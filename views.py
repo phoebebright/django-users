@@ -5,12 +5,11 @@ import string
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
-from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
-from django_keycloak_admin.models import try_while_locked
-from django_ratelimit.decorators import ratelimit
-from post_office.utils import send_mail
+
+
 from twilio.rest import Client
 
 import requests
@@ -27,25 +26,43 @@ from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView
-from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
+
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 from requests import Response
 
-from migrate_keycloak.models import UserEntity
-from skorie.common.mixins import GoNextMixin, GoNextTemplateMixin, CheckLoginRedirectMixin
-from tools.permission_mixins import UserCanAdministerMixin
 
-from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
-    is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
-from .forms import SubscribeForm, ProfileForm, UserMigrationForm, SignUpForm, CommsChannelForm, VerificationCodeForm, \
+from tools.mixins import GoNextMixin, GoNextTemplateMixin, CheckLoginRedirectMixin
+from .permission_mixins import UserCanAdministerMixin
+
+
+from .forms import SubscribeForm, ProfileForm,  SignUpForm, CommsChannelForm, VerificationCodeForm, \
     ChangePasswordForm, AddCommsChannelForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, CustomUserCreationForm
-from .keycloak import create_keycloak_user
-from .models import UserContact, CustomUser, VerificationCode, CommsChannel
 
+from .models import UserContact, VerificationCode, CommsChannel, ModelRoles, Role
 
 logger = logging.getLogger('django')
+
+
+User = get_user_model()
+
+
+
+
+NOW = timezone.now()
+LASTWEEK = NOW - timedelta(days=7)
+LASTMONTH = NOW - timedelta(days=31)
+YESTERDAY = NOW - timedelta(days=1)
+
+
+def is_superuser(user):
+    return user.is_superuser
+def is_organiser(user):
+    return user.is_manager
+def is_admin(user):
+    return user.is_administrator
+
 
 def get_legitimate_redirect(request):
     nextpage=request.GET.get('next','/')
@@ -64,40 +81,21 @@ class AddUser(generic.CreateView):
         '''create the keycloak user first then the local user'''
         me = self.request.user
 
-        payload = {
-            "email": form.cleaned_data['email'],
-            "username": form.cleaned_data['email'],
-            "firstName": form.cleaned_data['first_name'],
-            "lastName": form.cleaned_data['last_name'],
-            "enabled": True,
-            "credentials": [{
-                "type": "password",
-                "value": form.cleaned_data['password'].replace(" ", ""),  # remove spaces
-                "temporary": True
-            }],
-            "requiredActions": [],
+        # now create the django instance
+        user = form.save(commit=False)
+        user.attributes = {'temporary_password': form.cleaned_data['password']}
+        user.creator = me
+        user.save()
 
-        }
-
-        keycloak_id, status_code = create_keycloak_user(payload, me)
-
-        if keycloak_id:
-            # now create the django instance
-            user = form.save(commit=False)
-            user.keycloak_id = keycloak_id
-            user.attributes = {'temporary_password': form.cleaned_data['password']}
-            user.creator = me
-            user.save()
-
-            message = f"Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {form.cleaned_data['password']}.  Please log in and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie"
-            mail.send(
-                subject="You are signed up with Skor.ie",
-                message=message,
-                html_message=message,
-                recipients=[user.email, ],
-                sender=settings.DEFAULT_FROM_EMAIL,
-                priority='now',
-            )
+        message = f"Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {form.cleaned_data['password']}.  Please log in and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie"
+        mail.send(
+            subject="You are signed up with Skor.ie",
+            message=message,
+            html_message=message,
+            recipients=[user.email, ],
+            sender=settings.DEFAULT_FROM_EMAIL,
+            priority='now',
+        )
         return HttpResponseRedirect(reverse_lazy('users:admin_user', kwargs={'pk': user.pk}))
 
 class ManagerUserProfile(LoginRequiredMixin, generic.CreateView):
@@ -183,37 +181,12 @@ def send_test_email(request):
 #                                 first_name=user_details['firstName'], last_name=user_details['lastName'])
 
 
-def logout(request):
-
-    nextpage=get_legitimate_redirect(request)
-
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
-
-    else:
-        log_out(request)
-        return HttpResponseRedirect(nextpage)
-
-    # return_to = urlencode({'returnTo': request.build_absolute_uri('/')})
-    # return HttpResponseRedirect("/keycloak/logout")
-    # return HttpResponseRedirect(logout_url)
-
-def login_redirect(request):
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
-    else:
-        # this doesn't seem to be working
-        return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
 
 def signup_redirect(request):
 
     next = request.GET.urlencode()
 
-
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        url = f"/keycloak/register"
-    else:
-        url = f"/account/login/"
+    url = f"/account/login/"
 
     if 'next' in request.GET.urlencode():
         url += "?{request.GET.urlencode()}"
@@ -224,16 +197,9 @@ def signup_redirect(request):
 
 
 
-def login_redirect(request):
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
-    else:
-        # this doesn't seem to be working
-        return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
-
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
-    if request.user.status < CustomUser.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
+    if request.user.status < User.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
         url = reverse("subscribe_only")
     else:
         url = "/"
@@ -243,7 +209,7 @@ def after_login_redirect(request):
 @method_decorator(never_cache, name='dispatch')
 class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
     form_class = ProfileForm
-    model = CustomUser
+    model = User
 
     def get_template_names(self):
 
@@ -301,8 +267,8 @@ class Troubleshoot(UserCanAdministerMixin, View):
         email = request.POST.get('email')
 
         try:
-            django_user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+            django_user = User.objects.get(email=email)
+        except User.DoesNotExist:
             django_user = None
 
         if django_user:
@@ -343,8 +309,8 @@ class ProblemLogin(ProblemSignup):
         email = request.GET.get('email', None)
         if email:
             try:
-                django_user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
+                django_user = User.objects.get(email=email)
+            except User.DoesNotExist:
                 pass
             else:
                 self.verified = django_user.is_verified
@@ -371,7 +337,7 @@ class NewUsers(UserCanAdministerMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        users = CustomUser.objects.filter(date_joined__gte=timezone.now() - timedelta(days=7))
+        users = User.objects.filter(date_joined__gte=timezone.now() - timedelta(days=7))
         # calclogs = []
         # for user in users:
         #     logs = []
@@ -414,73 +380,24 @@ class UserMigrationView(View):
         return response.status_code == 200
 
     def update_password_new_keycloak(self, email, password):
-        try:
-            # Initialize KeycloakAdmin for the new Keycloak instance
-            new_keycloak_admin = KeycloakAdmin(
-                server_url=settings.KEYCLOAK_CLIENTS['ADMIN']['URL'],
-                username=settings.KEYCLOAK_ADMIN_USERNAME,  # Admin username for new Keycloak
-                password=settings.KEYCLOAK_ADMIN_PASSWORD,  # Admin password for new Keycloak
-                realm_name=settings.KEYCLOAK_CLIENTS['ADMIN']['REALM'],
-                client_id=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_ID'],
-                client_secret_key=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_SECRET'],
-                verify=True  # Set to False if you encounter SSL issues
-            )
 
-        except KeycloakGetError as e:
-            print(f"Failed to update password in new Keycloak: {e.response_code} - {e.error_message}")
-            return False
-
-        try:
-            # Find the user by email
-            users = new_keycloak_admin.get_users({"email": email})
-            if users:
-                user_id = users[0]['id']
-                # Update the user's password
-                new_keycloak_admin.set_user_password(user_id, password, temporary=False)
-                return True
-            else:
-                print(f"User with email {email} not found in new Keycloak.")
-                # need to add them
-                return False
-        except Exception as e:
-            print(f"Failed to update password in new Keycloak: {e}")
+        user = User.objects.get(email=email)
 
         return False
 
     def post(self, request, *args, **kwargs):
-        from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
+
         email = request.POST.get('email')
         password = request.POST.get('password')
 
         try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
             # check if user has signup in new keycloak and is so proceed with login first time
             # Need to redirect to register page - email already filled in
             user = None
         else:
-            if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
-
-                    # try authenticating with old keycloak
-                    if self.authenticate_old_keycloak(email, password):
-                        if self.update_password_new_keycloak(email, password):
-                            logger.info(f"User {email} has been migrated successfully.")
-                        else:
-                            logger.info(f"User {email} Failed to update password in the new system.")
-                            return redirect(settings.FORGOT_PASSWORD_URL)
-
-        # need to sign in user with new keycloak
-        backend = KeycloakPasswordCredentialsBackend()
-        authenticated_user = backend.authenticate(self.request, username=email, password=password)
-        if authenticated_user:
-            login(request, authenticated_user, backend='django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend')
-            messages.success(request, "You have been successfully logged in.")
-            return redirect(settings.LOGIN_REDIRECT_URL)
-        else:
-            messages.error(self.request, "Authentication failed. Please check your credentials.")
-            return redirect("/")
-
-
+          pass
 def send_sms(recipient_user, message, user=None):
     # Twilio credentials (replace with your actual credentials)
 
@@ -546,24 +463,15 @@ class RegisterView(FormView):
 
             #TODO: move to using users.add_or_update_user
             try:
-                user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
-                user = CustomUser.objects.create(username=email, email=email, first_name=form.cleaned_data['first_name'], last_name=form.cleaned_data['last_name'], is_active=False)
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                user = User.objects.create(username=email, email=email, first_name=form.cleaned_data['first_name'], last_name=form.cleaned_data['last_name'], is_active=False)
                 self.user = user
             else:
                 # we already have this user
                 self.user = user
-                if not user.is_active and user.keycloak_id:
-                    keycloak_details = get_user_by_id(user.keycloak_id)
-                    if keycloak_details['emailVerified']:
-                        messages.warning(self.request,
-                                         _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                        return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
-                    else:
-                        # as they never finished setting up the user, let's update the password so they can continue
-                        update_password(user.keycloak_id, password)
-                        logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
-                    # if user picked mobile, then need to add this channel and verify it
+                if not user.is_active:
+                                    # if user picked mobile, then need to add this channel and verify it
                     if mobile:
                             channel = self.create_comms_channels(channel_type, mobile, user)
                             user.preferred_channel = channel
@@ -584,23 +492,6 @@ class RegisterView(FormView):
             set_current_user(self.request, user.id, "REGISTER")
 
 
-
-            # make sure we have a keycloak id
-
-            if not user.keycloak_id:
-
-                status_code = user.create_keycloak_user_from_user(form.cleaned_data['password'])
-
-                if status_code == 201:
-                    pass
-                elif status_code == 409:
-                    messages.error(self.request, _('You already have .'))
-                    pass
-                else:
-                    messages.error(self.request, _('Failed to create user account. Please try again later.'))
-                    return reverse('users:login')
-
-            # now we have a fully setup user, create the comms channels, if not already existing
 
             # Create communication channels - defaults to email
             channel = self.create_comms_channels('email', email, user)
@@ -691,8 +582,8 @@ def get_current_user(request):
 
             if user_id and user_login_mode in ["REGISTER", "PROBLEM"]:
                 try:
-                    user = CustomUser.objects.get(id=user_id)
-                except CustomUser.DoesNotExist:
+                    user = User.objects.get(id=user_id)
+                except User.DoesNotExist:
                     messages.error(request, _('Failed to locate user account. Please try again with a different email.'))
 
 
@@ -796,7 +687,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         # Retrieve session values and set them as initial values in the form
         if step > 1:
             email = self.request.session.get('forgot_email')
-            self.user = CustomUser.objects.filter(username=email).first()
+            self.user = User.objects.filter(username=email).first()
             if self.user:
                 kwargs['user'] = self.user  # Pass the user to populate channels in step 2
 
@@ -842,7 +733,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         if step == 1:
             # Step 1: Check if email exists and save it in session
             email = form.cleaned_data['email']
-            user = CustomUser.objects.filter(username=email).first()
+            user = User.objects.filter(username=email).first()
             if user and not user.is_active:
                 form.add_error('email', _(f'This email does not have an account. Please {settings.REGISTER_TERM}.'))
                 return self.form_invalid(form)
@@ -883,7 +774,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             confirm_password = form.cleaned_data['confirm_password']
             if new_password == confirm_password:
                 email = self.request.session.get('forgot_email')
-                user = CustomUser.objects.filter(username=email).first()
+                user = User.objects.filter(username=email).first()
                 if user:
                     if not user.keycloak_id:
                         logger.error(f"User {user.pk} does not have a keycloak_id.")
@@ -938,35 +829,63 @@ class ChangePasswordView(GoNextTemplateMixin ,FormView):
             return self.form_invalid(form)
 
 
-def update_users(request):
-    # temporary function to update all users with keycloak_id - comment out once used
-    from users.models import CustomUser
-    for user in CustomUser.objects.filter(keycloak_id__isnull=True):
-        try:
-            user.keycloak_id = keycloak_admin.get_user_id(user.email)
-        except Exception as e:
-            print(e)
-        else:
-            user.save(update_fields=['keycloak_id',])
+@user_passes_test(is_admin)
+def subscribers_list(request):
+
+    users = User.objects.filter(subscribe_news__isnull=False).exclude(unsubscribe_news__isnull=False).values_list('email', flat=True).order_by('-subscribe_news')
+    emails = ','.join(users)
+    return HttpResponse(emails)
+
+@user_passes_test(is_superuser)
+def tidy_contacts(request):
+    for user in User.objects.filter(last_login__isnull=True, subscribe_news__isnull=True):
+        print(f"Deleting {user}")
+        person = user.person
+        if person:
+            with transaction.atomic():
+                user.person = None
+                user.save()
+                print("removed link to person")
+            with transaction.atomic():
+                person.delete()
+                print("deleted person")
 
 
+            for item in UserContact.objects.filter(user=user):
+                with transaction.atomic():
+                    item.delete()
+                    print("deleted user contact")
 
-class UnverifiedUsersList(UserCanAdministerMixin, ListView):
-    model = UserEntity
-    template_name = 'users/unverified_users_report.html'
-    context_object_name = 'users'  # Name to use in the template
+        with transaction.atomic():
+            user.is_active=False
+            user.save()
+            print("set user to inactive deleted user")
 
-    def get_queryset(self):
-        # Calculate one month ago as a timestamp in milliseconds
-        one_month_ago = datetime.now() - timedelta(days=30)
-        one_month_ago_timestamp = int(one_month_ago.timestamp() * 1000)
-        # Query unverified users from the last month
-        return UserEntity.objects.using('keycloak_new').filter(
-            email_verified=False,
-            created_timestamp__gte=one_month_ago_timestamp
-        ).order_by('-created_timestamp')
 
-    def get_context_data(self, **kwargs):
+class ManageRoles(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/manage_roles.html"
+
+    def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['title'] = 'Unverified Users (Last Month)'
+
+
+        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.NON_EVENT_CHOICES}
+        # we are adding Competitor so we can remove it when making people judges.  SHouldn't need to but for now...
+        context['roles'][ModelRoles.ROLE_COMPETITOR] = "Competitor"
+        context['role_list'] = Role.objects.exclude(role_type__in = [ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
+
+
+        return context
+
+
+class ManageUsers(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/manage_users.html"
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(**kwargs)
+        #
+        # context['users'] = User.objects.all().order_by('last_name', 'first_name')
+
         return context

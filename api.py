@@ -27,7 +27,7 @@ from rest_framework_api_key.permissions import HasAPIKey
 
 from tools.auth import DeviceKeyAuthentication
 from tools.exceptions import ChangePasswordException
-from tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
+from .permission_mixins import UserCanAdministerMixin, IsAdministrator
 from tools.permissions import IsAdministratorPermission
 from users.serializers import EmailExistsSerializer, OrganisationSerializer, CommsChannelSerializer, UserShortSerializer
 from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \

@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
-from web.models import ModelRoles
+from users.models import ModelRoles
 from .models import Organisation, UserContact, CustomUser as User, Role, Person, PersonOrganisation, CustomUser, \
     CommsChannel, VerificationCode
 
