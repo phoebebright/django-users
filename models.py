@@ -11,8 +11,7 @@ from string import digits
 from OpenSSL.rand import status
 from chunked_upload.models import AbstractChunkedUpload
 from cryptography.fernet import Fernet
-from keycloak import KeycloakAdmin
-from phonenumber_field.modelfields import PhoneNumberField
+
 from django.apps import apps
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -56,7 +55,7 @@ from django.utils.translation import gettext_lazy as _
 
 import logging
 
-from users.keycloak import create_keycloak_user, verify_user_without_email
+from users.keycloak_tools import create_keycloak_user, verify_user_without_email
 from users.notifications import on_new_user_unverified
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)

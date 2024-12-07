@@ -2,10 +2,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model, logout
 from django.shortcuts import redirect
-from keycloak import KeycloakAdmin
-from keycloak.exceptions import KeycloakAuthenticationError, KeycloakGetError
-
-
+from keycloak import KeycloakAdmin, KeycloakAuthenticationError, KeycloakGetError
 
 logger = logging.getLogger('django')
 

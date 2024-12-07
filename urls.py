@@ -7,7 +7,7 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
     logout, Troubleshoot, UnverifiedUsersList
-from users.keycloak import logout_user_from_keycloak_and_django
+from users.keycloak_tools import logout_user_from_keycloak_and_django
 
 app_name = 'users'
 

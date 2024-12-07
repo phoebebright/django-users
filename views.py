@@ -1,10 +1,11 @@
 import json
 import logging
-import random
-import string
+import csv
+from io import StringIO
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
+from django.db.models import Count
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
@@ -27,7 +28,7 @@ from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView
-from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
+from keycloak_tools import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
@@ -37,13 +38,18 @@ from migrate_keycloak.models import UserEntity
 from skorie.common.mixins import GoNextMixin, GoNextTemplateMixin, CheckLoginRedirectMixin
 from tools.permission_mixins import UserCanAdministerMixin
 
-from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+from .keycloak_tools import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
     is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
 from .forms import SubscribeForm, ProfileForm, UserMigrationForm, SignUpForm, CommsChannelForm, VerificationCodeForm, \
     ChangePasswordForm, AddCommsChannelForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, CustomUserCreationForm
-from .keycloak import create_keycloak_user
+from .keycloak_tools import create_keycloak_user
 from .models import UserContact, CustomUser, VerificationCode, CommsChannel
 
+from openai import OpenAI
+
+client = OpenAI(
+  api_key=settings.OPENAI_KEY,  # this is also the default, it can be omitted
+)
 
 logger = logging.getLogger('django')
 
@@ -969,4 +975,119 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = 'Unverified Users (Last Month)'
+        return context
+
+
+def get_where_did_you_hear_group(request):
+
+    # initially we are just going to update the user profile with the where_did_you_hear field
+    where_did_you_hear = []
+    for user in CustomUser.objects.filter(
+    profile__has_key='where_did_you_hear'
+).exclude(
+    profile__has_key='where_did_you_hear_group'
+)[:500]:
+
+        where_did_you_hear.append(f"user: {user.pk}, response: {user.profile['where_did_you_hear']}")
+
+    expected_categories = ["Search Engine", "National Poetry Library", "Social Media", "Poetry Mama Website",
+                           "Other Websites / Competition Listings", "Friend / Family / Word of Mouth",
+                           "School / Teacher", "Previous Participation / Mailing List / Email",
+                           "Online Search / General Research", "Magazines / Journals", "Fish Publishing",
+                           "Poetry Groups / Writing Circles", "Other / Unclassified"]
+
+    responses_str = "\n- ".join(where_did_you_hear)
+
+    prompt = f"""You are to classify the following user responses into one of the predefined categories and return the results in plain CSV format. Ensure the output is a plain CSV file without any surrounding code blocks or formatting tags (e.g., no '''csv or other markers). The response should be pure CSV content. Ensure that every user has a corresponding row in the output.
+
+Categories:
+- Search Engine
+- National Poetry Library
+- Social Media
+- Poetry Mama Website
+- Other Websites / Competition Listings
+- Friend / Family / Word of Mouth
+- School / Teacher
+- Previous Participation / Mailing List / Email
+- Online Search / General Research
+- Magazines / Journals
+- Fish Publishing
+- Poetry Groups / Writing Circles
+- Other / Unclassified
+
+Task:
+
+Classify each user response into one of the categories above.
+Return the results in CSV format with the following columns:
+    user: The user ID.
+    response: The user's response.
+    category: The selected category.
+Do not include any additional text in your response. Only return the CSV content.
+
+Examples:
+user,response,category
+123,Found on Google,Search Engine
+124,My teacher told me about it,School / Teacher
+125,Fish publishing newsletter (already subscribed),Previous Participation / Mailing List / Email
+126,Friend recommended,Friend / Family / Word of Mouth
+127,Writing Magazine,Magazines / Journals
+128,Facebook ad,Social Media
+129,- Select one -,Other / Unclassified
+130,I can't remember,Other / Unclassified
+
+
+Responses list:
+{responses_str}
+
+     """
+
+
+    response = client.chat.completions.create(
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0,
+        model="gpt-4o",
+    )
+
+
+    response_csv = response.choices[0].message.content
+
+    # row begins ''' then strip these rows
+
+    # load csv and update users
+
+    try:
+        csv_file = StringIO(response_csv)
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            if len(row.items()) == 3:
+                user = CustomUser.objects.get(pk=row['user'])
+                user.profile['where_did_you_hear_group'] = row['category']
+                user.save(update_fields=['profile',])
+    except Exception as e:
+        print(f"Failed to update users with {e}")
+
+    return HttpResponse(response_csv, content_type='text/csv')
+
+
+class UserReportView(TemplateView):
+    template_name = "users/user_where_did_you_hear_report.html"  # Replace with your template name
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get count of users per category
+        category_counts = (
+            CustomUser.objects.filter(profile__has_key="where_did_you_hear_group")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        # Get all user details
+        user_details = CustomUser.objects.values("id", "name", "where_did_you_hear_group")
+
+        # Add to context
+        context["category_counts"] = category_counts
+        context["user_details"] = user_details
         return context
