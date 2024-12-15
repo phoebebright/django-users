@@ -1,0 +1,105 @@
+Code,Timezone,Country
+US,America/Adak,United States
+US,America/Anchorage,United States
+US,America/Boise,United States
+US,America/Chicago,United States
+US,America/Denver,United States
+US,America/Detroit,United States
+US,America/Indiana/Indianapolis,United States
+US,America/Indiana/Knox,United States
+US,America/Indiana/Marengo,United States
+US,America/Indiana/Petersburg,United States
+US,America/Indiana/Tell_City,United States
+US,America/Indiana/Vevay,United States
+US,America/Indiana/Vincennes,United States
+US,America/Indiana/Winamac,United States
+US,America/Juneau,United States
+US,America/Kentucky/Louisville,United States
+US,America/Kentucky/Monticello,United States
+US,America/Los_Angeles,United States
+US,America/Menominee,United States
+US,America/Metlakatla,United States
+US,America/New_York,United States
+US,America/Nome,United States
+US,America/North_Dakota/Beulah,United States
+US,America/North_Dakota/Center,United States
+US,America/North_Dakota/New_Salem,United States
+US,America/Phoenix,United States
+US,America/Sitka,United States
+US,America/Yakutat,United States
+US,Pacific/Honolulu,United States
+NL,Europe/Amsterdam,Netherlands
+AD,Europe/Andorra,Andorra
+RU,Europe/Astrakhan,Russia
+GR,Europe/Athens,Greece
+RS,Europe/Belgrade,Serbia
+DE,Europe/Berlin,Germany
+SK,Europe/Bratislava,Slovakia
+BE,Europe/Brussels,Belgium
+RO,Europe/Bucharest,Romania
+HU,Europe/Budapest,Hungary
+DE,Europe/Busingen,Germany
+MD,Europe/Chisinau,Moldova
+DK,Europe/Copenhagen,Denmark
+IE,Europe/Dublin,Ireland
+GI,Europe/Gibraltar,Gibraltar
+GG,Europe/Guernsey,Guernsey
+FI,Europe/Helsinki,Finland
+IM,Europe/Isle_of_Man,Isle of Man
+TR,Europe/Istanbul,Turkey
+JE,Europe/Jersey,Jersey
+RU,Europe/Kaliningrad,Russia
+UA,Europe/Kiev,Ukraine
+RU,Europe/Kirov,Russia
+PT,Europe/Lisbon,Portugal
+SI,Europe/Ljubljana,Slovenia
+GB,Europe/London,United Kingdom
+LU,Europe/Luxembourg,Luxembourg
+ES,Europe/Madrid,Spain
+MT,Europe/Malta,Malta
+AX,Europe/Mariehamn,Åland Islands
+BY,Europe/Minsk,Belarus
+MC,Europe/Monaco,Monaco
+RU,Europe/Moscow,Russia
+NO,Europe/Oslo,Norway
+FR,Europe/Paris,France
+ME,Europe/Podgorica,Montenegro
+CZ,Europe/Prague,Czech Republic
+LV,Europe/Riga,Latvia
+IT,Europe/Rome,Italy
+RU,Europe/Samara,Russia
+SM,Europe/San_Marino,San Marino
+BA,Europe/Sarajevo,Bosnia and Herzegovina
+RU,Europe/Saratov,Russia
+RU,Europe/Simferopol,Russia
+MK,Europe/Skopje,North Macedonia
+BG,Europe/Sofia,Bulgaria
+SE,Europe/Stockholm,Sweden
+EE,Europe/Tallinn,Estonia
+AL,Europe/Tirane,Albania
+RU,Europe/Ulyanovsk,Russia
+UA,Europe/Uzhgorod,Ukraine
+LI,Europe/Vaduz,Liechtenstein
+VA,Europe/Vatican,Vatican City
+AT,Europe/Vienna,Austria
+LT,Europe/Vilnius,Lithuania
+RU,Europe/Volgograd,Russia
+PL,Europe/Warsaw,Poland
+HR,Europe/Zagreb,Croatia
+UA,Europe/Zaporozhye,Ukraine
+CH,Europe/Zurich,Switzerland
+NZ,Pacific/Auckland,New Zealand
+NZ,Pacific/Chatham,New Zealand
+US,Pacific/Honolulu,United States
+AU,Australia/Adelaide,Australia
+AU,Australia/Brisbane,Australia
+AU,Australia/Broken_Hill,Australia
+AU,Australia/Currie,Australia
+AU,Australia/Darwin,Australia
+AU,Australia/Eucla,Australia
+AU,Australia/Hobart,Australia
+AU,Australia/Lindeman,Australia
+AU,Australia/Lord_Howe,Australia
+AU,Australia/Melbourne,Australia
+AU,Australia/Perth,Australia
+AU,Australia/Sydney,Australia

@@ -5,13 +5,21 @@ from django_countries.serializers import CountryFieldMixin
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
 
-from .models import CustomUser, UserContact, Organisation, CommsChannel
+class DynamicModelSerializer(serializers.ModelSerializer):
+    """
+    A base serializer that dynamically resolves models for Meta class.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically set the model if it hasn't been set yet
+        if not self.Meta.model:
+            raise ValueError("Meta.model must be defined or dynamically resolved in the derived serializer.")
 
 
-class EmailExistsSerializer(serializers.Serializer):
+class EmailExistsSerializerBase(DynamicModelSerializer):
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('active',  'date_joined',)
 
     def to_representation(self, instance):
@@ -31,17 +39,17 @@ class EmailExistsSerializer(serializers.Serializer):
         return ret
 
 
-class UserShortSerializer(CountryFieldMixin, serializers.ModelSerializer):
+class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('id','username','first_name', 'last_name',  'active', 'country','date_joined','last_login','is_active','profile')
 
 
-class UserShortSerializer(CountryFieldMixin, serializers.ModelSerializer):
+class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('id','username','email','first_name', 'last_name',  'active', 'country','date_joined','last_login','is_active','profile')
 
     def to_representation(self, instance):
@@ -51,11 +59,11 @@ class UserShortSerializer(CountryFieldMixin, serializers.ModelSerializer):
         ret['country'] = instance.country.name if instance.country else ''
         return ret
 
-class UserSerializer(CountryFieldMixin, serializers.ModelSerializer):
+class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):
     where_did_you_hear = serializers.CharField(max_length=255, required=False)
     city = serializers.CharField(max_length=255, required=False)
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('id','username','first_name', 'last_name',  'full_name', 'active', 'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')
 
     def to_representation(self, instance):
@@ -119,10 +127,10 @@ class UserSerializer(CountryFieldMixin, serializers.ModelSerializer):
 
         return instance
 
-class UserContactSerializer(serializers.Serializer):
-    user = UserSerializer
+class UserContactSerializerBase(DynamicModelSerializer):
+    user = None
     class Meta:
-        model = UserContact
+        model = None
         fields = ['user','contact_date']
 
     def to_representation(self, instance):
@@ -130,17 +138,17 @@ class UserContactSerializer(serializers.Serializer):
         ret = ret + instance.data
         return ret
 
-class UserEmailSerializer(serializers.ModelSerializer):
+class UserEmailSerializerBase(DynamicModelSerializer):
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('email',)
 
 
-class UserSyncSerializer(serializers.ModelSerializer):
+class UserSyncSerializerBase(DynamicModelSerializer):
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ('email','username',)
 
 
@@ -188,22 +196,16 @@ class UserSyncSerializer(serializers.ModelSerializer):
         else:
             return False
 
-class OrganisationBaseSerializer(serializers.ModelSerializer):
+class OrganisationSerializerBase(DynamicModelSerializer):
     class Meta:
-        model = Organisation
+        model = None
         fields = '__all__'
 
 
-
-class OrganisationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Organisation
-        fields = '__all__'
-
-class CommsChannelSerializer(serializers.ModelSerializer):
+class CommsChannelSerializerBase(DynamicModelSerializer):
     # mobile = PhoneNumberField()
     class Meta:
-        model = CommsChannel
+        model = None
         fields = '__all__'
         extra_kwargs = {'user': {'read_only': True}}  # Prevent user field from being directly editable
 

@@ -6,7 +6,7 @@ import django.utils.timezone
 import django_countries.fields
 import phonenumber_field.modelfields
 import skorie.common.fields
-import skorie.common.model_mixins
+import tools.model_mixins
 import timezone_field.fields
 import yamlfield.fields
 from django.conf import settings
