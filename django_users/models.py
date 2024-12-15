@@ -308,7 +308,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
 
-class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
+class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     # options for additional roles within skorie
 
     # Private attributes for lazy-loaded models
@@ -1518,20 +1518,8 @@ class UserContactBase(models.Model):
 
 #------------------  MODELS CUSTOMISED FOR THIS APPLICATION -----------------------
 
-class DataQualityLog(DataQualityLogBase):
-    pass
-    # '''note that only models with a ref field can have an entry'''
-    # ref = models.CharField(max_length=10, db_index=True)
-    # reason_type = models.CharField(max_length=60, default="None", help_text=_("Reason for change in quality"))
-    #
-    # data_quality = models.SmallIntegerField(validators=[MinLengthValidator(0), MaxLengthValidator(100)])
-    # data_comment = models.TextField(blank=True, null=True)
-    # data_source = models.CharField(max_length=200, default="Data entry",
-    #                                help_text=_("notes on source of data - may be url"))
 
-
-
-class PersonBase(CreatedUpdatedMixin, DataQualityMixin, AliasForMixin, TrackChangesMixin):
+class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
 
 
     _Role = None
