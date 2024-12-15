@@ -58,6 +58,17 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
 
     };
 
+    //     // can block panes, eg. if only a few entries, by settings panes to []
+    // if (typeof panes != "undefined" && panes.length > 0) {
+    //     table_options['searchPanes'] =  {
+    //         viewTotal: true,
+    //         columns: panes,
+    //     };
+    //     table_options['select'] = true;
+    //     table_options['dom'] = 'Plfrtip';
+    //
+    // }
+
     // Configure SearchPanes if panes are provided
     const searchPaneConfig = getSearchPaneConfig(panes);
     if (Object.keys(searchPaneConfig).length > 0) {

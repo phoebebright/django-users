@@ -308,7 +308,7 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(CommsChannel)
 class CommsChannelAdmin(admin.ModelAdmin):
-    list_display = ('user', 'channel_type', 'email', 'mobile', 'verified_at')
+    list_display = ('user', 'channel_type', 'value',  'verified_at')
     list_filter = ('channel_type',)
     search_fields = ('phone', 'email')
 
@@ -316,4 +316,4 @@ class CommsChannelAdmin(admin.ModelAdmin):
 class VerificationCodeAdmin(admin.ModelAdmin):
     list_display = ('user', 'channel', 'code', 'expires_at', 'created_at')
     list_filter = ('channel__channel_type',)
-    search_fields = ('user__email', 'channel__email', 'channel__mobile', 'code')
+    search_fields = ('user__email', 'channel__value', 'code')

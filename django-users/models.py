@@ -8,11 +8,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from string import digits
 
-from OpenSSL.rand import status
-from chunked_upload.models import AbstractChunkedUpload
-from cryptography.fernet import Fernet
-from keycloak import KeycloakAdmin
-from phonenumber_field.modelfields import PhoneNumberField
+
 from django.apps import apps
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -56,120 +52,111 @@ from django.utils.translation import gettext_lazy as _
 
 import logging
 
-from users.keycloak import create_keycloak_user, verify_user_without_email
-from users.notifications import on_new_user_unverified
+from .keycloak import create_keycloak_user, verify_user_without_email
+from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
 logger = logging.getLogger('django')
 
-class CommsChannel(CommsChannelBase):
-    pass
-
-class VerificationCode(VerificationCodeBase):
-    pass
-
-class CustomUserQuerySet(models.QuerySet):
-
-    def old_anon(self, days=7):
-        days_ago = timezone.now() - timedelta(days=days)
-        return self.filter(status=self.model.USER_STATUS_ANON, date_joined__lt=days_ago)
-
-    def active(self):
-
-        return self.filter(active=True)
-
-    def competitors(self):
-        return self.filter(is_competitor=True)
-
-    def riders(self):
-        return self.filter(is_rider=True)
-
-    def judges(self):
-        return self.filter(is_judge=True)
-
-    def icansee(self, user):
-        '''used when organising an event and shows '''
-        # needs to be built
-        if user.is_superuser or user.is_administrator:
-            return self.all()
-        else:
-            return self.none()
+def lazy_import(full_path):
+    """Lazily import an object from a given path."""
+    module_path, _, object_name = full_path.rpartition('.')
+    imported_module = __import__(module_path, fromlist=[object_name])
+    return getattr(imported_module, object_name)
 
 
-class CustomUserManager(BaseUserManager):
-    _person_model = None
 
-    @property
-    def Person(self):
-        if self._person_model is None:
-            self._person_model = apps.get_model('users', 'Person')
-        return self._person_model
+class CommsChannelsQueryset(models.QuerySet):
 
-    def _create_user(self, email, password,
-                     is_staff, is_superuser, **extra_fields):
-        """
-        Creates and saves a User with the given username, email and password.
-        """
-        now = timezone.now()
+    def verified(self):
+        return self.filter(verified_at__isnull=False)
 
-        email = self.normalize_email(email)
-        user = self.model(email=email,
-                          is_staff=is_staff, is_active=True,
-                          is_superuser=is_superuser, last_login=now,
-                          date_joined=now, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
+class CommsChannelBase(models.Model):
 
-        return user
+    CHANNEL_EMAIL = "email"
+    CHANNEL_SMS = "sms"
+    CHANNEL_WHATSAPP = "whatsapp"
 
-    def create_user(self, email=None, password=None, **extra_fields):
-        '''note that extra_fields only used in creating person not user'''
-        is_active = True
-        user_extras = {}
-        if 'first_name' in extra_fields:
-            user_extras['first_name'] = extra_fields['first_name']
-            user_extras['last_name'] = extra_fields['last_name']
-            extra_fields.pop('first_name')
-            extra_fields.pop('last_name')
+    CHANNEL_CHOICES = [
+        (CHANNEL_EMAIL, 'Email'),
+        (CHANNEL_SMS, 'SMS'),
+        (CHANNEL_WHATSAPP, 'WhatsApp'),
+    ]
 
-        # person needs a name
-        if not 'formal_name' in extra_fields:
-            if 'first_name' in extra_fields and 'last_name' in extra_fields:
-                extra_fields['formal_name'] = f"{extra_fields['first_name']} {extra_fields['last_name']}"
-            else:
-                extra_fields['formal_name'] = email.split("@")[0]
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='comms_channels')
+    channel_type = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    value = models.CharField(max_length=255)
+    verified_at = models.DateTimeField(null=True, blank=True)
 
-        if 'username' in extra_fields:
-            extra_fields.pop('username')
-        if 'is_active' in extra_fields:
-            is_active = extra_fields.pop('is_active')
+    objects = CommsChannelsQueryset.as_manager()
+
+    class Meta:
+        unique_together = ('user', 'channel_type', 'value')
+        abstract = True
+
+    def __str__(self):
+        return f"{self.get_channel_type_display()}: {self.value}"
+
+    def is_verified(self):
+        return self.verified_at is not None
+
+    def send_msg(self, msg, subject=None):
+        if self.channel_type == self.CHANNEL_EMAIL:
+            mail.send(
+                recipients=self.value,
+                subject=subject,
+                message=msg,
+                priority='now',
+                language="EN",
+            )
+        elif self.channel_type == self.CHANNEL_SMS:
+            send_sms_verification_code(self.value, msg)
+        elif self.channel_type == self.CHANNEL_WHATSAPP:
+            send_whatsapp_verification_code(self.value, msg)
+
+class VerificationCodeBase(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='verification_codes')
+    channel = models.ForeignKey('CommsChannel', on_delete=models.CASCADE)
+    code = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    attempts = models.PositiveIntegerField(default=0)
 
 
-        person = self.Person.objects.create(**extra_fields)
 
-        user_extras['person'] = person
-        user = self._create_user(email, password, False, False, **user_extras)
+    def __str__(self):
+        return f"Code for {self.user} via {self.channel}"
 
-        if not is_active:
-            user.is_active = False
-            user.save()
+    class Meta:
+        abstract = True
 
-        person.user = user
-        person.save()
+    @classmethod
+    def create_verification_code(cls, user, channel):
+        code = ''.join(random.choices(string.digits, k=6))
+        expires_at = timezone.now() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
+        obj = cls.objects.create(
+            user=user,
+            channel=channel,
+            code=code,
+            expires_at=expires_at
+        )
+        return obj
 
-        return user
+    def is_expired(self):
+        return timezone.now() > self.expires_at
 
-    def create_superuser(self, email, password, **extra_fields):
+    def send_verification_code(self)->bool:
 
-        person = self.Person.objects.create(**extra_fields)
-        user = self._create_user(email, password, True, True,
-                                 person=person, **extra_fields)
-        person.user = user
-        person.save()
-        user.save()
-        return user
+        if self.channel.channel_type == 'email':
+            return send_email_verification_code(self)
+        elif self.channel.channel_type == 'sms':
+            return send_sms_verification_code(self.channel.value, self.code)
+        elif self.channel.channel_type == 'whatsapp':
+            return send_whatsapp_verification_code(self.channel.value, self.code)
+
 
 
 
@@ -299,8 +286,9 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
     # TODO: change organisation to M2M
     organisation = models.ForeignKey("users.Organisation", on_delete=models.CASCADE, blank=True, null=True)
 
+    #TODO: can we remove this - very confusing as we have django is_active field as well
     active = models.BooleanField(default=True,
-                                 db_index=True)  # true when user accepts an invitation or confirms account - bad choice of name
+                                 db_index=True)  # true when user accepts an invitation or confirms account
 
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
 
@@ -382,6 +370,25 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
 
         if not self.password:
             self.password = hash(str(uuid.uuid4()))
+
+            # migrate email to comms channel
+        if not self.preferred_channel and self.date_joined and self.date_joined < timezone.make_aware(
+                datetime(*settings.USER_COMMS_MIGRATION_DATE)):
+            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
+                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
+                                                                  email=self.email,
+                                                                  defaults={'verified_at': self.date_joined})
+
+        super().save(*args, **kwargs)
+
+        # setup email as preferred channel but not verified
+        if not self.preferred_channel:
+            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
+                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
+                                                                  email=self.email)
+            self.preferred_channel = email_channel
+            self.quick_save(update_fields=['preferred_channel', ])
+
 
         super().save(*args, **kwargs)
 
@@ -1309,6 +1316,52 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
             if 'mobile' in self.profile and self.profile['mobile']:
                 CommsChannel.objects.get_or_create(user=self, channel_type=CommsChannel.CHANNEL_SMS, mobile=self.profile['mobile'])
 
+
+class UserContactBase(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    contact_date = models.DateTimeField(auto_now_add=True, db_index=True)
+    method = models.CharField(max_length=40)
+    notes = models.TextField(blank=True, null=True)
+    data = models.TextField(blank=True, null=True)  # use for json data, convert to field when avaialble
+
+    def __str__(self):
+        return "%s" % self.user
+
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def add(cls, user, method, notes=None, data=None, send_mail=True):
+
+        if type(data) == str:
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                logger.warning(f"Data is not valid json: {data}")
+                mail.send(
+                    subject=f"Contact from {settings.SITE_NAME} unable to decode ",
+                    message=data,
+                    recipients=[settings.SUPPORT_EMAIL, ]
+                )
+                return
+
+        obj = cls.objects.create(user=user, method=method, notes=notes, data=data)
+        if data and 'message' in data:
+            msg = f"{user} contacted us via {data['message']}"
+        else:
+            msg = f"{user} contacted us via {method}"
+
+        if send_mail:
+            mail.send(
+                subject=f"Contact from {settings.SITE_NAME} user {obj.user} ",
+                message=msg,
+                recipients=[settings.SUPPORT_EMAIL, ],
+                sender=settings.DEFAULT_FROM_EMAIL,
+                priority='now',
+                language='EN',
+            )
+
+
 #------------------  MODELS CUSTOMISED FOR THIS APPLICATION -----------------------
 
 class DataQualityLog(DataQualityLogBase):
@@ -1323,110 +1376,470 @@ class DataQualityLog(DataQualityLogBase):
     #                                help_text=_("notes on source of data - may be url"))
 
 
-class PersonOrganisation(PersonOrganisationBase):
-    pass
+
+class PersonBase(CreatedUpdatedMixin, DataQualityMixin, AliasForMixin, TrackChangesMixin):
 
 
-class Person(PersonBase):
-   pass
-
-class Role(RoleBase):
-    pass
-
-class Organisation(OrganisationBase):
-    code = models.CharField(max_length=8, help_text=_("Max 10 chars upper case.  Used to tag data as belonging to the organisation"))
-    # need to think through how to handle key being wrong/changed so system does not crash
-    # settings = EncryptedJSONField(default=dict, blank=True, help_text=_("Settings for this organisation"))
-    settings = models.JSONField(default=dict, blank=True, help_text=_("Settings for this organisation"))
-    '''
-    {"STRIPE_API_KEY":"sk_test_51PH596KLzhkFeFrKYqw05ssNcnAvJRtTtx0vjRdP30R8oZW1kJX8Zz28EX7WCqp4Gl7oINEGks9158vd0H6xl6Rn0040SWxkF0","STRIPE_SECRET_KEY":"whsec_pHidHiMenLyJzp0bs8ziAd0ToWz6NWu7", "CURRENCY": "EUR"}
-    '''
-    # seller = models.ForeignKey("web.Seller", on_delete=models.CASCADE, blank=True, null=True)
-    default_authority = models.ForeignKey("testsheets.Issuer", blank=True, null=True, on_delete=models.SET_NULL,
-                                          related_name="default_issuer",)
-
-    def decrypt_settings_data(self):
-        cipher_suite = Fernet(settings.SETTINGS_KEY)
-        decrypted_value = cipher_suite.decrypt(base64.b64decode(self.settings)).decode('utf-8')
-        return json.loads(decrypted_value)
-
+    _Role = None
     @property
-    def has_payment_gateway(self):
-        '''this can get more sophisticated'''
+    def Role(self):
+        if not self._Role:
+            self._Role = apps.get_model('users', 'Role')
+        return self._Role
 
-        return 'STRIPE_API_KEY' in self.settings or hasattr(settings, 'STRIPE_API_KEY')
+    _CustomUser = None
+    @property
+    def CustomUser(self):
+        if not self._CustomUser:
+            self._CustomUser = apps.get_model('users', 'CustomUser')
+        return self._CustomUser
 
-
-
-class CustomUser(CustomUserBase):
-    EXTRA_ROLES = {
-        'testmanager': "Testsheet Manager",
-        'testchecker': "Testsheet Checker",
-        'devteam': "Skorie Development Team",
-    }
-
-    USER_STATUS_ANON = 0
-    USER_STATUS_NA = 1  # used for system users
-    USER_STATUS_TEMPORARY = 2  # used where user has signed in with an acocunt like scorer1@skor.ie
-    USER_STATUS_UNCONFIRMED = 3
-    USER_STATUS_CONFIRMED = 4
-    USER_STATUS_TRIAL = 5
-    USER_STATUS_SUBSCRIBED = 7
-    USER_STATUS_TRIAL_LAPSED = 8
-    USER_STATUS_SUBSCRIBED_LAPSED = 9
-
-    USER_STATUS = (
-        (USER_STATUS_ANON, "Unknown"),
-        (USER_STATUS_NA, "Not Applicable"),
-        (USER_STATUS_TEMPORARY, "Temporary"),
-        (USER_STATUS_UNCONFIRMED, "Unconfirmed"),
-        (USER_STATUS_CONFIRMED, "Confirmed"),
-        (USER_STATUS_TRIAL, "Trial"),
-        (USER_STATUS_SUBSCRIBED, "Subscribed"),
-        (USER_STATUS_TRIAL_LAPSED, "Trial Lapsed"),
-        (USER_STATUS_SUBSCRIBED_LAPSED, "Subscription Lapsed"),
+    IDENTIFIER_TYPE_EMAIL = "E"
+    IDENTIFIER_TYPE_PHONE = "P"
+    IDENTIFIER_TYPE_CHOICES = (
+        (IDENTIFIER_TYPE_EMAIL, "Email"),
+        (IDENTIFIER_TYPE_PHONE, "Phone"),
     )
-    objects = CustomUserManager.from_queryset(CustomUserQuerySet)()
+    DEFAULT_IDENTIFIER_TYPE = "E"
+
+    # ? should there be an email or mobile in here as a key to identifying a unique Person?
+    ref = models.CharField(max_length=6, primary_key=True)
+
+    formal_name = models.CharField(_('formal name'), max_length=50,
+                                   help_text=_("Full name including salution"))
+
+    sortable_name = models.CharField(_('sortable, eg. last name then first name'), max_length=130, blank=True)
+    friendly_name = models.CharField(_('friendly name'), max_length=30, blank=True, null=True,
+                                     help_text=_("Short name used in groups"))
+
+    dob = models.DateField(blank=True, null=True)  # n/a once an adult?
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="person_user")
+
+
+
+    # consider only adding a person if you have some way of making them unique, eg. email or phone
+    identifier_type = models.CharField(max_length=1, choices=IDENTIFIER_TYPE_CHOICES, default=DEFAULT_IDENTIFIER_TYPE)
+    identifier = models.CharField(max_length=50, unique=True, blank=True, null=True)
+
+    country = CountryField(blank=True, null=True, help_text=_("Optional"))
+
+    timezone = TimeZoneField(default='UTC', help_text=_("Default timezone for this user"))
+
+    organisation = models.ManyToManyField("users.Organisation", through="users.PersonOrganisation")
+
+
+    def __str__(self):
+        return self.formal_name
+
+    class Meta:
+        verbose_name = _('person')
+        verbose_name_plural = _('people')
+        ordering = ['sortable_name', ]
+        abstract = True
+
 
     def save(self, *args, **kwargs):
 
-        new = not self.id
+        if not self.ref:
+            self.ref = get_new_ref("person")
 
-        # migrate email to comms channel
-        if not self.preferred_channel and self.date_joined and self.date_joined < timezone.make_aware(datetime(*settings.USER_COMMS_MIGRATION_DATE)):
+        if not self.identifier:
+            self.identifier = None
 
-            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
-                                                                  email=self.email,
-                                                                  defaults={'verified_at': self.date_joined})
+        # try to split name assuming it is a western name
+        if not self.sortable_name:
+            parts = self.formal_name.split(" ")
+            if len(parts) > 1:
+                self.sortable_name = f"{parts[-1]} {parts[-2]}"
+            else:
+                self.sortable_name = self.formal_name
 
         super().save(*args, **kwargs)
 
-        # setup email as preferred channel but not verified
-        if not self.preferred_channel:
-            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
-                                                                 email=self.email)
-            self.preferred_channel = email_channel
-            self.quick_save(update_fields=['preferred_channel',])
+        if 'user' in self.changed_fields and self.user != None:
+            self.bump(10, "linking user to person")
 
-
+    @classmethod
+    def id_or_name(cls, id, name, data, creator=None):
+        raise ValidationError("Deprecated method id_or_name")
 
     @property
-    def is_rider(self):
-        return self.is_competitor
+    def name(self):
+        '''if available return formal_name (friendly_name), if not do your best!'''
 
-    def upgrade_to_rider(self, creator=None, source="system"):
-        '''add role of rider for this user'''
-        Rider = apps.get_model('web', 'rider')
-        roles = self.add_roles([ModelRoles.ROLE_COMPETITOR, ])
+        if self.formal_name:
+            return self.formal_name
+        elif self.friendly_name:
+            return self.friendly_name
+        else:
+            return self.ref
 
-        for rider in Rider.objects.filter(email=self.email, user__isnull=True):
-            rider.user = self
-            rider.save()
+    @classmethod
+    def new(cls, name, roles=None, user=None, source="Unknown", ref=None, creator=None, **data):
+        '''create a new person and all associated links - name at least is required and this becomes formal_name if that is not supplied
+        returns person object and first role object as often want to just add a judge for example and not then have to go and look for it'''
 
-        return roles[0]
+        obj = None
 
-class UserContact(UserContactBase):
+        # FOR NOW ONLY ONE PERSON PER USER
+        if user:
+            try:
+                obj = cls.objects.get(user=user)
+            except:
+                pass
+            else:
+                # person may already have been created with user so just update the name
+                obj.formal_name = name
+                for k, v in data.items():
+                    setattr(obj, k, v)
 
-    pass
+                if creator:
+                    obj.updator = creator
+
+                obj.save()
+
+        # create Person object
+        if not obj:
+
+            if user:
+                data['identifier_type'] = cls.IDENTIFIER_TYPE_EMAIL
+                data['identifier'] = user.email
+
+            obj = cls.objects.create(formal_name=name, user=user, creator=creator, data_source=source, **data)
+
+        # else:
+        #
+        #     # update name if Person already exists
+        #     if obj.formal_name != name:
+        #         obj.formal_name = name
+        #         obj.save()
+
+        # if we have a user, this improves the quality of the data
+        if user:
+            quality = obj.DEFAULT_QUALITY + 10
+        else:
+            quality = obj.DEFAULT_QUALITY
+
+        obj.update_quality(quality=quality, comment='', source=source, creator=creator)
+
+        # create role links
+        if roles:
+            role_objs = obj.add_roles(roles)
+            role_obj = role_objs[0]
+        else:
+            role_obj = None
+
+        return obj, role_obj
+
+    @classmethod
+    def create_from_user(cls, user):
+
+        person = cls(
+            user=user,
+            data_source="User"
+        )
+
+        if user.first_name:
+            person.friendly_name = user.first_name
+
+        if user.last_name:
+            person.formal_name = f"{user.first_name} {user.last_name}"
+
+        # have to have a formal name, so build from email
+        if not person.formal_name:
+            parts = user.email.split("@")
+            person.formal_name = parts[0]
+
+        person.save()
+
+        return person
+
+    @classmethod
+    def create_person_and_user(cls, username, email, friendly_name, formal_name, **kwargs):
+
+        person = cls(
+            friendly_name=friendly_name,
+            formal_name=formal_name,
+            **kwargs,
+        )
+        person.save()
+
+        user = cls.CustomUser.objects.create_user(username=username, email=email, person=person)
+
+    @property
+    def roles(self):
+        return self.Role.objects.active().filter(person=self)
+
+    def add_roles(self, roles):
+        '''add roles to PersonRoles where roles is a list of role ids'''
+
+        objs = []
+        for role in roles:
+            try:
+                obj, _ = self.Role.objects.get_or_create(name=self.formal_name, person=self, role_type=role, user=self.user)
+            except self.Role.MultipleObjectsReturned:
+                logger.warning(f"Multiple roles returned for {self.formal_name} {role}")
+                obj = self.Role.objects.filter(name=self.formal_name, person=self, role_type=role, user=self.user).last()
+            objs.append(obj)
+
+        return objs
+
+    def remove_roles(self, roles):
+
+        for role in roles:
+            try:
+                self.Role.objects.get(person=self, role_type=role).delete()
+            except Exception as e:
+                logger.warning(f"exception {e} on removing role {role}")
+
+
+
+class RoleQuerySet(models.QuerySet):
+
+    def judges(self):
+        return self.filter(role_type=ModelRoles.ROLE_JUDGE)
+
+    def active(self):
+        return self.filter(active=True)
+
+    def event_roles(self):
+        '''excluding judges'''
+        return self.filter(role_type__in=ModelRoles.EVENT_ROLES_LIST_NO_JUDGES)
+
+class RoleBase(CreatedUpdatedMixin):
+    '''a person may have many roles and many have different versions of the same role, for example,
+    be a judge at a different level in different disciplines or different countries.  If this person
+    is also a user of the system then the user will be linked in
+    May also be used for memberships in future so I have a role as an AIRC Member
+    This is the role outside of the event - EventRole is used to say what roles they have at ane event'''
+
+    ref = models.CharField(max_length=7, unique=True, null=True, blank=True)
+
+    role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES)
+
+    # making person not required so that where you have a person with little info other than a name , eg. a competitor at a historical event
+    # you do not necessarily need to create a person, and very likely end up with many duplicate Person records.
+
+    person = models.ForeignKey("Person", on_delete=models.CASCADE, blank=True, null=True, related_name="role_person")
+
+    # Role will belong to whinnie in future and should not be used by other systems
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+                             related_name="role_user")
+
+    name = models.CharField(_("Name"), max_length=60, db_index=True)
+
+    # we may not want level and credentials - only really useful for competitor and judge and these have their own model (?)
+    level = models.CharField(_("List"), max_length=20, blank=True, null=True)
+    credentials = models.CharField(_("List of credentials"), max_length=254, blank=True, null=True)
+
+    country = CountryField(blank=True, null=True,
+                           help_text=_("Optional"))
+
+    discipline = models.CharField(choices=Disciplines.DISCIPLINE_CHOICES, max_length=2,
+                                  default=Disciplines.DEFAULT_DISCIPLINE)
+
+    organisation = models.ForeignKey("users.Organisation", blank=True, null=True, on_delete=models.CASCADE)
+    active = models.BooleanField(default=True, db_index=True)
+    comments = models.TextField(blank=True, null=True)
+
+    objects = RoleQuerySet().as_manager()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        abstract = True
+        indexes = [
+            models.Index(fields=['user', 'active','role_type']),
+        ]
+
+    def save(self, *args, **kwargs):
+
+        if not self.ref:
+            self.ref = get_new_ref("role")
+
+        # Ensure consistency between user and person
+        if self.person and self.person.user and self.person.user != self.user:
+            self.user = self.person.user
+        elif self.user and self.user.person and self.user.person != self.person:
+            self.person = self.user.person
+
+        if self.user and self.user.person and self.person != self.user.person:
+            raise ValidationError(
+                f"User and Person have a one to one link - user is linked to {self.user.person} and trying to save with link to person {self.person}")
+
+        if not self.name and self.person:
+            self.name = self.person.formal_name
+
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_or_create(cls, role_type, user=None, person=None, **extra_fields):
+        # Role is not currently to be trusted - it is creating multiple roles for the same person/competitor
+        if user or person:
+            roles = cls.objects.filter(role_type=role_type)
+
+            if user:
+                roles = roles.filter(user=user)
+            elif person:
+                roles = roles.filter(person=person)
+
+            if roles.exists():
+                return roles[0], False
+
+        # create
+
+        return cls.objects.create(role_type=role_type, user=user, person=person, **extra_fields), True
+
+
+class PersonOrganisationBase(CreatedUpdatedMixin):
+    person = models.ForeignKey("users.Person", on_delete=models.CASCADE)
+    organisation = models.ForeignKey("users.Organisation", on_delete=models.CASCADE)
+
+    membership_id = models.CharField(max_length=30, blank=True, null=True)
+    membership_starts = models.DateTimeField(blank=True, null=True)
+    membership_ends = models.DateTimeField(blank=True, null=True)
+    membership_type = models.CharField(max_length=40, blank=True, null=True)
+
+    class Meta:
+        abstract = True
+
+
+
+
+class OrganisationBase(CreatedUpdatedMixin):
+    ''' the organising group for an event.  This could be a club, eg South Munster Dressage or a national body, eg. Dressage Ireland
+    Note that some bodies will be listed under both Organisation and Issuer.
+    It is expected that an Organisation will always run using the rule book of a single authority but this may not be the case so
+    both Organisation (organising body) and Issuer (authority) are listed in the event.
+    '''
+    # scoring_type determines how final score is calculated. eg. dressage is totals marks as %,
+    # eventing  100 - (total marks as %)
+    SCORING_TYPES = (
+        ("D", "Dressage"),
+        ("E", "Eventing"),
+        ("C", "Combined Training"),
+    )
+    code = models.CharField(max_length=8, primary_key=True, help_text=_("Max 10 chars upper case.  Used to tag data as belonging to the organisation"))
+    name = models.CharField(_('Organisation Name'), max_length=50, db_index=True)
+
+    test = models.BooleanField(default=False, db_index=True)
+    active = models.BooleanField(default=True, db_index=True)
+    scoring_type = models.CharField(max_length=1, choices=SCORING_TYPES, default='D')  # default for this organisation
+    country = CountryField(blank=True, null=True)
+    home_page = models.URLField(blank=True, null=True)
+    logo_link_large = models.ImageField(upload_to="logo/organisation/", blank=True, null=True)
+    logo_link_small = models.ImageField(upload_to="logo/organisation/", blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name', ]
+        abstract = True
+
+    @property
+    def is_test(self):
+        return self.test
+
+
+class CustomUserQuerySet(models.QuerySet):
+
+    def old_anon(self, days=7):
+        days_ago = timezone.now() - timedelta(days=days)
+        return self.filter(status=self.model.USER_STATUS_ANON, date_joined__lt=days_ago)
+
+    def active(self):
+
+        return self.filter(active=True)
+
+    def competitors(self):
+        return self.filter(is_competitor=True)
+
+    def riders(self):
+        return self.filter(is_rider=True)
+
+    def judges(self):
+        return self.filter(is_judge=True)
+
+    def icansee(self, user):
+        '''used when organising an event and shows '''
+        # needs to be built
+        if user.is_superuser or user.is_administrator:
+            return self.all()
+        else:
+            return self.none()
+
+
+class CustomUserManager(BaseUserManager):
+    _person_model = None
+
+    @property
+    def Person(self):
+        if self._person_model is None:
+            self._person_model = apps.get_model('users', 'Person')
+        return self._person_model
+
+    def _create_user(self, email, password,
+                     is_staff, is_superuser, **extra_fields):
+        """
+        Creates and saves a User with the given username, email and password.
+        """
+        now = timezone.now()
+
+        email = self.normalize_email(email)
+        user = self.model(email=email,
+                          is_staff=is_staff, is_active=True,
+                          is_superuser=is_superuser, last_login=now,
+                          date_joined=now, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+    def create_user(self, email=None, password=None, **extra_fields):
+        '''note that extra_fields only used in creating person not user'''
+        is_active = True
+        user_extras = {}
+        if 'first_name' in extra_fields:
+            user_extras['first_name'] = extra_fields['first_name']
+            user_extras['last_name'] = extra_fields['last_name']
+            extra_fields.pop('first_name')
+            extra_fields.pop('last_name')
+
+        # person needs a name
+        if not 'formal_name' in extra_fields:
+            if 'first_name' in extra_fields and 'last_name' in extra_fields:
+                extra_fields['formal_name'] = f"{extra_fields['first_name']} {extra_fields['last_name']}"
+            else:
+            extra_fields['formal_name'] = email.split("@")[0]
+
+        if 'username' in extra_fields:
+            extra_fields.pop('username')
+        if 'is_active' in extra_fields:
+            is_active = extra_fields.pop('is_active')
+
+
+        person = self.Person.objects.create(**extra_fields)
+
+        user_extras['person'] = person
+        user = self._create_user(email, password, False, False, **user_extras)
+
+        if not is_active:
+            user.is_active = False
+            user.save()
+
+        person.user = user
+        person.save()
+
+        return user
+
+    def create_superuser(self, email, password, **extra_fields):
+
+        person = self.Person.objects.create(**extra_fields)
+        user = self._create_user(email, password, True, True,
+                                 person=person, **extra_fields)
+        person.user = user
+        person.save()
+        user.save()
+        return user

@@ -52,7 +52,8 @@ class UserShortSerializer(CountryFieldMixin, serializers.ModelSerializer):
         return ret
 
 class UserSerializer(CountryFieldMixin, serializers.ModelSerializer):
-
+    where_did_you_hear = serializers.CharField(max_length=255, required=False)
+    city = serializers.CharField(max_length=255, required=False)
     class Meta:
         model = CustomUser
         fields = ('id','username','first_name', 'last_name',  'full_name', 'active', 'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')

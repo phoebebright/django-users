@@ -79,57 +79,16 @@ class EmailForm(forms.Form):
         super(EmailForm, self).__init__(*args, **kwargs)
 
 class ProfileForm(Form):
-    LEVEL_CHOICES = (
-        ('trainee_judge', 'Trainee Judge'),
-        ('list6', 'List 6'),
-        ('list5', 'List 5'),
-        ('list4', 'List 4'),
-        ('list3', 'List 3'),
-        ('list3a', 'List 3a'),
-        ('list2', 'List 2'),
-        ('list2a', 'List 2a'),
-        ('list1', 'List 1'),
-    )
-    COUNTY_CHOICES = [
-        ('Antrim', 'Antrim'),
-        ('Armagh', 'Armagh'),
-        ('Carlow', 'Carlow'),
-        ('Cavan', 'Cavan'),
-        ('Clare', 'Clare'),
-        ('Cork', 'Cork'),
-        ('Donegal', 'Donegal'),
-        ('Down', 'Down'),
-        ('Dublin', 'Dublin'),
-        ('Fermanagh', 'Fermanagh'),
-        ('Galway', 'Galway'),
-        ('Kerry', 'Kerry'),
-        ('Kildare', 'Kildare'),
-        ('Kilkenny', 'Kilkenny'),
-        ('Laois', 'Laois'),
-        ('Leitrim', 'Leitrim'),
-        ('Limerick', 'Limerick'),
-        ('Londonderry', 'Londonderry'),
-        ('Longford', 'Longford'),
-        ('Louth', 'Louth'),
-        ('Mayo', 'Mayo'),
-        ('Meath', 'Meath'),
-        ('Monaghan', 'Monaghan'),
-        ('Offaly', 'Offaly'),
-        ('Roscommon', 'Roscommon'),
-        ('Sligo', 'Sligo'),
-        ('Tipperary', 'Tipperary'),
+    country = CountryField().formfield()
+    city = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'update'}),
+        max_length=50,  label=_("Nearest City or Town"))
 
-        ('Tyrone', 'Tyrone'),
-        ('Waterford', 'Waterford'),
-        ('Westmeath', 'Westmeath'),
-        ('Wexford', 'Wexford'),
-        ('Wicklow', 'Wicklow'),
-
-    ]
-    username = forms.HiddenInput()
-    county = forms.ChoiceField(choices=COUNTY_CHOICES, required=False)
-    level = forms.ChoiceField(choices=LEVEL_CHOICES, required=False)
-
+    where_did_you_hear = forms.CharField(max_length=60,  label=_("Where did you hear about us? (Please name any organisation, magazines or websites)"), help_text=_("It really helps us if you tell us the full names of how you found us!"))
+    # mobile =  forms.CharField(max_length=20,  label=_("Mobile Number"),
+    #                           help_text=_("Optional - Only for Events you are participating in or for support"),
+    # required=False)
+    # whatsapp = forms.BooleanField(required=False, label="Whatsapp - Only for Events you are participating in or for support")
 
 class UserMigrationForm(forms.Form):
     email = forms.EmailField(label="Email")
@@ -146,7 +105,7 @@ class SignUpForm(forms.Form):
         email = forms.EmailField(max_length=254, required=True, label=_('Email Address'))
         mobile = PhoneNumberField(required=False, label=_('Phone Number (for SMS/WhatsApp)'))
         password = forms.CharField(label="Password", widget=forms.PasswordInput)
-        channel_type = forms.ChoiceField(
+        preferred_channel = forms.ChoiceField(
             choices=CommsChannel.CHANNEL_CHOICES,
             initial='email',
             label=_('Preferred Communication Channel'),
@@ -157,10 +116,10 @@ class SignUpForm(forms.Form):
 
         def clean(self):
             cleaned_data = super().clean()
-            channel_type = cleaned_data.get('channel_type')
+            preferred_channel = cleaned_data.get('preferred_channel')
             mobile = cleaned_data.get('mobile')
 
-            if channel_type in ['sms', 'whatsapp'] and not mobile:
+            if preferred_channel in ['sms', 'whatsapp'] and not mobile:
                 raise forms.ValidationError(_('Phone number is required for SMS or WhatsApp verification.'))
 
             return cleaned_data

@@ -74,7 +74,12 @@ def logout_user_from_keycloak_and_django(request, user=None):
 def create_keycloak_user(user_details):
     '''Create a Keycloak user and return the user ID that will be used as the username in Django'''
     '''
-
+    new_user = keycloak_admin.create_user({"email": "example@example.com",
+                                       "username": "example@example.com",
+                                       "enabled": True,
+                                       "firstName": "Example",
+                                       "lastName": "Example",
+                                        "credentials": [{"value": "secret","type": "password",}]})
     user_details = {
         "email": "example@example.com",
         "username": "example@example.com",
