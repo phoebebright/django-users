@@ -14,44 +14,6 @@ from phonenumber_field.formfields import PhoneNumberField
 
 
 
-class CustomUserCreationFormBase(ModelForm):
-    #email = forms.HiddenInput() not working
-    #username = forms.HiddenInput()
-    password = forms.CharField(
-        label=_("Temporary Password"),
-        strip=False,
-        help_text=_("Suggested temporary password."),
-    )
-
-    class Meta:
-        model = None
-        fields = ( "email", "first_name","last_name")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['first_name'] = forms.CharField(required=True)
-        self.fields['last_name'] = forms.CharField(required=True)
-        self.fields['mobile'] = PhoneNumberField(required=False)
-        self.fields['first_name'].widget.attrs.update({'class': 'update'})
-        self.fields['last_name'].widget.attrs.update({'class': 'update'})
-        self.fields['mobile'].widget.attrs.update({'class': 'update'})
-
-        random_number = random.randint(100000, 999999)
-        random_letter = random.choice(string.ascii_uppercase)
-        self.fields['password'].initial  = f"{str(random_number)[:3]}{random_letter}{str(random_number)[3:]}"
-
-
-    def clean(self):
-        return super().clean()
-
-
-    def save(self, commit=True):
-        return super().save(commit=commit)
-
-class OrganisationFormBase(ModelForm):
-    class Meta:
-        model = None
-        fields = '__all__'
 
 
 class SubscribeForm(forms.Form):
@@ -131,26 +93,6 @@ class SignUpForm(forms.Form):
                 raise forms.ValidationError(_('Phone number is required for SMS or WhatsApp verification.'))
 
             return cleaned_data
-
-class CommsChannelFormBase(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False)
-    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
-    class Meta:
-        model = None
-        fields = ['channel_type', 'email', 'mobile']
-
-
-
-
-
-class AddCommsChannelForm(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False)
-    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
-    username_code = forms.CharField(widget=HiddenInput(), required=False)
-
-    class Meta:
-        model = None
-        fields = ['channel_type', 'email', 'mobile']
 
 
 class ForgotPasswordForm(forms.Form):
@@ -272,3 +214,58 @@ class ProfileForm(Form):
                               help_text=_("Optional - Only for Events you are participating in or for support"),
     required=False)
     whatsapp = forms.BooleanField(required=False, label="Whatsapp - Only for Events you are participating in or for support")
+
+class CustomUserCreationFormBase(ModelForm):
+    #email = forms.HiddenInput() not working
+    #username = forms.HiddenInput()
+    password = forms.CharField(
+        label=_("Temporary Password"),
+        strip=False,
+        help_text=_("Suggested temporary password."),
+    )
+
+    class Meta:
+        model = None
+        fields = ( "email", "first_name","last_name")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['first_name'] = forms.CharField(required=True)
+        self.fields['last_name'] = forms.CharField(required=True)
+        self.fields['mobile'] = PhoneNumberField(required=False)
+        self.fields['first_name'].widget.attrs.update({'class': 'update'})
+        self.fields['last_name'].widget.attrs.update({'class': 'update'})
+        self.fields['mobile'].widget.attrs.update({'class': 'update'})
+
+        random_number = random.randint(100000, 999999)
+        random_letter = random.choice(string.ascii_uppercase)
+        self.fields['password'].initial  = f"{str(random_number)[:3]}{random_letter}{str(random_number)[3:]}"
+
+
+    def clean(self):
+        return super().clean()
+
+
+    def save(self, commit=True):
+        return super().save(commit=commit)
+
+class OrganisationFormBase(ModelForm):
+    class Meta:
+        model = None
+        fields = '__all__'
+
+class CommsChannelFormBase(forms.ModelForm):
+    email = forms.EmailField(label=_('Email'), required=False)
+    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
+    class Meta:
+        model = None
+        fields = ['channel_type', 'email', 'mobile']
+
+class AddCommsChannelFormBase(forms.ModelForm):
+    email = forms.EmailField(label=_('Email'), required=False)
+    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
+    username_code = forms.CharField(widget=HiddenInput(), required=False)
+
+    class Meta:
+        model = None
+        fields = ['channel_type', 'email', 'mobile']
