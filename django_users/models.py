@@ -33,18 +33,12 @@ from post_office.models import EmailTemplate
 from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
 
-from skorie.common.fields import EncryptedJSONField
-from skorie.common.user_models import OrganisationBase, PersonOrganisationBase, PersonBase, RoleBase, CommsChannelBase, \
-    VerificationCodeBase, UserContactBase, lazy_import
+
 from skorie.common.models import DataQualityLogBase, ModelRoles
-from testsheets.models import TestSheet
-from tinycloud_storage.models import TinyCloudBaseVideoItem
+
 from skorie.common.model_mixins import CreatedMixin,  EventMixin,  CreatedUpdatedMixin, \
      SponsorMixin, DataQualityMixin,  AliasForMixin, SellerMixin
 from django.db import IntegrityError, models, transaction
-
-
-from chunked_upload.models import AbstractChunkedUpload, ChunkedUpload
 
 
 from django.utils.translation import gettext_lazy as _
