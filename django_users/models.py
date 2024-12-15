@@ -153,6 +153,107 @@ class VerificationCodeBase(models.Model):
 
 
 
+class CustomUserQuerySet(models.QuerySet):
+
+    def old_anon(self, days=7):
+        days_ago = timezone.now() - timedelta(days=days)
+        return self.filter(status=self.model.USER_STATUS_ANON, date_joined__lt=days_ago)
+
+    def active(self):
+
+        return self.filter(active=True)
+
+    def competitors(self):
+        return self.filter(is_competitor=True)
+
+    def riders(self):
+        return self.filter(is_rider=True)
+
+    def judges(self):
+        return self.filter(is_judge=True)
+
+    def icansee(self, user):
+        '''used when organising an event and shows '''
+        # needs to be built
+        if user.is_superuser or user.is_administrator:
+            return self.all()
+        else:
+            return self.none()
+
+
+class CustomUserManager(BaseUserManager):
+    _person_model = None
+
+    @property
+    def Person(self):
+        if self._person_model is None:
+            self._person_model = apps.get_model('users', 'Person')
+        return self._person_model
+
+    def _create_user(self, email, password,
+                     is_staff, is_superuser, **extra_fields):
+        """
+        Creates and saves a User with the given username, email and password.
+        """
+        now = timezone.now()
+
+        email = self.normalize_email(email)
+        user = self.model(email=email,
+                          is_staff=is_staff, is_active=True,
+                          is_superuser=is_superuser, last_login=now,
+                          date_joined=now, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+    def create_user(self, email=None, password=None, **extra_fields):
+        '''note that extra_fields only used in creating person not user'''
+        is_active = True
+        user_extras = {}
+        if 'first_name' in extra_fields:
+            user_extras['first_name'] = extra_fields['first_name']
+            user_extras['last_name'] = extra_fields['last_name']
+            extra_fields.pop('first_name')
+            extra_fields.pop('last_name')
+
+        # person needs a name
+        if not 'formal_name' in extra_fields:
+            if 'first_name' in extra_fields and 'last_name' in extra_fields:
+                extra_fields['formal_name'] = f"{extra_fields['first_name']} {extra_fields['last_name']}"
+            else:
+                extra_fields['formal_name'] = email.split("@")[0]
+
+        if 'username' in extra_fields:
+            extra_fields.pop('username')
+        if 'is_active' in extra_fields:
+            is_active = extra_fields.pop('is_active')
+
+
+        person = self.Person.objects.create(**extra_fields)
+
+        user_extras['person'] = person
+        user = self._create_user(email, password, False, False, **user_extras)
+
+        if not is_active:
+            user.is_active = False
+            user.save()
+
+        person.user = user
+        person.save()
+
+        return user
+
+    def create_superuser(self, email, password, **extra_fields):
+
+        person = self.Person.objects.create(**extra_fields)
+        user = self._create_user(email, password, True, True,
+                                 person=person, **extra_fields)
+        person.user = user
+        person.save()
+        user.save()
+        return user
+
 
 class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
     # options for additional roles within skorie
@@ -1735,105 +1836,3 @@ class OrganisationBase(CreatedUpdatedMixin):
     @property
     def is_test(self):
         return self.test
-
-
-class CustomUserQuerySet(models.QuerySet):
-
-    def old_anon(self, days=7):
-        days_ago = timezone.now() - timedelta(days=days)
-        return self.filter(status=self.model.USER_STATUS_ANON, date_joined__lt=days_ago)
-
-    def active(self):
-
-        return self.filter(active=True)
-
-    def competitors(self):
-        return self.filter(is_competitor=True)
-
-    def riders(self):
-        return self.filter(is_rider=True)
-
-    def judges(self):
-        return self.filter(is_judge=True)
-
-    def icansee(self, user):
-        '''used when organising an event and shows '''
-        # needs to be built
-        if user.is_superuser or user.is_administrator:
-            return self.all()
-        else:
-            return self.none()
-
-
-class CustomUserManager(BaseUserManager):
-    _person_model = None
-
-    @property
-    def Person(self):
-        if self._person_model is None:
-            self._person_model = apps.get_model('users', 'Person')
-        return self._person_model
-
-    def _create_user(self, email, password,
-                     is_staff, is_superuser, **extra_fields):
-        """
-        Creates and saves a User with the given username, email and password.
-        """
-        now = timezone.now()
-
-        email = self.normalize_email(email)
-        user = self.model(email=email,
-                          is_staff=is_staff, is_active=True,
-                          is_superuser=is_superuser, last_login=now,
-                          date_joined=now, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-
-        return user
-
-    def create_user(self, email=None, password=None, **extra_fields):
-        '''note that extra_fields only used in creating person not user'''
-        is_active = True
-        user_extras = {}
-        if 'first_name' in extra_fields:
-            user_extras['first_name'] = extra_fields['first_name']
-            user_extras['last_name'] = extra_fields['last_name']
-            extra_fields.pop('first_name')
-            extra_fields.pop('last_name')
-
-        # person needs a name
-        if not 'formal_name' in extra_fields:
-            if 'first_name' in extra_fields and 'last_name' in extra_fields:
-                extra_fields['formal_name'] = f"{extra_fields['first_name']} {extra_fields['last_name']}"
-            else:
-            extra_fields['formal_name'] = email.split("@")[0]
-
-        if 'username' in extra_fields:
-            extra_fields.pop('username')
-        if 'is_active' in extra_fields:
-            is_active = extra_fields.pop('is_active')
-
-
-        person = self.Person.objects.create(**extra_fields)
-
-        user_extras['person'] = person
-        user = self._create_user(email, password, False, False, **user_extras)
-
-        if not is_active:
-            user.is_active = False
-            user.save()
-
-        person.user = user
-        person.save()
-
-        return user
-
-    def create_superuser(self, email, password, **extra_fields):
-
-        person = self.Person.objects.create(**extra_fields)
-        user = self._create_user(email, password, True, True,
-                                 person=person, **extra_fields)
-        person.user = user
-        person.save()
-        user.save()
-        return user
