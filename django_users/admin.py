@@ -198,7 +198,7 @@ class UserChangeForm(forms.ModelForm):
         return self.initial["password"]
 
 
-class CustomAdminBase(UserAdmin):
+class CustomUserAdminBase(UserAdmin):
 
     list_display = ('email', 'person','username','is_active','last_login','date_joined', 'subscribe_news', 'unsubscribe_news')
     list_filter = ('is_staff', 'is_active', 'status','subscribe_news', 'unsubscribe_news')
@@ -207,6 +207,8 @@ class CustomAdminBase(UserAdmin):
     inlines = [UserContactInline,]
     actions = [email_list, subscribe, unsubscribe, remove, add_to_keycloak, make_event_manager, delete_one]
 
+    class Meta:
+        model = None
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
