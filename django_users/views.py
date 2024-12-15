@@ -12,6 +12,7 @@ from django_keycloak_admin.models import try_while_locked
 from django_ratelimit.decorators import ratelimit
 from post_office.utils import send_mail
 from twilio.rest import Client
+from .keycloak_models import UserEntity
 
 import requests
 
@@ -33,32 +34,45 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
                                  update_session_auth_hash)
 from requests import Response
 
-from migrate_keycloak.models import UserEntity
-from skorie.common.mixins import GoNextMixin, GoNextTemplateMixin, CheckLoginRedirectMixin
 from tools.permission_mixins import UserCanAdministerMixin
+from .forms import *
 
 from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
     is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
-from .forms import SubscribeForm, ProfileForm, UserMigrationForm, SignUpForm, CommsChannelForm, VerificationCodeForm, \
-    ChangePasswordForm, AddCommsChannelForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, CustomUserCreationForm
 from .keycloak import create_keycloak_user
-from .models import UserContact, CustomUser, VerificationCode, CommsChannel
-
+from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
 logger = logging.getLogger('django')
 
+
 def get_legitimate_redirect(request):
-    nextpage=request.GET.get('next','/')
+    nextpage = request.GET.get('next', '/')
     if nextpage.startswith('http'):
         # prevent malicious redirects
-        nextpage='/'
+        nextpage = '/'
     return nextpage
 
-class AddUser(generic.CreateView):
+class GoNextTemplateMixin(TemplateView):
+    '''used for event views to work out where to go next'''
+
+    def get_context_data(self, **kwargs):
+        '''some forms put a url name in 'go_next' - respect this, otherwise go to event home'''
+        context = super().get_context_data(**kwargs)
+
+        context['next'] = self.request.GET.get('next', "")
+
+        return context
+
+class AddUserBase(generic.CreateView):
     '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)'''
-    #TODO: must be administrator or manager (?)
-    form_class = CustomUserCreationForm
+    # TODO: must be administrator or manager (?)
+    # form_class = CustomUserCreationForm
     template_name = 'organiser/add_user.html'
+
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def form_valid(self, form):
         '''create the keycloak user first then the local user'''
@@ -100,10 +114,15 @@ class AddUser(generic.CreateView):
             )
         return HttpResponseRedirect(reverse_lazy('users:admin_user', kwargs={'pk': user.pk}))
 
-class ManagerUserProfile(LoginRequiredMixin, generic.CreateView):
-    form_class = CustomUserCreationForm
+
+class ManagerUserProfileBase(LoginRequiredMixin, generic.CreateView):
+    # form_class = CustomUserCreationForm
     template_name = 'organiser/users/manage_user_profile.html'
 
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def form_valid(self, form):
         # This method is called when valid form data has been POSTed.
@@ -125,6 +144,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
+        UserContact = apps.get_model('users.UserContact')
 
         # only available for signed in user
         user = self.request.user
@@ -136,35 +156,26 @@ class SubscribeView(LoginRequiredMixin, FormView):
         # user.city = form.cleaned_data['city']
         user.save()
 
-
         # this will set status to at least Confirmed
         user.update_subscribed(form.cleaned_data['subscribe'])
 
-
-
         # add contact note
         notify = settings.NOTIFY_NEW_USER_EMAILS > ""
-        UserContact.add(user=user, method="Subscribe & Interest Form", notes = json.dumps(form.cleaned_data), data=form.cleaned_data, send_mail=notify)
+        UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
+                        data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)
 
 
-
 def unsubscribe_only(request):
-
     if request.user.is_authenticated:
         request.user.update_subscribed(False)
-
 
     return HttpResponseRedirect()
 
 
-
-
 @login_required()
 def send_test_email(request):
-
-
     # send_test_message('smtp', to=request.user)
     mail.send(
         subject="Test Message from Skor.ie",
@@ -177,15 +188,12 @@ def send_test_email(request):
     return HttpResponse("Mail Sent...")
 
 
-
-
 # user = User.objects.create_user(username=userid, email=user_details['email'],
 #                                 first_name=user_details['firstName'], last_name=user_details['lastName'])
 
 
 def logout(request):
-
-    nextpage=get_legitimate_redirect(request)
+    nextpage = get_legitimate_redirect(request)
 
     if len(settings.AUTHENTICATION_BACKENDS) > 1:
         return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
@@ -198,6 +206,7 @@ def logout(request):
     # return HttpResponseRedirect("/keycloak/logout")
     # return HttpResponseRedirect(logout_url)
 
+
 def login_redirect(request):
     if len(settings.AUTHENTICATION_BACKENDS) > 1:
         return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
@@ -205,10 +214,9 @@ def login_redirect(request):
         # this doesn't seem to be working
         return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
 
+
 def signup_redirect(request):
-
     next = request.GET.urlencode()
-
 
     if len(settings.AUTHENTICATION_BACKENDS) > 1:
         url = f"/keycloak/register"
@@ -222,9 +230,9 @@ def signup_redirect(request):
 
     return HttpResponseRedirect(url)
 
-def logout(request):
 
-    nextpage=get_legitimate_redirect(request)
+def logout(request):
+    nextpage = get_legitimate_redirect(request)
 
     if len(settings.AUTHENTICATION_BACKENDS) > 1:
         return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
@@ -237,6 +245,7 @@ def logout(request):
     # return HttpResponseRedirect("/keycloak/logout")
     # return HttpResponseRedirect(logout_url)
 
+
 def login_redirect(request):
     if len(settings.AUTHENTICATION_BACKENDS) > 1:
         return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
@@ -244,50 +253,54 @@ def login_redirect(request):
         # this doesn't seem to be working
         return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
 
+
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
-    if request.user.status < CustomUser.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
+    User = get_user_model()
+    if request.user.status < User.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
         url = reverse("subscribe_only")
     else:
         url = "/"
 
     return HttpResponseRedirect(url)
 
+
 @method_decorator(never_cache, name='dispatch')
-class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
-    form_class = ProfileForm
-    model = CustomUser
+class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
+    # form_class = ProfileForm
+    # model = CustomUser
+
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def get_template_names(self):
 
-        return  "users/change_profile.html"
+        return "users/change_profile.html"
 
     def get_object(self, queryset=None):
         # can only see your own profile
 
         return self.request.user
 
-
     def get_initial(self):
         initial = super().get_initial()
         user = self.request.user
         if user.is_authenticated:
-
             initial['country'] = user.country
             initial['county'] = user.profile['county'] if 'county' in user.profile else ''
             initial['level'] = user.profile['level'] if 'level' in user.profile else ''
-            initial['where_did_you_hear'] = user.profile['where_did_you_hear'] if 'where_did_you_hear' in user.profile else ''
+            initial['where_did_you_hear'] = user.profile[
+                'where_did_you_hear'] if 'where_did_you_hear' in user.profile else ''
 
         return initial
-
-
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
         context['now'] = timezone.now()
         context['roles'] = self.request.user.user_roles(descriptions=True)
-
 
         return context
 
@@ -306,13 +319,14 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         else:
             return self.form_invalid(form)
 
+
 @method_decorator(never_cache, name='dispatch')
 class Troubleshoot(UserCanAdministerMixin, View):
     '''given an email, see what the problem is'''
 
     def post(self, request, *args, **kwargs):
         email = request.POST.get('email')
-
+        CustomUser = get_user_model()
         try:
             django_user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
@@ -338,7 +352,6 @@ class ProblemSignup(TemplateView):
         else:
             return "users/problem_signup.html"
 
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         set_current_user(self.request, None, None)
@@ -346,6 +359,7 @@ class ProblemSignup(TemplateView):
         context['next'] = get_legitimate_redirect(self.request)
         context['email'] = kwargs['email'] if 'email' in kwargs else self.request.GET.get('email', '')
         return context
+
 
 @method_decorator(never_cache, name='dispatch')
 class ProblemLogin(ProblemSignup):
@@ -355,9 +369,10 @@ class ProblemLogin(ProblemSignup):
 
         email = request.GET.get('email', None)
         if email:
+            User = get_user_model()
             try:
-                django_user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
+                django_user = User.objects.get(email=email)
+            except User.DoesNotExist:
                 pass
             else:
                 self.verified = django_user.is_verified
@@ -377,14 +392,15 @@ class ProblemLogin(ProblemSignup):
         else:
             return "users/problem_login.html"
 
+
 @method_decorator(never_cache, name='dispatch')
 class NewUsers(UserCanAdministerMixin, TemplateView):
     template_name = "admin/new_users.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        users = CustomUser.objects.filter(date_joined__gte=timezone.now() - timedelta(days=7))
+        User = get_user_model()
+        users = User.objects.filter(date_joined__gte=timezone.now() - timedelta(days=7))
         # calclogs = []
         # for user in users:
         #     logs = []
@@ -397,22 +413,23 @@ class NewUsers(UserCanAdministerMixin, TemplateView):
 
 
 def get_keycloak_signup_url(email):
-        """Construct the Keycloak signup URL with the email pre-filled."""
-        base_url = f"{settings.KEYCLOAK_CLIENTS['DEFAULT']['URL']}/realms/{settings.KEYCLOAK_CLIENTS['DEFAULT']['REALM']}/protocol/openid-connect/auth"
-        params = {
-            'client_id': settings.KEYCLOAK_CLIENTS['DEFAULT']['CLIENT_ID'],
-            'response_type': 'code',
-            'scope': 'email',
-            'redirect_uri': f"{settings.SITE_URL}/keycloak/login-complete/",
-            'login_hint': email,
-            'action': 'register'
-        }
-        signup_url = f"{base_url}?{urlencode(params)}"
-        return signup_url
+    """Construct the Keycloak signup URL with the email pre-filled."""
+    base_url = f"{settings.KEYCLOAK_CLIENTS['DEFAULT']['URL']}/realms/{settings.KEYCLOAK_CLIENTS['DEFAULT']['REALM']}/protocol/openid-connect/auth"
+    params = {
+        'client_id': settings.KEYCLOAK_CLIENTS['DEFAULT']['CLIENT_ID'],
+        'response_type': 'code',
+        'scope': 'email',
+        'redirect_uri': f"{settings.SITE_URL}/keycloak/login-complete/",
+        'login_hint': email,
+        'action': 'register'
+    }
+    signup_url = f"{base_url}?{urlencode(params)}"
+    return signup_url
+
 
 @method_decorator(never_cache, name='dispatch')
 class UserMigrationView(View):
-    http_method_names = ['post',]
+    http_method_names = ['post', ]
 
     def authenticate_old_keycloak(self, email, password):
         token_url = f"{settings.OLD_KEYCLOAK_URL}/realms/{settings.OLD_REALM}/protocol/openid-connect/token"
@@ -462,31 +479,33 @@ class UserMigrationView(View):
 
     def post(self, request, *args, **kwargs):
         from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
+        User = get_user_model()
         email = request.POST.get('email')
         password = request.POST.get('password')
 
         try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
             # check if user has signup in new keycloak and is so proceed with login first time
             # Need to redirect to register page - email already filled in
             user = None
         else:
             if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
 
-                    # try authenticating with old keycloak
-                    if self.authenticate_old_keycloak(email, password):
-                        if self.update_password_new_keycloak(email, password):
-                            logger.info(f"User {email} has been migrated successfully.")
-                        else:
-                            logger.info(f"User {email} Failed to update password in the new system.")
-                            return redirect(settings.FORGOT_PASSWORD_URL)
+                # try authenticating with old keycloak
+                if self.authenticate_old_keycloak(email, password):
+                    if self.update_password_new_keycloak(email, password):
+                        logger.info(f"User {email} has been migrated successfully.")
+                    else:
+                        logger.info(f"User {email} Failed to update password in the new system.")
+                        return redirect(settings.FORGOT_PASSWORD_URL)
 
         # need to sign in user with new keycloak
         backend = KeycloakPasswordCredentialsBackend()
         authenticated_user = backend.authenticate(self.request, username=email, password=password)
         if authenticated_user:
-            login(request, authenticated_user, backend='django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend')
+            login(request, authenticated_user,
+                  backend='django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend')
             messages.success(request, "You have been successfully logged in.")
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
@@ -512,7 +531,7 @@ class LoginView(TemplateView):
     template = "users/login.html"
 
     def get(self, request):
-        #TODO: check user is not already logged in
+        # TODO: check user is not already logged in
         return render(request, self.template)
 
     def post(self, request):
@@ -540,100 +559,105 @@ class LoginView(TemplateView):
                 messages.error(request, _('Invalid email or password.'))
                 return render(request, self.template, {'email': email})
 
+
 @method_decorator(never_cache, name='dispatch')
-class RegisterView(FormView):
-    form_class = SignUpForm
+class RegisterViewBase(FormView):
+    # form_class = SignUpForm
     template_name = "users/register.html"
     user = None
+
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def success_url(self):
         return reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
 
-
     def form_valid(self, form):
 
-            channel_type = form.cleaned_data['channel_type']
-            email = form.cleaned_data['email']
-            mobile = form.cleaned_data['mobile']
-            password = form.cleaned_data['password']
+        channel_type = form.cleaned_data['channel_type']
+        email = form.cleaned_data['email']
+        mobile = form.cleaned_data['mobile']
+        password = form.cleaned_data['password']
 
-            #TODO: move to using users.add_or_update_user
-            try:
-                user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
-                user = CustomUser.objects.create(username=email, email=email, first_name=form.cleaned_data['first_name'], last_name=form.cleaned_data['last_name'], is_active=False)
-                self.user = user
-            else:
-                # we already have this user
-                self.user = user
-                if not user.is_active and user.keycloak_id:
-                    keycloak_details = get_user_by_id(user.keycloak_id)
-                    if keycloak_details['emailVerified']:
-                        messages.warning(self.request,
-                                         _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                        return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
-                    else:
-                        # as they never finished setting up the user, let's update the password so they can continue
-                        update_password(user.keycloak_id, password)
-                        logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
-                    # if user picked mobile, then need to add this channel and verify it
-                    if mobile:
-                            channel = self.create_comms_channels(channel_type, mobile, user)
-                            user.preferred_channel = channel
-                    else:
-                        channel = self.create_comms_channels('email', email, user)
-                        if channel_type == CommsChannel.CHANNEL_EMAIL:
-                            user.preferred_channel = channel
-
-                    user.quick_save(update_fields=['preferred_channel'])
-
-                    return HttpResponseRedirect(reverse('users:verify_channel', kwargs={'channel_id': channel.id}))
-                elif user.is_active:
-                    messages.warning(self.request, _('An account with this email already exists. Please log in with the original password.'))
-                    # could try signing in - at least put email in login form
+        # TODO: move to using users.add_or_update_user
+        User = get_user_model()
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            user = User.objects.create(username=email, email=email, first_name=form.cleaned_data['first_name'],
+                                             last_name=form.cleaned_data['last_name'], is_active=False)
+            self.user = user
+        else:
+            # we already have this user
+            self.user = user
+            if not user.is_active and user.keycloak_id:
+                keycloak_details = get_user_by_id(user.keycloak_id)
+                if keycloak_details['emailVerified']:
+                    messages.warning(self.request,
+                                     _('An account with this email already exists on Skorie. Please log in with the original password.'))
                     return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
-
-            # put current user in session so we can verify them
-            set_current_user(self.request, user.id, "REGISTER")
-
-
-
-            # make sure we have a keycloak id
-
-            if not user.keycloak_id:
-
-                status_code = user.create_keycloak_user_from_user(form.cleaned_data['password'])
-
-                if status_code == 201:
-                    pass
-                elif status_code == 409:
-                    messages.error(self.request, _('You already have .'))
-                    pass
                 else:
-                    messages.error(self.request, _('Failed to create user account. Please try again later.'))
-                    return reverse('users:login')
+                    # as they never finished setting up the user, let's update the password so they can continue
+                    update_password(user.keycloak_id, password)
+                    logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
+                # if user picked mobile, then need to add this channel and verify it
+                if mobile:
+                    channel = self.create_comms_channels(channel_type, mobile, user)
+                    user.preferred_channel = channel
+                else:
+                    channel = self.create_comms_channels('email', email, user)
+                    CommsChannel = apps.get_model('users.CommsChannel')
+                    if channel_type == CommsChannel.CHANNEL_EMAIL:
+                        user.preferred_channel = channel
 
-            # now we have a fully setup user, create the comms channels, if not already existing
+                user.quick_save(update_fields=['preferred_channel'])
 
-            # Create communication channels - defaults to email
-            channel = self.create_comms_channels('email', email, user)
-            if  channel_type == CommsChannel.CHANNEL_EMAIL:
-                user.preferred_channel = channel
+                return HttpResponseRedirect(reverse('users:verify_channel', kwargs={'channel_id': channel.id}))
+            elif user.is_active:
+                messages.warning(self.request,
+                                 _('An account with this email already exists. Please log in with the original password.'))
+                # could try signing in - at least put email in login form
+                return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
 
+        # put current user in session so we can verify them
+        set_current_user(self.request, user.id, "REGISTER")
 
-            # Create SMS/WhatsApp channel if phone number is provided
-            if mobile:
-                channel = self.create_comms_channels(channel_type, mobile, user)
-                user.preferred_channel = channel
+        # make sure we have a keycloak id
 
+        if not user.keycloak_id:
 
-            user.quick_save(update_fields=['preferred_channel'])
+            status_code = user.create_keycloak_user_from_user(form.cleaned_data['password'])
 
-            return HttpResponseRedirect(self.success_url())
+            if status_code == 201:
+                pass
+            elif status_code == 409:
+                messages.error(self.request, _('You already have .'))
+                pass
+            else:
+                messages.error(self.request, _('Failed to create user account. Please try again later.'))
+                return reverse('users:login')
 
+        # now we have a fully setup user, create the comms channels, if not already existing
+
+        # Create communication channels - defaults to email
+        channel = self.create_comms_channels('email', email, user)
+        CommsChannel = apps.get_model('users.CommsChannel')
+        if channel_type == CommsChannel.CHANNEL_EMAIL:
+            user.preferred_channel = channel
+
+        # Create SMS/WhatsApp channel if phone number is provided
+        if mobile:
+            channel = self.create_comms_channels(channel_type, mobile, user)
+            user.preferred_channel = channel
+
+        user.quick_save(update_fields=['preferred_channel'])
+
+        return HttpResponseRedirect(self.success_url())
 
     def create_comms_channels(self, channel_type, value, user):
-
+        CommsChannel = apps.get_model('users.CommsChannel')
         if channel_type != 'email':
             try:
                 channel = CommsChannel.objects.get(user=user, channel_type=channel_type, mobile=value)
@@ -657,15 +681,20 @@ class RegisterView(FormView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class AddCommsChannelView(View):
+class AddCommsChannelViewBase(View):
     '''this can be called after the user has logged in or before.  If before then there needs to be some throttling'''
-    def get(self, request):
 
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
+
+    def get(self, request):
         # set form.keycloak_id to user.keycloak_id
 
         user, user_login_mode = get_current_user(request)
 
-        form = AddCommsChannelForm()
+        form = self.get_form_class()
         form.fields['username_code'].initial = user.password
 
         return render(request, 'users/add_channel.html', {'form': form})
@@ -688,9 +717,7 @@ def set_current_user(request, user_id=None, user_login_mode=None):
         request.session['user_login_mode'] = user_login_mode
 
 
-
 def get_current_user(request):
-
     user = None
     user_login_mode = None
 
@@ -698,37 +725,41 @@ def get_current_user(request):
         user = request.user
         user_login_mode = "LOGGEDIN"
     else:
-            user_id = request.session.get('user_id',None)
-            user_login_mode = request.session.get('user_login_mode', None)
+        user_id = request.session.get('user_id', None)
+        user_login_mode = request.session.get('user_login_mode', None)
 
-
-            if user_id and user_login_mode in ["REGISTER", "PROBLEM"]:
-                try:
-                    user = CustomUser.objects.get(id=user_id)
-                except CustomUser.DoesNotExist:
-                    messages.error(request, _('Failed to locate user account. Please try again with a different email.'))
-
-
+        User = get_user_model()
+        if user_id and user_login_mode in ["REGISTER", "PROBLEM"]:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                messages.error(request, _('Failed to locate user account. Please try again with a different email.'))
 
     return user, user_login_mode
 
+
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelView(View):
+class VerifyChannelViewBase(View):
+
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def get(self, request, channel_id):
         user, user_login_mode = get_current_user(request)
-
+        CommsChannel = apps.get_model('users.CommsChannel')
         channel = get_object_or_404(CommsChannel, id=channel_id)
 
+        VerificationCode = apps.get_model('users.VerificationCode')
         vc = VerificationCode.create_verification_code(channel)
         success = vc.send_verification_code()
 
         if not success:
-
             messages.error(request, _('Failed to send verification code. Check your contact method is correct.'))
             return HttpResponseRedirect('users:login')
 
-        form = VerificationCodeForm(initial={'channel': channel})
+        form = self.get_form_class(initial={'channel': channel})
         next = request.GET.get('next', reverse('users:login'))
 
         context = {'form': form, 'channel': channel}
@@ -738,14 +769,16 @@ class VerifyChannelView(View):
         return render(request, 'users/verify_channel.html', context)
 
     def post(self, request, channel_id):
+        CommsChannel = apps.get_model('users.CommsChannel')
+        VerificationCode = apps.get_model('users.VerificationCode')
         channel = get_object_or_404(CommsChannel, id=channel_id)
-        code = request.POST.get('code',None)
+        code = request.POST.get('code', None)
 
         if code:
             success = VerificationCode.verify_code(code, channel)
             if success:
                 messages.success(request, _('Contact method has been verified.'))
-                url = f"{reverse('users:login')}?"+urlencode({'email': channel.user.email})
+                url = f"{reverse('users:login')}?" + urlencode({'email': channel.user.email})
                 return redirect(url)
 
         messages.error(request, _('Invalid or expired verification code.'))
@@ -763,13 +796,16 @@ class ManageCommsChannelsView(View):
         pass
 
 
-
 @method_decorator(never_cache, name='dispatch')
-class ChangePasswordNowView(GoNextTemplateMixin ,FormView):
+class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
     success_url = reverse_lazy("profile")
 
+    def get_form_class(self):
+        if not hasattr(self, 'form_class') or self.form_class is None:
+            raise NotImplementedError("Define `form_class` in the child class.")
+        return self.form_class
 
     def form_valid(self, form):
 
@@ -785,9 +821,10 @@ class ChangePasswordNowView(GoNextTemplateMixin ,FormView):
             form.add_error(None, f"Failed to update password: {e}")
             return self.form_invalid(form)
 
+
 @method_decorator(never_cache, name='dispatch')
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
-    #TODO: instead of putting vc code into session, put the pk of the record and check properly
+    # TODO: instead of putting vc code into session, put the pk of the record and check properly
     # Recheck vc on last step before changing password - could bypass step 3?
     template_name = "users/forgot_password.html"
     form_class = ForgotPasswordForm
@@ -809,7 +846,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         # Retrieve session values and set them as initial values in the form
         if step > 1:
             email = self.request.session.get('forgot_email')
-            self.user = CustomUser.objects.filter(username=email).first()
+            User = get_user_model()
+            self.user = User.objects.filter(username=email).first()
             if self.user:
                 kwargs['user'] = self.user  # Pass the user to populate channels in step 2
 
@@ -820,8 +858,6 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             kwargs['initial']['channel'] = self.request.session.get('forgot_channel')
 
         return kwargs
-
-
 
     def get_step(self):
         # Determine current step based on session
@@ -855,7 +891,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         if step == 1:
             # Step 1: Check if email exists and save it in session
             email = form.cleaned_data['email']
-            user = CustomUser.objects.filter(username=email).first()
+            User = get_user_model()
+            user = User.objects.filter(username=email).first()
             if user and not user.is_active:
                 form.add_error('email', _(f'This email does not have an account. Please {settings.REGISTER_TERM}.'))
                 return self.form_invalid(form)
@@ -869,6 +906,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         elif step == 2:
             # Step 2: Send a verification code to selected channel
             channel_id = form.cleaned_data['channel']
+            CommsChannel = apps.get_model('users.CommsChannel')
+            VerificationCode = apps.get_model('users.VerificationCode')
             channel = CommsChannel.objects.filter(id=channel_id, verified_at__isnull=False).first()
             if channel:
                 self.channel = channel
@@ -896,11 +935,13 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             confirm_password = form.cleaned_data['confirm_password']
             if new_password == confirm_password:
                 email = self.request.session.get('forgot_email')
-                user = CustomUser.objects.filter(username=email).first()
+                User = get_user_model()
+                user = User.objects.filter(username=email).first()
                 if user:
                     if not user.keycloak_id:
                         logger.error(f"User {user.pk} does not have a keycloak_id.")
-                        form.add_error('confirm_password', _('There is an issue with your account.  The administrator has been notified.'))
+                        form.add_error('confirm_password',
+                                       _('There is an issue with your account.  The administrator has been notified.'))
                         return self.form_invalid(form)
                     success = update_password(user.keycloak_id, new_password)
                     if success:
@@ -911,7 +952,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         self.request.session.pop('verification_code', None)
                         return redirect('users:login')
                     else:
-                        form.add_error('confirm_password', _('Unable to reset password.  Please try a different password.'))
+                        form.add_error('confirm_password',
+                                       _('Unable to reset password.  Please try a different password.'))
                         return self.form_invalid(form)
 
             else:
@@ -923,13 +965,11 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         return self.render_to_response(self.get_context_data(form=newform))
 
 
-
 @method_decorator(never_cache, name='dispatch')
-class ChangePasswordView(GoNextTemplateMixin ,FormView):
+class ChangePasswordView(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordForm
     success_url = reverse_lazy("profile")
-
 
     def form_valid(self, form):
         current_password = form.cleaned_data.get("current_password")
@@ -937,7 +977,6 @@ class ChangePasswordView(GoNextTemplateMixin ,FormView):
         user = get_current_user(self.request)
 
         if not verify_login(self.request.user.email, current_password):
-
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
@@ -953,15 +992,14 @@ class ChangePasswordView(GoNextTemplateMixin ,FormView):
 
 def update_users(request):
     # temporary function to update all users with keycloak_id - comment out once used
-    from users.models import CustomUser
-    for user in CustomUser.objects.filter(keycloak_id__isnull=True):
+    User = get_user_model()
+    for user in User.objects.filter(keycloak_id__isnull=True):
         try:
             user.keycloak_id = keycloak_admin.get_user_id(user.email)
         except Exception as e:
             print(e)
         else:
-            user.save(update_fields=['keycloak_id',])
-
+            user.save(update_fields=['keycloak_id', ])
 
 
 class UnverifiedUsersList(UserCanAdministerMixin, ListView):

@@ -1,0 +1,3 @@
+git+https://github.com/phoebebright/django-keycloak-admin
+Django
+twilio
