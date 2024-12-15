@@ -34,9 +34,7 @@ from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
 
 
-from skorie.common.models import DataQualityLogBase, ModelRoles
-
-from skorie.common.model_mixins import CreatedMixin,  EventMixin,  CreatedUpdatedMixin, \
+from .model_mixins import CreatedMixin,  EventMixin,  CreatedUpdatedMixin, \
      SponsorMixin, DataQualityMixin,  AliasForMixin, SellerMixin
 from django.db import IntegrityError, models, transaction
 
@@ -51,6 +49,20 @@ from .utils import send_email_verification_code, send_sms_verification_code, sen
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
+
+
+class DataQualityLogBase(CreatedMixin):
+    '''note that only models with a ref field can have an entry'''
+    ref = models.CharField(max_length=10, db_index=True)
+    reason_type = models.CharField(max_length=60, default="None", help_text=_("Reason for change in quality"))
+
+    data_quality = models.SmallIntegerField(validators=[MinLengthValidator(0), MaxLengthValidator(100)])
+    data_comment = models.TextField(blank=True, null=True)
+    data_source = models.CharField(max_length=200, default="Data entry",
+                                   help_text=_("notes on source of data - may be url"))
+
+    class Meta:
+        abstract = True
 
 logger = logging.getLogger('django')
 
