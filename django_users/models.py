@@ -8,12 +8,13 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from string import digits
 
-
+import nanoid
 from django.apps import apps
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.flatpages.models import FlatPage
+from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
 from django.core.mail import mail_admins
 
@@ -34,8 +35,7 @@ from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
 
 
-from .model_mixins import CreatedMixin,  EventMixin,  CreatedUpdatedMixin, \
-     SponsorMixin, DataQualityMixin,  AliasForMixin, SellerMixin
+from .model_mixins import CreatedMixin,  CreatedUpdatedMixin, TrackChangesMixin, DataQualityMixin,  AliasForMixin
 from django.db import IntegrityError, models, transaction
 
 
@@ -50,6 +50,47 @@ from .utils import send_email_verification_code, send_sms_verification_code, sen
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
+
+def get_new_ref(model):
+    '''
+    S+6 = Scoresheet
+    T+3 = Testsheet
+    H+5 = Horse
+    R+6 = Role
+    P+5 = Person
+    J+5 = Judge  # deprecated
+    V+4 = Event
+    C+5 = Competition
+    E+8 = Entry = E + Event + sequence - handled in model
+    W+5 = Order
+
+    Rosettes
+    Z+6 = Rosette
+
+    2 = 900
+    3 = 27,000
+    4 = 810,000
+    5 = 24,300,000
+    6 = 729,000,000
+    '''
+
+    if type(model) == type("string"):
+        model = model.lower()
+    else:
+        # assume model instance passed
+        model = model._meta.model_name.lower()
+
+    if model == "person":
+        first = "P"
+        size = 5
+    elif model == "role":
+        first = "R"
+        size = 6
+
+    else:
+        raise IntegrityError("Unrecognised model %s" % model)
+
+    return "%s%s" % (first, nanoid.generate(alphabet="23456789abcdefghjkmnpqrstvwxyz", size=size))
 
 class DataQualityLogBase(CreatedMixin):
     '''note that only models with a ref field can have an entry'''
@@ -289,6 +330,12 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
                                                    )
         return self._system_user
 
+    _CommsChannel = None
+    @property
+    def CommsChannel(self):
+        if not self._CommsChannel:
+            self._CommsChannel = apps.get_model('users', 'CommsChannel')
+        return self._CommsChannel
 
     _Role = None
     @property
@@ -481,8 +528,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
             # migrate email to comms channel
         if not self.preferred_channel and self.date_joined and self.date_joined < timezone.make_aware(
                 datetime(*settings.USER_COMMS_MIGRATION_DATE)):
-            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
+            email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
+                                                                  channel_type=self.CommsChannel.CHANNEL_EMAIL,
                                                                   email=self.email,
                                                                   defaults={'verified_at': self.date_joined})
 
@@ -490,8 +537,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
 
         # setup email as preferred channel but not verified
         if not self.preferred_channel:
-            email_channel, _ = CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=CommsChannel.CHANNEL_EMAIL,
+            email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
+                                                                  channel_type=self.CommsChannel.CHANNEL_EMAIL,
                                                                   email=self.email)
             self.preferred_channel = email_channel
             self.quick_save(update_fields=['preferred_channel', ])
@@ -557,17 +604,17 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
 
     @property
     def has_mobile(self):
-        return CommsChannel.objects.filter(user=self).exclude(channel_type="email", verified_at=None).exists()
+        return self.CommsChannel.objects.filter(user=self).exclude(channel_type="email", verified_at=None).exists()
 
     @property
     def has_email(self):
-        return CommsChannel.objects.filter(user=self, channel_type="email").exclude(verified_at=None).exists()
+        return self.CommsChannel.objects.filter(user=self, channel_type="email").exclude(verified_at=None).exists()
 
     @property
     def get_preferred_channel(self):
         '''handle migration where there may be no email comms channel'''
         if not self.preferred_channel:
-            self.preferred_channel.CommsChannel.objects.create(user=self, channel_type=CommsChannel.CHANNEL_EMAIL, value=self.email)
+            self.preferred_channel.CommsChannel.objects.create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, value=self.email)
             self.quick_save(updated_fields=['preferred_channel'])
 
         return self.preferred_channel
@@ -638,7 +685,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
     @classmethod
     def system_user(cls):
         # need a dummy person instance
-        person, _ = Person.objects.get_or_create(formal_name="Skorie System")
+        person, _ = cls.Person.objects.get_or_create(formal_name="Skorie System")
         system_user, _ = cls.objects.get_or_create(email="system@skor.ie",
                                                    defaults={'username': 'System',
                                                              'person': person,
@@ -768,9 +815,9 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
     def is_devteam(self):
         return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
 
-    @cached_property
-    def is_issuer(self):
-        return Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ISSUER).exists()
+    # @cached_property
+    # def is_issuer(self):
+    #     return seRole.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ISSUER).exists()
     # @property
     # def is_bot(self):
     #     return self.Role.objects.filter(user=self, role_type=self.ModelRoles.ROLE_BOT).exists()
@@ -1152,7 +1199,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
             passw = f"{str(random_number)[:3]}{random_letter}{str(random_number)[3:]}"
 
         # currently username is email
-        user, created = CustomUser.objects.get(username=username, defaults={'email': email,
+        user, created = cls.objects.get(username=username, defaults={'email': email,
                                                                             'first_name': first_name,
                                              'last_name': last_name,
                                                                             'is_active': False,
@@ -1417,11 +1464,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin, DataQualityMixin):
     def migrate_channels(self):
         # migrate email to comms channel and mobile if available in profile
         if not self.preferred_channel:
-            self.preferred_channel, _ = CommsChannel.objects.get_or_create(user=self, channel_type=CommsChannel.CHANNEL_EMAIL, email=self.email)
+            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, email=self.email)
             self.save()
 
             if 'mobile' in self.profile and self.profile['mobile']:
-                CommsChannel.objects.get_or_create(user=self, channel_type=CommsChannel.CHANNEL_SMS, mobile=self.profile['mobile'])
+                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS, mobile=self.profile['mobile'])
 
 
 class UserContactBase(models.Model):
