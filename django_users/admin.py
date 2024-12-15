@@ -3,6 +3,7 @@ import json
 
 from cryptography.fernet import Fernet
 from django import forms
+from django.apps import apps
 from django.contrib import admin
 from django.conf import settings
 from django.contrib.auth.admin import UserAdmin
@@ -16,12 +17,13 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
 
+
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
-# Register your models here.
 
 
-class  UserContactAdmin(admin.ModelAdmin):
+
+class  UserContactAdminBase(admin.ModelAdmin):
 
     list_display = ('user', 'contact_date', 'method', )
     list_filter = ('contact_date', 'method' )
@@ -54,6 +56,7 @@ remove.short_description = "Remove/Anonymise user data - FOREVER!"
 
 @transaction.non_atomic_requests
 def delete_one(self, request, queryset):
+    User = apps.get_model('users', 'CustomUser')
     Person = User.person.field.related_model
     people_to_delete = []
     for item in queryset:
@@ -149,8 +152,7 @@ class UserCreationForm(forms.ModelForm):
     password2 = forms.CharField(label='Password confirmation', widget=forms.PasswordInput)
 
     class Meta:
-        model = User
-
+        model = None
         fields = ('email', )
 
     def clean_password2(self):
@@ -179,7 +181,7 @@ class UserChangeForm(forms.ModelForm):
         help_text= ('<a href="../password/">Change Password</a>.'))
 
     class Meta:
-        model = User
+        model = None
         fields = ('email', 'password', 'extra_roles','is_active','person')
 
     def clean_password(self):
@@ -189,7 +191,7 @@ class UserChangeForm(forms.ModelForm):
         return self.initial["password"]
 
 
-class CustomAdmin(UserAdmin):
+class CustomAdminBase(UserAdmin):
 
     list_display = ('email', 'person','username','is_active','last_login','date_joined', 'subscribe_news', 'unsubscribe_news')
     list_filter = ('is_staff', 'is_active', 'status','subscribe_news', 'unsubscribe_news')
@@ -243,7 +245,7 @@ class CustomAdmin(UserAdmin):
 
 
 
-class OrganisationAdminForm(forms.ModelForm):
+class OrganisationAdminFormBase(forms.ModelForm):
     class Meta:
 
         exclude = ('country',) #AttributeError: 'BlankChoiceIterator' object has no attribute '__len__'
@@ -308,7 +310,7 @@ class PersonOrgInline(admin.TabularInline):
         self.model = model
 
 
-class PersonAdmin(admin.ModelAdmin):
+class PersonAdminBase(admin.ModelAdmin):
 
     list_display = ('ref','formal_name','friendly_name','user',)
     search_fields = ('formal_name','friendly_name','user__email','ref')
@@ -321,7 +323,7 @@ class PersonAdmin(admin.ModelAdmin):
         self.model = model
 
 
-class RoleAdmin(admin.ModelAdmin):
+class RoleAdminBase(admin.ModelAdmin):
 
     list_display = ('ref','name','role_type','user','organisation',)
     list_filter = ('role_type',)
@@ -334,7 +336,7 @@ class RoleAdmin(admin.ModelAdmin):
         self.model = model
 
 
-class CommsChannelAdmin(admin.ModelAdmin):
+class CommsChannelAdminBase(admin.ModelAdmin):
     list_display = ('user', 'channel_type', 'value',  'verified_at')
     list_filter = ('channel_type',)
     search_fields = ('phone', 'email')
@@ -345,7 +347,7 @@ class CommsChannelAdmin(admin.ModelAdmin):
         self.model = model
 
 
-class VerificationCodeAdmin(admin.ModelAdmin):
+class VerificationCodeAdminBase(admin.ModelAdmin):
     list_display = ('user', 'channel', 'code', 'expires_at', 'created_at')
     list_filter = ('channel__channel_type',)
     search_fields = ('user__email', 'channel__value', 'code')
