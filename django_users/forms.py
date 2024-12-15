@@ -11,10 +11,9 @@ from django.utils.translation import gettext_lazy as _
 from django_countries.fields import CountryField
 from phonenumber_field.formfields import PhoneNumberField
 
-from users.models import CustomUser, Organisation, CommsChannel
 
 
-class CustomUserCreationForm(ModelForm):
+class CustomUserCreationFormBase(ModelForm):
     #email = forms.HiddenInput() not working
     #username = forms.HiddenInput()
     password = forms.CharField(
@@ -24,7 +23,7 @@ class CustomUserCreationForm(ModelForm):
     )
 
     class Meta:
-        model = CustomUser
+        model = None
         fields = ( "email", "first_name","last_name")
 
     def __init__(self, *args, **kwargs):
@@ -48,9 +47,9 @@ class CustomUserCreationForm(ModelForm):
     def save(self, commit=True):
         return super().save(commit=commit)
 
-class OrganisationForm(ModelForm):
+class OrganisationFormBase(ModelForm):
     class Meta:
-        model = Organisation
+        model = None
         fields = '__all__'
 
 
@@ -124,11 +123,11 @@ class SignUpForm(forms.Form):
 
             return cleaned_data
 
-class CommsChannelForm(forms.ModelForm):
+class CommsChannelFormBase(forms.ModelForm):
     email = forms.EmailField(label=_('Email'), required=False)
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     class Meta:
-        model = CommsChannel
+        model = None
         fields = ['channel_type', 'email', 'mobile']
 
 
@@ -141,7 +140,7 @@ class AddCommsChannelForm(forms.ModelForm):
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
-        model = CommsChannel
+        model = None
         fields = ['channel_type', 'email', 'mobile']
 
 

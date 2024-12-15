@@ -12,25 +12,31 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from django.contrib.auth.admin import UserAdmin
+from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
-from web.models import ModelRoles
-from .models import Organisation, UserContact, CustomUser as User, Role, Person, PersonOrganisation, CustomUser, \
-    CommsChannel, VerificationCode
 
+
+ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
 # Register your models here.
 
 
 class  UserContactAdmin(admin.ModelAdmin):
 
-    class Meta:
-        model = UserContact
-
     list_display = ('user', 'contact_date', 'method', )
     list_filter = ('contact_date', 'method' )
 
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
+
 class UserContactInline(admin.TabularInline):
-    model = UserContact
+
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
 
 def email_list(self, request, queryset):
     return render('admin/email_list.html', {
@@ -182,8 +188,7 @@ class UserChangeForm(forms.ModelForm):
         # field does not have access to the initial value
         return self.initial["password"]
 
-# admin.site.unregister(User)
-@admin.register(CustomUser)
+
 class CustomAdmin(UserAdmin):
 
     list_display = ('email', 'person','username','is_active','last_login','date_joined', 'subscribe_news', 'unsubscribe_news')
@@ -191,8 +196,6 @@ class CustomAdmin(UserAdmin):
     search_fields = (  'email','username')
     ordering = ( 'email',)
     inlines = [UserContactInline,]
-
-
     actions = [email_list, subscribe, unsubscribe, remove, add_to_keycloak, make_event_manager, delete_one]
 
 
@@ -216,6 +219,11 @@ class CustomAdmin(UserAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
 
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
+
     def delete_model(self, request, obj):
         '''prevent recusion error when deleting'''
 
@@ -237,8 +245,13 @@ class CustomAdmin(UserAdmin):
 
 class OrganisationAdminForm(forms.ModelForm):
     class Meta:
-        model = Organisation
+
         exclude = ('country',) #AttributeError: 'BlankChoiceIterator' object has no attribute '__len__'
+
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
 
     # def __init__(self, *args, **kwargs):
     #     super().__init__(*args, **kwargs)
@@ -272,8 +285,13 @@ class OrganisationAdminForm(forms.ModelForm):
 
 
 class PersonRoleInline(admin.TabularInline):
-    model = Role
+
     extra = 0
+
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
 
     def encrypt_value(self, value):
         cipher_suite = Fernet(settings.SECRET_KEY.encode())
@@ -282,38 +300,57 @@ class PersonRoleInline(admin.TabularInline):
         return encrypted_value.decode('utf-8')
 
 class PersonOrgInline(admin.TabularInline):
-    model = PersonOrganisation
     extra = 0
 
-@admin.register(Person)
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
+
+
 class PersonAdmin(admin.ModelAdmin):
 
-    class Meta:
-        model = Person
     list_display = ('ref','formal_name','friendly_name','user',)
     search_fields = ('formal_name','friendly_name','user__email','ref')
     ordering = ('sortable_name', 'formal_name')
     inlines = [PersonRoleInline,PersonOrgInline]
 
-@admin.register(Role)
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
+
+
 class RoleAdmin(admin.ModelAdmin):
 
-    class Meta:
-        model = Role
     list_display = ('ref','name','role_type','user','organisation',)
     list_filter = ('role_type',)
     search_fields = ('name','ref')
     ordering = ('name', 'role_type')
 
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
 
-@admin.register(CommsChannel)
+
 class CommsChannelAdmin(admin.ModelAdmin):
     list_display = ('user', 'channel_type', 'value',  'verified_at')
     list_filter = ('channel_type',)
     search_fields = ('phone', 'email')
 
-@admin.register(VerificationCode)
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
+
+
 class VerificationCodeAdmin(admin.ModelAdmin):
     list_display = ('user', 'channel', 'code', 'expires_at', 'created_at')
     list_filter = ('channel__channel_type',)
     search_fields = ('user__email', 'channel__value', 'code')
+
+    def __init__(self, model, admin_site):
+        super().__init__(model, admin_site)
+        # Dynamically set the model if needed for further customization
+        self.model = model
