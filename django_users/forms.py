@@ -2,6 +2,7 @@ import random
 import string
 
 from django import forms
+from django.apps import apps
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
@@ -104,14 +105,22 @@ class SignUpForm(forms.Form):
         email = forms.EmailField(max_length=254, required=True, label=_('Email Address'))
         mobile = PhoneNumberField(required=False, label=_('Phone Number (for SMS/WhatsApp)'))
         password = forms.CharField(label="Password", widget=forms.PasswordInput)
-        preferred_channel = forms.ChoiceField(
-            choices=CommsChannel.CHANNEL_CHOICES,
-            initial='email',
-            label=_('Preferred Communication Channel'),
-            widget=forms.RadioSelect
-        )
+        preferred_channel = None  # Placeholder for the preferred_channel field
 
+        def __init__(self, *args, **kwargs):
+            # Attempt to resolve the CommsChannel model dynamically
+            comms_channel_model = apps.get_model('users', 'CommsChannel', require_ready=False)
 
+            super().__init__(*args, **kwargs)
+
+            # Set up the preferred_channel field only if CommsChannel is available
+            if comms_channel_model:
+                self.fields['preferred_channel'] = forms.ChoiceField(
+                    choices=comms_channel_model.CHANNEL_CHOICES,
+                    initial='email',
+                    label=_('Preferred Communication Channel'),
+                    widget=forms.RadioSelect
+                )
 
         def clean(self):
             cleaned_data = super().clean()
