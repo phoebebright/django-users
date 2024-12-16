@@ -6,6 +6,7 @@ from venv import create
 import requests
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth import get_user_model
 from django.core.checks import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -144,11 +145,11 @@ class ChangePassword(APIView):
 def email_exists(request):
     '''check an email exists in the system'''
     response = "N"
-    CustomUser = apps.get_model('users.CustomUser')
+    User = get_user_model()
     try:
-        CustomUser.objects.get(email=request.data['email'])
+        User.objects.get(email=request.data['email'])
         response = "Y"
-    except CustomUser.DoesNotExist:
+    except User.DoesNotExist:
         pass
 
     return Response(response)
@@ -164,9 +165,9 @@ class CheckActivationBase(APIView):
     permission_classes = []
 
     def get(self, request, format=None):
-        CustomUser = apps.get_model('users.CustomUser')
+        User = get_user_model()
         if not request.user.is_authenticated:
-            user = CustomUser.objects.get(email=request.query_params['email'])
+            user = User.objects.get(email=request.query_params['email'])
         else:
             user = request.user
 
@@ -189,9 +190,9 @@ class CheckPinBase(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
     def post(self, request, format=None):
-        CustomUser = apps.get_model('users.CustomUser')
+        User = get_user_model()
         if not request.user.is_authenticated:
-            user = CustomUser.objects.get(email=request.query_params['email'])
+            user = User.objects.get(email=request.query_params['email'])
         else:
             user = request.user
 
@@ -208,9 +209,9 @@ class CheckPinBase(APIView):
 @api_view(['GET'])
 def resend_activation(request):
     '''trigger resend of activation email for email address specified'''
-    CustomUser = apps.get_model('users.CustomUser')
+    User = get_user_model()
     if not request.user.is_authenticated:
-        user = CustomUser.objects.get(email=request.query_params['email'])
+        user = User.objects.get(email=request.query_params['email'])
     else:
         user = request.user
 
@@ -230,8 +231,8 @@ class UserProfileUpdateBase(APIView):
 
     def patch(self, request, username):
 
-        CustomUser = apps.get_model('users.CustomUser')
-        user = CustomUser.objects.get(username=username)
+        User = get_user_model()
+        user = User.objects.get(username=username)
 
 
         # can only edit your own
@@ -315,10 +316,10 @@ class SendVerificationCode(APIView):
     throttle_classes = [CustomAnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        CustomUser = apps.get_model('users.CustomUser')
-        VerificationCode = apps.get_model('users.VerificationCode')
+        User = get_user_model()
+        VerificationCode = apps.get_model('users', 'VerificationCode')
         user_id = request.session.get('user_id')
-        user = CustomUser.objects.get(id=user_id)
+        user = User.objects.get(id=user_id)
         channel = user.comms_channels.get(pk=request.POST.get('channel_pk'))
         if channel:
             vc = VerificationCode.create_verification_code(channel)
@@ -339,7 +340,7 @@ class CheckEmailInKeycloakPublic(APIView):
     throttle_classes = [CustomAnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        CustomUser = apps.get_model('users.CustomUser')
+        User = get_user_model()
         create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
         email = request.POST.get('email', None)
         if email:
@@ -348,8 +349,8 @@ class CheckEmailInKeycloakPublic(APIView):
             # get user in django
             try:
                 # username will be set by keycloak so use email as key
-                django_user = CustomUser.objects.get(email=email)
-            except CustomUser.DoesNotExist:
+                django_user = User.objects.get(email=email)
+            except User.DoesNotExist:
                 django_user = None
             else:
                 set_current_user(request, django_user.id, "PROBLEM")
@@ -377,7 +378,7 @@ class CheckEmailInKeycloakPublic(APIView):
 
                 with transaction.atomic():
                     # create user in django
-                    django_user = CustomUser.objects.create_user(email=email, username=email,
+                    django_user = User.objects.create_user(email=email, username=email,
                                                                  first_name=keycloak_user['firstName'],
                                                                  last_name=keycloak_user['lastName'],
                                                                  )
@@ -429,8 +430,8 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ('email',)
 
     def get_queryset(self):
-        CustomUser = apps.get_model('users.CustomUser')
-        return CustomUser.objects.none()
+        User = get_user_model()
+        return User.objects.none()
 
     def get_serializer_class(self):
         if not hasattr(self, 'serializer_class') or self.serializer_class is None:
@@ -438,7 +439,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
         return self.serializer_class
 
     def post(self, request, *args, **kwargs):
-        CustomUser = apps.get_model('users.CustomUser')
+        User = get_user_model()
         email = request.POST.get('email', None)
         # logger.warning(f"CheckEmail used to check {email}")
 
@@ -448,7 +449,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
         except ValidationError as e:
             raise ValidationError("Not an email")
 
-        queryset = CustomUser.objects.filter(email__iexact=email).first()
+        queryset = User.objects.filter(email__iexact=email).first()
 
         serializer = self.get_serializer(queryset)
         return Response(serializer.data)
@@ -524,13 +525,13 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         '''create a new comms channel for the user'''
-        CommsChannel = apps.get_model('users.CommsChannel')
+        CommsChannel = apps.get_model('users','CommsChannel')
         username_code = request.POST.get('username_code', None)
         if username_code:
-            CustomUser = apps.get_model('users.CustomUser')
+            User = get_user_model()
             try:
-                user = CustomUser.objects.get(password=username_code)
-            except CustomUser.DoesNotExist:
+                user = User.objects.get(password=username_code)
+            except User.DoesNotExist:
                 raise PermissionDenied
         else:
             user = request.user
@@ -566,7 +567,7 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
     @action(methods=['post'], detail=True, permission_classes=[IsAdministrator])
     def manually_verify(self, request, pk):
         '''manually verify a channel'''
-        CommsChannel = apps.get_model('users.CommsChannel')
+        CommsChannel = apps.get_model('users', 'CommsChannel')
         channel = CommsChannel.objects.get(pk=pk)
         channel.verified_at = timezone.now()
         channel.note = request.POST.get("note", "")
@@ -588,7 +589,7 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
         return self.serializer_class
 
     def get_queryset(self):
-        Organisation = apps.get_model('users.Organisation')
+        Organisation = apps.get_model('users', 'Organisation')
         queryset = Organisation.objects.filter(active=True)
 
         if not settings.DEBUG:
@@ -614,7 +615,7 @@ def toggle_role(request, personref):
 
     me = request.user
     role = request.data['role']
-    Role = apps.get_model('users.Role')
+    Role = apps.get_model('users', 'Role')
     role, created = Role.objects.get_or_create(person_id=personref, role_type=role)
 
     if not created:

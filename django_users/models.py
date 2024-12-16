@@ -146,8 +146,81 @@ class CommsChannelBase(models.Model):
     def __str__(self):
         return f"{self.get_channel_type_display()}: {self.value}"
 
+    @property
     def is_verified(self):
         return self.verified_at is not None
+
+    @property
+    def obfuscated_value(self):
+        if self.channel_type == self.CHANNEL_EMAIL:
+            return self.obfuscated_email
+        elif self.channel_type == self.CHANNEL_SMS:
+            return self.obfuscated_mobile
+        else:
+            return ''
+    @property
+    def obfuscated_email(self):
+        # Split the email into username and domain
+
+        if not self.email:
+            return ''
+
+        try:
+            username, domain = self.email.split('@')
+        except:
+            return ''
+        else:
+            # Keep the first character of the username and mask the rest
+            obfuscated_username = username[0] + '*' * (len(username) - 1)
+            return f"{obfuscated_username}@{domain}"
+
+    @property
+    def obfuscated_mobile(self):
+        # Only show the last four digits, mask the rest
+        if self.mobile:
+            mobile = str(self.mobile)
+            return  '*' * (len(mobile) - 4) + mobile[-4:]
+        else:
+            return ''
+
+
+    @property
+    def hash_username(self):
+        '''create a hash of the username to pass into a form so as to avoid exposing the email address'''
+        # Convert the username (email) to lowercase to ensure consistent hashing
+        normal = self.username.strip().lower()
+        return hashlib.sha256(normal.encode()).hexdigest()
+
+    def verify(self):
+        self.verified_at = timezone.now()
+        self.save()
+
+        # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
+        keycloak_verified = False
+        keycloak_user = get_user_by_id(self.user.keycloak_id)
+        if keycloak_user:
+            keycloak_verified =  keycloak_user['emailVerified']
+        else:
+            # let's create keycloak user and mark as verified
+            payload = {
+                "email": self.user.username,
+                "username": self.user.username,
+                "firstName": self.user.first_name,
+                "lastName": self.user.last_name,
+                "enabled": True,
+                'emailVerified': True,
+                "requiredActions": [],
+            }
+            keycloak_id, status_code = create_keycloak_user(payload)
+            self.user.is_active = True
+            self.user.save()
+
+        # TODO: move this somewhere better
+        if not self.user.is_active or not keycloak_verified:
+            self.user.is_active = True
+            self.user.save()
+            verify_user_without_email(self.user.keycloak_id)
+
 
     def send_msg(self, msg, subject=None):
         if self.channel_type == self.CHANNEL_EMAIL:
@@ -192,6 +265,7 @@ class VerificationCodeBase(models.Model):
         )
         return obj
 
+    @property
     def is_expired(self):
         return timezone.now() > self.expires_at
 
