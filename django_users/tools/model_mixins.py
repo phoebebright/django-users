@@ -19,7 +19,7 @@ from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
 
 
-from web.notifications import send_notification
+
 
 from django.utils.translation import gettext_lazy as _
 
@@ -31,7 +31,7 @@ from django.db.models.expressions import Combinable
 from post_office import mail
 
 from typing import Optional, Dict, Any, Set
-from tools.ref import get_new_ref
+from django_users.models import  get_new_ref
 
 
 logger = logging.getLogger('django')
