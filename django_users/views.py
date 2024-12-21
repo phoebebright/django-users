@@ -752,7 +752,7 @@ class VerifyChannelViewBase(View):
         channel = get_object_or_404(CommsChannel, id=channel_id)
 
         VerificationCode = apps.get_model('users.VerificationCode')
-        vc = VerificationCode.create_verification_code(channel)
+        vc = VerificationCode.create_verification_code(user, channel)
         success = vc.send_verification_code()
 
         if not success:
@@ -887,12 +887,13 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
     def form_valid(self, form):
         step = self.get_step()
+        User = get_user_model()
+        user = User.objects.filter(username=email).first()
 
         if step == 1:
             # Step 1: Check if email exists and save it in session
             email = form.cleaned_data['email']
-            User = get_user_model()
-            user = User.objects.filter(username=email).first()
+
             if user and not user.is_active:
                 form.add_error('email', _(f'This email does not have an account. Please {settings.REGISTER_TERM}.'))
                 return self.form_invalid(form)
@@ -906,19 +907,35 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         elif step == 2:
             # Step 2: Send a verification code to selected channel
             channel_id = form.cleaned_data['channel']
-            CommsChannel = apps.get_model('users.CommsChannel')
-            VerificationCode = apps.get_model('users.VerificationCode')
-            channel = CommsChannel.objects.filter(id=channel_id, verified_at__isnull=False).first()
-            if channel:
+            CommsChannel = apps.get_model('users', 'CommsChannel')
+            VerificationCode = apps.get_model('users', 'VerificationCode')
+
+            # going to allow unverified channels
+            try:
+                channel = CommsChannel.objects.get(id=channel_id)
+            except Exception as e:
+                logger.warning(f"Channel {channel_id} not found: {e}")
+                form.add_error('channel', _('Invalid or unverified channel selected.'))
+            else:
                 self.channel = channel
-                self.request.session['forgot_channel'] = channel_id  # Store channel in session
-                vc = VerificationCode.create_verification_code(channel)
+                self.request.session['forgot_channel'] = channel_id
+                vc = VerificationCode.create_verification_code(user, channel)
                 vc.send_verification_code()
                 self.request.session['verification_code'] = vc.code
                 self.set_step(3)  # Move to Step 3
-            else:
-                form.add_error('channel', _('Invalid or unverified channel selected.'))
-                return self.form_invalid(form)
+
+
+            # channel = CommsChannel.objects.filter(id=channel_id, verified_at__isnull=False).first()
+            # if channel:
+            #     self.channel = channel
+            #     self.request.session['forgot_channel'] = channel_id  # Store channel in session
+            #     vc = VerificationCode.create_verification_code(channel)
+            #     vc.send_verification_code()
+            #     self.request.session['verification_code'] = vc.code
+            #     self.set_step(3)  # Move to Step 3
+            # else:
+            #     form.add_error('channel', _('Invalid or unverified channel selected.'))
+            #     return self.form_invalid(form)
 
         elif step == 3:
             # Step 3: Verify the code
@@ -935,8 +952,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             confirm_password = form.cleaned_data['confirm_password']
             if new_password == confirm_password:
                 email = self.request.session.get('forgot_email')
-                User = get_user_model()
-                user = User.objects.filter(username=email).first()
+
                 if user:
                     if not user.keycloak_id:
                         logger.error(f"User {user.pk} does not have a keycloak_id.")
@@ -944,6 +960,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                                        _('There is an issue with your account.  The administrator has been notified.'))
                         return self.form_invalid(form)
                     success = update_password(user.keycloak_id, new_password)
+                    #TODO: if channel was not verified set it to verified now
                     if success:
                         messages.success(self.request, _('Your password has been reset successfully.'))
                         # Clear session data after success
@@ -969,12 +986,12 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 class ChangePasswordView(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordForm
-    success_url = reverse_lazy("profile")
+    success_url = reverse_lazy("users:user-profile")
 
     def form_valid(self, form):
         current_password = form.cleaned_data.get("current_password")
         new_password = form.cleaned_data.get("new_password")
-        user = get_current_user(self.request)
+        user, user_login_mode = get_current_user(self.request)
 
         if not verify_login(self.request.user.email, current_password):
             form.add_error('current_password', "Current password is incorrect.")
@@ -982,7 +999,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password(user.id, new_password)
+            update_password(user.keycloak_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:

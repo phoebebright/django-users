@@ -2,7 +2,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model, logout
 from django.shortcuts import redirect
-from keycloak import KeycloakAdmin
+from keycloak import KeycloakAdmin, KeycloakOpenID
 from keycloak.exceptions import KeycloakAuthenticationError, KeycloakGetError
 
 
@@ -27,6 +27,15 @@ keycloak_admin = KeycloakAdmin(
     client_secret_key=client_secret,
     verify=True
 )
+
+# Initialize KeycloakOpenID
+keycloak_openid = KeycloakOpenID(
+    server_url=f"{keycloak_url}/",
+    realm_name=keycloak_realm,
+    client_id=client_id,
+    client_secret_key=client_secret,
+)
+
 
 
 def get_access_token(requester):
@@ -199,10 +208,11 @@ def verify_login(username, password):
     '''Verify a user's login credentials'''
 
     try:
-        keycloak_admin.get_token(username, password)
-    except KeycloakAuthenticationError as e:
+        keycloak_openid.token(username=username, password=password)
+    except KeycloakAuthenticationError:
         return False
-    return True
+    else:
+        return True
 
 def update_password(keycloak_id, new_password):
     '''Update the password for a Keycloak user'''

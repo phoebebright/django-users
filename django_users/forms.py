@@ -129,11 +129,13 @@ class ForgotPasswordForm(forms.Form):
             required_fields['channel'] = self.fields['channel']
             required_fields['channel'].required = True
 
-            # Populate the choices with user's verified channels
-            verified_channels = user.comms_channels.filter(verified_at__isnull=False)
+            # Was going to allow only verified channels but if they receive the message then that
+            # effectively verifies the channel so gong to allow all
+
+
             required_fields['channel'].choices = [
-                (channel.id, f"{channel.channel_type}: {channel.email or channel.mobile}")
-                for channel in verified_channels
+                (channel.id, f"{channel.channel_type}: {channel.value}")
+                for channel in user.comms_channels.all()
             ]
 
         if step >= 3:

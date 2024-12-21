@@ -162,11 +162,11 @@ class CommsChannelBase(models.Model):
     def obfuscated_email(self):
         # Split the email into username and domain
 
-        if not self.email:
+        if not self.value:
             return ''
 
         try:
-            username, domain = self.email.split('@')
+            username, domain = self.value.split('@')
         except:
             return ''
         else:
@@ -177,8 +177,8 @@ class CommsChannelBase(models.Model):
     @property
     def obfuscated_mobile(self):
         # Only show the last four digits, mask the rest
-        if self.mobile:
-            mobile = str(self.mobile)
+        if self.value:
+            mobile = str(self.value)
             return  '*' * (len(mobile) - 4) + mobile[-4:]
         else:
             return ''
@@ -604,7 +604,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
                 datetime(*settings.USER_COMMS_MIGRATION_DATE)):
             email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
                                                                   channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                  email=self.email,
+                                                                  value=self.email,
                                                                   defaults={'verified_at': self.date_joined})
 
         super().save(*args, **kwargs)
@@ -613,7 +613,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         if not self.preferred_channel:
             email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
                                                                   channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                  email=self.email)
+                                                                  value=self.email)
             self.preferred_channel = email_channel
             self.quick_save(update_fields=['preferred_channel', ])
 
@@ -678,11 +678,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
     @property
     def has_mobile(self):
-        return self.CommsChannel.objects.filter(user=self).exclude(channel_type="email", verified_at=None).exists()
+        return self.CommsChannel.objects.filter(user=self, channel_type=self.CHANNEL_SMS).exclude(verified_at=None).exists()
 
     @property
     def has_email(self):
-        return self.CommsChannel.objects.filter(user=self, channel_type="email").exclude(verified_at=None).exists()
+        return self.CommsChannel.objects.filter(user=self, channel_type=self.CHANNEL_EMAIL).exclude(verified_at=None).exists()
 
     @property
     def get_preferred_channel(self):
