@@ -25,7 +25,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from . import apps
+
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
