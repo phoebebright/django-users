@@ -31,8 +31,10 @@ from django.views.generic import FormView, TemplateView, DetailView, ListView
 from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
-                                 update_session_auth_hash)
+                                 update_session_auth_hash, get_user_model)
+
 from requests import Response
+from django.db import transaction
 
 from tools.permission_mixins import UserCanAdministerMixin
 from .forms import *
@@ -42,8 +44,17 @@ from .keycloak import get_access_token, verify_user_without_email, keycloak_admi
 from .keycloak import create_keycloak_user
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
+
+User = get_user_model()
+
 logger = logging.getLogger('django')
 
+USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
+LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
+LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
+
+CommsChannel = apps.get_model('users.CommsChannel')  # Replace 'users' with your app name
+CHANNEL_EMAIL = CommsChannel.CHANNEL_EMAIL
 
 def get_legitimate_redirect(request):
     nextpage = request.GET.get('next', '/')
@@ -574,108 +585,72 @@ class RegisterViewBase(FormView):
     def success_url(self):
         return reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
 
-    def form_valid(self, form):
 
-        channel_type = form.cleaned_data['channel_type']
+    # @transaction.atomic
+    def form_valid(self, form):
+        preferred_channel = form.cleaned_data['preferred_channel']
         email = form.cleaned_data['email']
-        mobile = form.cleaned_data['mobile']
+        mobile = form.cleaned_data.get('mobile')
         password = form.cleaned_data['password']
 
-        # TODO: move to using users.add_or_update_user
+
         User = get_user_model()
         try:
-            user = User.objects.get(email=email)
+            print(f"Trying to get user with email {email}")
+            user = User.objects.get(username=email)
         except User.DoesNotExist:
-            user = User.objects.create(username=email, email=email, first_name=form.cleaned_data['first_name'],
-                                             last_name=form.cleaned_data['last_name'], is_active=False)
-            self.user = user
+            print(f"Creating user with email {email}")
+            user = User.objects.create(
+                username=email,
+                email=email,
+                first_name=form.cleaned_data['first_name'],
+                last_name=form.cleaned_data['last_name'],
+                is_active=False
+            )
         else:
-            # we already have this user
-            self.user = user
-            if not user.is_active and user.keycloak_id:
+            if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
                 keycloak_details = get_user_by_id(user.keycloak_id)
                 if keycloak_details['emailVerified']:
                     messages.warning(self.request,
                                      _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                    return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
+                    return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
                 else:
                     # as they never finished setting up the user, let's update the password so they can continue
                     update_password(user.keycloak_id, password)
                     logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
-                # if user picked mobile, then need to add this channel and verify it
-                if mobile:
-                    channel = self.create_comms_channels(channel_type, mobile, user)
-                    user.preferred_channel = channel
-                else:
-                    channel = self.create_comms_channels('email', email, user)
-                    CommsChannel = apps.get_model('users.CommsChannel')
-                    if channel_type == CommsChannel.CHANNEL_EMAIL:
-                        user.preferred_channel = channel
-
-                user.quick_save(update_fields=['preferred_channel'])
-
-                return HttpResponseRedirect(reverse('users:verify_channel', kwargs={'channel_id': channel.id}))
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
-                # could try signing in - at least put email in login form
-                return HttpResponseRedirect(reverse('users:login') + f"?email={email}")
+                return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
 
-        # put current user in session so we can verify them
         set_current_user(self.request, user.id, "REGISTER")
 
-        # make sure we have a keycloak id
-
-        if not user.keycloak_id:
-
-            status_code = user.create_keycloak_user_from_user(form.cleaned_data['password'])
-
-            if status_code == 201:
-                pass
-            elif status_code == 409:
-                messages.error(self.request, _('You already have .'))
-                pass
-            else:
+        if USE_KEYCLOAK and not user.keycloak_id:
+            status_code = user.create_keycloak_user_from_user(password)
+            if status_code == 409:
+                messages.error(self.request, _('You already have an account.'))
+                return HttpResponseRedirect(reverse(LOGIN_REGISTER))
+            elif status_code != 201:
                 messages.error(self.request, _('Failed to create user account. Please try again later.'))
-                return reverse('users:login')
+                return HttpResponseRedirect(reverse(LOGIN_REGISTER))
 
-        # now we have a fully setup user, create the comms channels, if not already existing
-
-        # Create communication channels - defaults to email
-        channel = self.create_comms_channels('email', email, user)
-        CommsChannel = apps.get_model('users.CommsChannel')
-        if channel_type == CommsChannel.CHANNEL_EMAIL:
-            user.preferred_channel = channel
-
-        # Create SMS/WhatsApp channel if phone number is provided
+        self.create_comms_channels(CHANNEL_EMAIL, email, user)
         if mobile:
-            channel = self.create_comms_channels(channel_type, mobile, user)
-            user.preferred_channel = channel
+            self.create_comms_channels(preferred_channel, mobile, user)
 
-        user.quick_save(update_fields=['preferred_channel'])
+        user.preferred_channel = self.create_comms_channels(preferred_channel, mobile or email, user)
+        user.save(update_fields=['preferred_channel'])
 
-        return HttpResponseRedirect(self.success_url())
+        #TODO: could try signing in - at least put email in login form
+
+        return HttpResponseRedirect(self.get_success_url())
 
     def create_comms_channels(self, channel_type, value, user):
         CommsChannel = apps.get_model('users.CommsChannel')
-        if channel_type != 'email':
-            try:
-                channel = CommsChannel.objects.get(user=user, channel_type=channel_type, mobile=value)
-            except CommsChannel.DoesNotExist:
-                channel = CommsChannel.objects.create(
+        channel, created = CommsChannel.objects.get_or_create(
                     user=user,
                     channel_type=channel_type,
-                    mobile=value
-                )
-        else:
-            try:
-                channel = CommsChannel.objects.get(user=user, channel_type=channel_type, email=value)
-            except CommsChannel.DoesNotExist:
-                channel = CommsChannel.objects.create(
-                    user=user,
-                    channel_type=channel_type,
-                    email=value
-                )
+            value=value)
 
         return channel
 
@@ -844,7 +819,13 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         kwargs['step'] = step  # Pass the current step to the form
 
         # Retrieve session values and set them as initial values in the form
-        if step > 1:
+        if step == 1:
+            email = self.request.GET.get('email', None)
+            if email:
+                kwargs['initial'] = {
+                    'email': email,
+                }
+        elif step > 1:
             email = self.request.session.get('forgot_email')
             User = get_user_model()
             self.user = User.objects.filter(username=email).first()
@@ -887,6 +868,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
     def form_valid(self, form):
         step = self.get_step()
+        email = form.cleaned_data['email']
         User = get_user_model()
         user = User.objects.filter(username=email).first()
 

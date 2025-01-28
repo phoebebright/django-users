@@ -5,6 +5,7 @@ from django import forms
 from django.apps import apps
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.forms import ModelForm, Form
 from django.forms.widgets import HiddenInput
@@ -83,6 +84,14 @@ class SignUpForm(forms.Form):
                     label=_('Preferred Communication Channel'),
                     widget=forms.RadioSelect
                 )
+
+        def clean_password(self):
+            password = self.cleaned_data.get('password')
+            try:
+                validate_password(password)
+            except ValidationError as e:
+                raise forms.ValidationError(e.messages)
+            return password
 
         def clean(self):
             cleaned_data = super().clean()

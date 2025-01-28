@@ -1,0 +1,120 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+
+
+{% block title %}{% trans "Manage User" %}{% endblock %}
+
+{% block content %}
+
+
+    <div class="row">
+        <div class="col-12">
+            <h2>Add User</h2>
+
+
+
+            <form id="check_user_form" method="post">
+            <div class="mb-3">
+                <label class="form-label" for="check_email">Email</label>
+                <input type="email" name="check_email" class="form-control" placeholder="Email" title="" required="" id="check_email">
+            </div>
+
+
+            <button id="check_user" class="btn btn-primary">{% blocktrans %}Check if already setup{% endblocktrans %}</button>
+            <div id="message mt-3"></div>
+            </form>
+
+            <form id="add_user" method="post">
+                {% csrf_token %}
+                <input id="username" name="username" type="hidden" value="">
+                <input id="id_email" name="email" type="hidden" value="">
+
+{#                {{ form.non_field_errors }}#}
+{##}
+{#                {% for hidden_field in form.hidden_fields %}#}
+{#                    {{ hidden_field.errors }}#}
+{#                    {{ hidden_field }}#}
+{#                {% endfor %}#}
+
+
+                <div id="in_keycloak_not_local" class="card" style="display:none;">
+                    <div class="card-header">Finish User Setup</div>
+                    <div class="card-body">
+                        <p>User exists in Keycloak but not locally.  Please fill in the rest of the form to complete the user setup.</p>
+                        {% bootstrap_field form.mobile %}
+                        {% bootstrap_field form.whatsapp %}
+                        <button class="btn btn-primary confirm_keycloak_user">Confirm User in Keycloak (requires mobile)</button>
+                    </div>
+                </div>
+
+                <div id="in_keycloak_and_local" class="card"  style="display:none;">
+
+                    <div class="card-body">
+                        <p>User is already setup </p>
+
+                        <button id="#manage_user" class="btn btn-primary">Update User</button>
+                        <button  class="btn btn-primary" onclick="location.reload();">Add another User</button>
+                    </div>
+                </div>
+
+                <div id="add_user_form" class="card"  style="display:none;">
+                    <div class="card-header">Add User</div>
+                    <div class="card-body">
+
+                        {% bootstrap_field form.first_name %}
+                        {% bootstrap_field form.last_name %}
+                        {% bootstrap_field form.password %}
+
+                        Optional means of communication:
+                        {% bootstrap_field form.mobile %}
+                        {% bootstrap_field form.whatsapp %}
+
+
+                        <button id="{{ next }}" class="btn btn-primary">Cancel</button>
+                        <button id="add_user" class="btn btn-primary">Add User</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script src="{% static "js/jquery.validate.js" %}"></script>
+    {% if not USE_ASSETS %}
+        <script src="{% static "js/organiser.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
+    {% else %}
+        <script src="/assets/js/organiser.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+    <script>
+
+
+
+        function submit_form(submitter_id) {
+            /* actions on submitting form. If using POST, can leave empty
+           required on all templates that have forms with validation */
+
+                $("#add_user").submit();
+
+        }
+
+        $(document).on("submit", "#check_user_form", function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        $(document).on("click", "#check_user", function(e) {
+            check_user(e);
+        });
+
+    </script>
+
+
+{% endblock %}

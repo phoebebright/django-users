@@ -50,6 +50,7 @@ from .utils import send_email_verification_code, send_sms_verification_code, sen
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
+CHANNEL_TYPES = getattr(settings, 'CHANNEL_TYPES', ['email', 'sms', 'whatsapp'])
 
 def get_new_ref(model):
     '''
@@ -126,11 +127,13 @@ class CommsChannelBase(models.Model):
     CHANNEL_SMS = "sms"
     CHANNEL_WHATSAPP = "whatsapp"
 
-    CHANNEL_CHOICES = [
+    ALL_CHANNEL_CHOICES = [
         (CHANNEL_EMAIL, 'Email'),
         (CHANNEL_SMS, 'SMS'),
         (CHANNEL_WHATSAPP, 'WhatsApp'),
     ]
+
+    CHANNEL_CHOICES = [(c[0], c[1]) for c in ALL_CHANNEL_CHOICES if c[0] in CHANNEL_TYPES]
 
     user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='comms_channels')
     channel_type = models.CharField(max_length=10, choices=CHANNEL_CHOICES)

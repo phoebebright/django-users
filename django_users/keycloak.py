@@ -77,8 +77,8 @@ def logout_user_from_keycloak_and_django(request, user=None):
         except KeycloakGetError as e:
             logger.error(f"Failed to log out user {user} from Keycloak: {e}")
 
-        # Redirect to a specified page after logout
-        return redirect(settings.LOGOUT_REDIRECT_URL)
+    # Redirect to a specified page after logout
+    return redirect(settings.LOGOUT_REDIRECT_URL)
 
 def create_keycloak_user(user_details):
     '''Create a Keycloak user and return the user ID that will be used as the username in Django'''

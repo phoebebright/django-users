@@ -43,7 +43,17 @@ function problem_login(email){
 
 
             if (d.keycloak_verified) {
-                $('#result').html('<div class="alert alert-success" role="alert">Your account is verified and ready to use. Have you fogotten your password? <a href="'+forgot_pw_url+'?email='+email+'" class="text-primary">Yes</a><br />Try <a href="'+login_url+'?email='+email+'" class="change_password_now text-primary">'+LOGIN_TERM+'</a></div>');
+                $('#result').html(`
+    <div class="alert alert-success" role="alert">
+        Your account is verified and ready to use. Have you forgotten your password? 
+        <a href="${forgot_pw_url}?email=${encodeURIComponent(email)}" class="text-primary">Yes</a><br />
+        Try <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
+            ${LOGIN_TERM}
+        </a>
+ 
+    </div>
+`);
+
                 $("#id_email").val(email);
                 $("#id_password").focus();
                 $(".login_form_div").slideDown();
