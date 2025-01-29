@@ -762,7 +762,9 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     @classmethod
     def system_user(cls):
         # need a dummy person instance
-        person, _ = cls.Person.objects.get_or_create(formal_name="Skorie System")
+        #person, _ = cls.Person.objects.get_or_create(formal_name="Skorie System") - doesn't work
+        Person = apps.get_model('users', 'Person')
+        person, _ = Person.objects.get_or_create(formal_name="Skorie System")
         system_user, _ = cls.objects.get_or_create(email="system@skor.ie",
                                                    defaults={'username': 'System',
                                                              'person': person,
