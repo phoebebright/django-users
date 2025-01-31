@@ -596,17 +596,22 @@ class RegisterViewBase(FormView):
 
         User = get_user_model()
         try:
-            print(f"Trying to get user with email {email}")
+            # print(f"Trying to get user with email {email}")
             user = User.objects.get(username=email)
         except User.DoesNotExist:
-            print(f"Creating user with email {email}")
-            user = User.objects.create(
-                username=email,
-                email=email,
-                first_name=form.cleaned_data['first_name'],
-                last_name=form.cleaned_data['last_name'],
-                is_active=False
+            try:
+                # print(f"Creating user with email {email}")
+                user = User.objects.create(
+                    username=email,
+                    email=email,
+                    first_name=form.cleaned_data['first_name'],
+                    last_name=form.cleaned_data['last_name'],
+                    is_active=False
             )
+            except User.DoesNotExist:
+                # if there is old data where email != username then will get duplicate error here
+                messages.error(self.request, _(f'Failed to create user account - duplicate email {email}. Please try again later.'))
+                return HttpResponseRedirect(reverse(LOGIN_REGISTER))
         else:
             if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
                 keycloak_details = get_user_by_id(user.keycloak_id)
