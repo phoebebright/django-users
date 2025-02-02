@@ -35,7 +35,7 @@ from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
 
 
-from tools.model_mixins import CreatedMixin,  CreatedUpdatedMixin, TrackChangesMixin, DataQualityMixin,  AliasForMixin
+from .tools.model_mixins import CreatedMixin,  CreatedUpdatedMixin, TrackChangesMixin, DataQualityMixin,  AliasForMixin
 from django.db import IntegrityError, models, transaction
 
 
