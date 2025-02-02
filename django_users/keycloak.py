@@ -77,6 +77,10 @@ def logout_user_from_keycloak_and_django(request, user=None):
         except KeycloakGetError as e:
             logger.error(f"Failed to log out user {user} from Keycloak: {e}")
 
+    else:
+        # can be left partially logged out in django so force logout and clear session of _auth values
+        logout(request)
+        
     # Redirect to a specified page after logout
     return redirect(settings.LOGOUT_REDIRECT_URL)
 

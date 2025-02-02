@@ -52,6 +52,46 @@ Disciplines = import_string(settings.DISCIPLINES_PATH)
 
 CHANNEL_TYPES = getattr(settings, 'CHANNEL_TYPES', ['email', 'sms', 'whatsapp'])
 
+def get_new_ref(model):
+    '''
+    S+6 = Scoresheet
+    T+3 = Testsheet
+    H+5 = Horse
+    R+6 = Role
+    P+5 = Person
+    J+5 = Judge  # deprecated
+    V+4 = Event
+    C+5 = Competition
+    E+8 = Entry = E + Event + sequence - handled in model
+    W+5 = Order
+
+    Rosettes
+    Z+6 = Rosette
+
+    2 = 900
+    3 = 27,000
+    4 = 810,000
+    5 = 24,300,000
+    6 = 729,000,000
+    '''
+
+    if type(model) == type("string"):
+        model = model.lower()
+    else:
+        # assume model instance passed
+        model = model._meta.model_name.lower()
+
+    if model == "person":
+        first = "P"
+        size = 5
+    elif model == "role":
+        first = "R"
+        size = 6
+
+    else:
+        raise IntegrityError("Unrecognised model %s" % model)
+
+    return "%s%s" % (first, nanoid.generate(alphabet="23456789abcdefghjkmnpqrstvwxyz", size=size))
 
 
 class DataQualityLogBase(CreatedMixin):
@@ -328,7 +368,7 @@ class CustomUserManager(BaseUserManager):
 
         if not is_active:
             user.is_active = False
-            user.save()
+            user.quick_save(update_fields=['is_active', ])
 
         person.user = user
         person.save()
@@ -582,24 +622,13 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             self.quick_save(update_fields=['preferred_channel', ])
 
 
-        super().save(*args, **kwargs)
 
-        # need to link eventteam invites for new users to the invite when the user logs in for the first time
-        # if new:
-        #     for invite in CustomInvitations.objects.filter(email=self.email, accepted=False):
-        #         try:
-        #             eventteam = EventTeam.objects.get(invitation=invite)
-        #         except EventTeam.DoesNotExist:
-        #             logger.warning(f"Invitation {invite.pk} is not attached to event team object")
-        #             pass
-        #         else:
-        #             eventteam.user = self
-        #             eventteam.save()
+
 
         # Person has link to user, so can't create until user is saved
         if not self.person_id:
             self.person = self.Person.create_from_user(self)
-            super().save(update_fields=['person', ])
+            super().quick_save(update_fields=['person', ])
 
         # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
         try:
@@ -1638,8 +1667,9 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
 
         super().save(*args, **kwargs)
 
-        if 'user' in self.changed_fields and self.user != None:
-            self.bump(10, "linking user to person")
+        # causes recursion
+        # if 'user' in self.changed_fields and self.user != None:
+        #     self.bump(10, "linking user to person")
 
     @classmethod
     def id_or_name(cls, id, name, data, creator=None):

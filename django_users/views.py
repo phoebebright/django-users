@@ -7,11 +7,8 @@ from urllib.parse import urlencode
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
-from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
-from django_keycloak_admin.models import try_while_locked
-from django_ratelimit.decorators import ratelimit
-from post_office.utils import send_mail
-from twilio.rest import Client
+
+
 from .keycloak_models import UserEntity
 
 import requests
@@ -526,7 +523,7 @@ class UserMigrationView(View):
 
 def send_sms(recipient_user, message, user=None):
     # Twilio credentials (replace with your actual credentials)
-
+    from twilio.rest import Client
     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
     message = client.messages.create(
         body=message,
@@ -595,13 +592,15 @@ class RegisterViewBase(FormView):
 
 
         User = get_user_model()
+        #this code cannot find username=email but when you try to create it, it says can't create duplicate and you see it already there.
+        # save not being triggered
         try:
             # print(f"Trying to get user with email {email}")
             user = User.objects.get(username=email)
         except User.DoesNotExist:
             try:
                 # print(f"Creating user with email {email}")
-                user = User.objects.create(
+                user = User.objects.create_user(
                     username=email,
                     email=email,
                     first_name=form.cleaned_data['first_name'],
@@ -612,6 +611,9 @@ class RegisterViewBase(FormView):
                 # if there is old data where email != username then will get duplicate error here
                 messages.error(self.request, _(f'Failed to create user account - duplicate email {email}. Please try again later.'))
                 return HttpResponseRedirect(reverse(LOGIN_REGISTER))
+            except Exception as e:
+                messages.error(self.request, _(f'Failed to create user account with error {e}. Please try again later.'))
+                raise
         else:
             if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
                 keycloak_details = get_user_by_id(user.keycloak_id)
