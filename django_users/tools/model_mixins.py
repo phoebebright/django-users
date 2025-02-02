@@ -2,6 +2,8 @@ import logging
 import ast
 from datetime import datetime
 from itertools import chain
+
+import nanoid
 import pandas as pd
 from django.apps import apps
 from django.conf import settings
@@ -9,7 +11,7 @@ from copy import deepcopy
 
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError
 from django.core.mail import mail_admins
 from django.db.models import Q
 from django.forms import model_to_dict
@@ -28,10 +30,10 @@ from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.db.models.expressions import BaseExpression
 from django.db.models.expressions import Combinable
-from post_office import mail
+
 
 from typing import Optional, Dict, Any, Set
-from django_users.models import  get_new_ref
+
 
 
 logger = logging.getLogger('django')
@@ -65,9 +67,51 @@ class RefAutoField(models.AutoField):
     def get_internal_type(self):
         return "RefAutoField"
 
+    # note this is customised for django-users and put here to avoid circular dependancy
+    def get_new_ref(self, model):
+        '''
+        S+6 = Scoresheet
+        T+3 = Testsheet
+        H+5 = Horse
+        R+6 = Role
+        P+5 = Person
+        J+5 = Judge  # deprecated
+        V+4 = Event
+        C+5 = Competition
+        E+8 = Entry = E + Event + sequence - handled in model
+        W+5 = Order
+
+        Rosettes
+        Z+6 = Rosette
+
+        2 = 900
+        3 = 27,000
+        4 = 810,000
+        5 = 24,300,000
+        6 = 729,000,000
+        '''
+
+        if type(model) == type("string"):
+            model = model.lower()
+        else:
+            # assume model instance passed
+            model = model._meta.model_name.lower()
+
+        if model == "person":
+            first = "P"
+            size = 5
+        elif model == "role":
+            first = "R"
+            size = 6
+
+        else:
+            raise IntegrityError("Unrecognised model %s" % model)
+
+        return "%s%s" % (first, nanoid.generate(alphabet="23456789abcdefghjkmnpqrstvwxyz", size=size))
+
     def pre_save(self, model_instance, add):
 
-       return get_new_ref(self.name)
+       return self.get_new_ref(self.name)
 
     def to_python(self, value):
         if value is None:
