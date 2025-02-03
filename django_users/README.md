@@ -48,3 +48,26 @@ Run rest of migrations
 
 MyHorse -> MyPartner
 MyRider -> MyCompetitor
+
+
+
+# Process
+
+*Signup form*
+  Collect name, email, password and create a django user
+
+*Verify*
+  Send verification code to email
+  User enters code
+  Create keycloak user (verified) and link to django user
+
+*Login*
+  Get email and password 
+
+
+
+# Communication Channels and Preferred Communication Channel
+
+Users continue to login with email used during signup
+
+Can have a preferred channel that is an alternate email

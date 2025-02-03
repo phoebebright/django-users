@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import random
 
@@ -44,7 +45,7 @@ from django.utils.translation import gettext_lazy as _
 
 import logging
 
-from .keycloak import create_keycloak_user, verify_user_without_email
+from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id
 from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -201,7 +202,11 @@ class CommsChannelBase(models.Model):
 
         # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
         keycloak_verified = False
-        keycloak_user = get_user_by_id(self.user.keycloak_id)
+
+        # do we have keycloak user setup yet?
+        keycloak_user = None
+        if self.user.keycloak_id:
+            keycloak_user = get_user_by_id(self.user.keycloak_id)
         if keycloak_user:
             keycloak_verified =  keycloak_user['emailVerified']
         else:
@@ -272,6 +277,25 @@ class VerificationCodeBase(models.Model):
     @property
     def is_expired(self):
         return timezone.now() > self.expires_at
+
+    @classmethod
+    def verify_code(cls, code, channel):
+
+            match = cls.objects.filter(
+                channel=channel,
+                code=code,
+                expires_at__gt=timezone.now()
+            )
+            if match.exists():
+                channel.verify()
+
+
+
+                # Delete all verification codes for this channel
+                cls.objects.filter(channel=channel).delete()
+
+                return True
+            return False
 
     def send_verification_code(self)->bool:
 

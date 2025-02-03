@@ -4,6 +4,7 @@ import string
 from venv import create
 
 import requests
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import get_user_model

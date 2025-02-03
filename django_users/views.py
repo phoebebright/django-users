@@ -579,7 +579,7 @@ class RegisterViewBase(FormView):
             raise NotImplementedError("Define `form_class` in the child class.")
         return self.form_class
 
-    def success_url(self):
+    def get_success_url(self):
         return reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
 
 
@@ -649,7 +649,7 @@ class RegisterViewBase(FormView):
         user.save(update_fields=['preferred_channel'])
 
         #TODO: could try signing in - at least put email in login form
-
+        self.user = user
         return HttpResponseRedirect(self.get_success_url())
 
     def create_comms_channels(self, channel_type, value, user):
@@ -741,7 +741,9 @@ class VerifyChannelViewBase(View):
             messages.error(request, _('Failed to send verification code. Check your contact method is correct.'))
             return HttpResponseRedirect('users:login')
 
-        form = self.get_form_class(initial={'channel': channel})
+        form_class = self.get_form_class()
+        form = form_class(initial={'channel': channel})
+
         next = request.GET.get('next', reverse('users:login'))
 
         context = {'form': form, 'channel': channel}
