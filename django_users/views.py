@@ -1,14 +1,14 @@
 import json
 import logging
-import random
-import string
+
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
+from django.apps import apps
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
-
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
 from .keycloak_models import UserEntity
 
 import requests
@@ -30,11 +30,8 @@ from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash, get_user_model)
 
-from requests import Response
-from django.db import transaction
 
 from tools.permission_mixins import UserCanAdministerMixin
-from .forms import *
 
 from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
     is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
