@@ -231,28 +231,6 @@ def signup_redirect(request):
     return HttpResponseRedirect(url)
 
 
-def logout(request):
-    nextpage = get_legitimate_redirect(request)
-
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
-
-    else:
-        log_out(request)
-        return HttpResponseRedirect(nextpage)
-
-    # return_to = urlencode({'returnTo': request.build_absolute_uri('/')})
-    # return HttpResponseRedirect("/keycloak/logout")
-    # return HttpResponseRedirect(logout_url)
-
-
-def login_redirect(request):
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
-    else:
-        # this doesn't seem to be working
-        return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
-
 
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
