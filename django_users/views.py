@@ -505,18 +505,21 @@ def send_sms(recipient_user, message, user=None):
 
 
 @method_decorator(never_cache, name='dispatch')
-class LoginView(TemplateView):
+class LoginView(GoNextTemplateMixin, TemplateView):
     template = "users/login.html"
 
     def get(self, request):
         # TODO: check user is not already logged in
-        return render(request, self.template)
+        context = super().get_context_data()
+        return render(request, self.template, context)
 
     def post(self, request):
         # NOTE THAT TEMPORARY PASSWORDS IN KEYCLOAK WILL NOT AUTHENTICATE HERE
         # HAVE TO REMOVE ALL REQUIRED ACTIONS FIRST
         email = request.POST.get('email')
         password = request.POST.get('password')
+        next = request.GET.get('next', request.POST.get('next', None))
+
         try:
             user = authenticate(request, username=email, password=password)
         except Exception as e:
@@ -532,10 +535,15 @@ class LoginView(TemplateView):
                     return redirect('users:change_password_now')
                 else:
                     login(request, user)
-                    return redirect(settings.LOGIN_REDIRECT_URL)
+                    if next:
+                        return redirect(next)
+                    else:
+                        return redirect(settings.LOGIN_REDIRECT_URL)
             else:
                 messages.error(request, _('Invalid email or password.'))
-                return render(request, self.template, {'email': email})
+                context = super().get_context_data()
+                context['email'] = email
+                return render(request, self.template, context)
 
 
 @method_decorator(never_cache, name='dispatch')
