@@ -1,0 +1,285 @@
+{% extends "users/users_narrow_base.html" %}
+{% load i18n %}
+{% load static %}
+
+
+{% block content %}
+
+    {% if user.is_authenticated %}
+        <p>You are successfully logged in as {{ user }}</p>
+    {% else %}
+        <h1>Having problems signing up?</h1>
+
+
+        <p>In order to make sure we can send you notificiations, we send you an email with a verificiation link.  Clicking the link confirms you can received the emails from us.  While this usually works, there can be problems with some email providers, particularly bigpond, that can be too enthusiastic in labeling emails as spam and may put the verification email in your spam folder or not delivering them at all.  Here are some alternatives:</p>
+
+        <p>Start by checking the status of your signup:</p>
+
+
+
+                    <form id="emailForm">
+                        <div class="mb-3">
+                            <input type="hidden" id="keycloak_id" value="">
+                            <input type="hidden" id="user_id" value="">
+                            <input type="email" class="form-control" id="email" name="email" placeholder="Enter the email you used to signup here:" required value="{{ email }}">
+                            <div class="invalid-feedback">
+                                Please enter a valid email address.
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <input type="submit" id="submitBtn" class="btn btn-primary" value="Check the status of my signup..." disabled>
+                        </div>
+                    </form>
+
+                    <div id="result" class="mt-4"></div>
+
+                    <div id="login_form_div" style="display:none;">
+                        {% include "users/include_login_form.html" %}
+                    </div>
+                    <!-- Placeholder for displaying API response -->
+                    <div id="apiResponse" class="mt-4" style="display: none;">
+                        <h4>Status Information</h4>
+                        <ul class="list-group">
+                            <li class="list-group-item"><strong>Account Created:</strong> <span id="created"></span></li>
+                            <li class="list-group-item"><strong>Enabled:</strong> <span id="enabled"></span></li>
+                            <li class="list-group-item"><strong>Required Actions:</strong> <span id="actions"></span></li>
+                            <li class="list-group-item"><strong>Email Verified:</strong> <span id="verified"></span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Error message -->
+                    <div id="apiError" class="alert alert-danger mt-4" style="display: none;">
+                        There was an error processing your request. Please try again later.
+                    </div>
+
+
+
+                    <div id="verify_how" style="display:none;">
+                        <h4>Verify your Account:</h4>
+                        <p>Choose how you would like to verify your account:</p>
+                        <div id="existing_channels"></div>
+
+                        <a class="btn btn-primary w-100 mt-3" href="{% url "users:add_channel" %}"><i class="bi bi-plus"></i>{% trans "Add Another Contact Method" %}</a>
+
+                    </div>
+
+
+
+    {% endif %}
+{% endblock %}
+
+{% block js %}
+    <script>
+        $(document).ready(function () {
+            let emailInput = $('#email');
+            let submitBtn = $('#submitBtn');
+            let pin = 0;
+
+
+            // Function to check if the email is valid
+            function validateEmail(email) {
+                let emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                return emailPattern.test(email);
+            }
+
+            // Check the email validity and update form state accordingly
+            function checkEmail() {
+                let email = emailInput.val();
+                if (validateEmail(email)) {
+                    emailInput.removeClass('is-invalid').addClass('is-valid');
+                    submitBtn.prop('disabled', false);
+                } else {
+                    emailInput.removeClass('is-valid').addClass('is-invalid');
+                    submitBtn.prop('disabled', true);
+                }
+            }
+
+            // Validate email input on any change
+            emailInput.on('input', function () {
+                checkEmail();
+            });
+
+            // On page load, check if email is already valid (for query param prefill)
+            if (emailInput.val()) {
+                checkEmail();
+            }
+
+            $('.verify_by_sms').on('click', function () {
+                // Show the phone input field when the button is clicked
+                $('#phoneInputContainer').slideDown();
+
+                // Enable the phone number input field to be required
+                $('#phone_number').prop('required', true);
+            });
+
+            // Function to validate phone number (basic regex for international numbers)
+            function validatePhoneNumber(phoneNumber) {
+                let phonePattern = /^\+?[1-9]\d{1,14}$/;  // Basic pattern for international phone numbers
+                return phonePattern.test(phoneNumber);
+            }
+
+            // Validate phone number and show 'Send SMS' button
+            $('#phone_number').on('input', function () {
+                let phoneNumber = $(this).val();
+                let sendSmsBtn = $('#sendSmsBtn');
+                let submitBtn = $('#submitBtn');
+
+                if (validatePhoneNumber(phoneNumber)) {
+
+                    $(this).removeClass('is-invalid').addClass('is-valid');
+
+                    sendSmsBtn.show();  // Show the 'Send SMS' button once phone number is valid
+                } else {
+                    $(this).removeClass('is-valid').addClass('is-invalid');
+                    sendSmsBtn.hide();  // Hide the 'Send SMS' button if the phone number becomes invalid
+                    submitBtn.prop('disabled', true);
+                }
+            });
+
+            // Handle 'Send SMS' button click
+            $('#sendSmsBtn').on('click', function () {
+                const user_id = $('#user_id').val();
+                const phone_no = $('#phone_number').val();
+
+                if (user_id && phone_no) {
+                    $.ajax({
+                        method: "POST",
+                        url: SKORIE_API + "/api/v2/send_verification_sms/",
+                        data: {'user_id': user_id, 'phone_no': phone_no},
+
+                        success: function (d) {
+                            pin = d.pin
+                            $('#sendSmsContainer').hide();
+                            $('#pinInputContainer').slideDown();
+                        },
+                        fail: function(d) {
+                            $('#sendSmsContainer').hide();
+                            $('#pinInputContainer').slideDown();
+
+                        }
+                    });
+                }
+
+            });
+
+            // Validate the PIN input when entered
+            $('#pin').on('input', function () {
+                let enteredPin = $(this).val();
+                let submitBtn = $('#submitBtn');
+                const user_id = $('#user_id').val();
+                const phone_no = $('#phone_number').val();
+
+                if (enteredPin.length === 6 && enteredPin === pin) {
+                    $(this).removeClass('is-invalid').addClass('is-valid');
+
+                    $.ajax({
+                        method: "POST",
+                        url: SKORIE_API + "/api/v2/verify_user_with_sms/",
+                        data: {'user_id': user_id, 'phone_no':phone_no },
+                        success: function (d) {
+                        $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href={% url "users:signin" %} class="btn btn-success-outline">Signin</a></div>');
+                        },
+                        error: function () {
+                            $('#result').html('<div class="alert alert-danger" role="alert">There was an error verifying your account</div>');
+                        }
+                    });
+                } else {
+                    $(this).removeClass('is-valid').addClass('is-invalid');
+
+                }
+            });
+        });
+
+        function clear_feedback() {
+
+            // tidy from earlier calls
+            $("#result").slideUp();
+            $("#verify_how").slideUp();
+            $("#apiError").slideUp();
+            $("#user_id").val(0);
+            $("#keycloak_id").val(0);
+        }
+
+        clear_feedback();
+
+        $(document).on('submit', '#emailForm', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const email = $('#email').val();
+         $('#apiError').html("").hide();
+                    $('#apiResponse').html("").hide();
+            $.ajax({
+                method: "POST",
+                url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+                data: {'email': email},
+
+                success: function (d) {
+                    const keycloak_id = $('#keycloak_id').val();
+                    $("#user_id").val(d.user_id);
+                    $("#keycloak_id").val(d.django_user);
+
+
+                    // check django keycloak_id is the same as the one in keycloak - if there is one
+                    if (d.user_id && d.user_id == d.django_user) {
+                        // for each d.channel create a button to click
+                        $('#existing_channels').html('');
+                        d.channels.forEach(function (item) {
+                            if (item.email) {
+                                $('#existing_channels').append('<button  class="btn btn-primary verify w-100 mt-1" data-channel_pk="' + item.channel_id + '">Send Email to ' + item.email + '</button>');
+                            } else {
+                                $('#existing_channels').append('<button  class="btn btn-primary verify w-100 mt-1" data-channel_pk="' + item.channel_id + '">Send SMS to ' + item.mobile + '</button>');
+                            }
+                        });
+
+
+                    }  else if (d.user_id == 0 && d.django_user == 0) {
+                            $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url "users:signup" %}" class="btn btn-primary-outline">Signup</div>');
+                        $("#result").slideDown();
+                        return;
+                    } else if (d.user_id && d.django_user ) {
+                        if (d.user_id != d.django_user) {
+                            $('#result').html('<div class="alert alert-danger" role="alert">The email you entered is already in use by another account.</div>');
+                            $("#result").slideDown();
+                            return;
+                        }
+                    }
+                    // If the API call is successful, display the data
+                    {#$('#created').text(new Date(d.created).toLocaleString());#}
+                    {#$('#enabled').text(d.enabled ? 'Yes' : 'No');#}
+                    {#$('#actions').text(d.actions.length ? d.actions.join(', ') : 'None');#}
+                    {#$('#verified').text(d.verified ? 'Yes' : 'No');#}
+
+                    if (d.verified) {
+                        $('#result').html('<div class="alert alert-success" role="alert">Your account is verified and ready to use.</div>');
+                        $("#id_email").val(email);
+                        $("#id_password").focus();
+                        $(".login_form").slideDown();
+                    } else {
+                        $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified. </div>');
+                        $("#verify_how").slideDown();
+
+                    }
+                    $("#result").slideDown();
+                    // Show the result section
+                    {#$('#apiResponse').show();#}
+                    {#$('#apiError').hide();#}
+                },
+                error: function () {
+                    // If there's an error, show the error message
+                    $('#apiError').show();
+                    $('#apiResponse').hide();
+                }
+            });
+        });
+
+        $(document).on('click', '.verify', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const user_id = $('#user_id').val();
+
+            var channel_pk = $(this).data('channel_pk');
+            document.location.href="{% url "users:verify_channel" 0 %}".replace("0", channel_pk);
+        });
+
+    </script>
+{% endblock %}

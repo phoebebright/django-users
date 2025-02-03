@@ -1,0 +1,124 @@
+{% extends "registration/registration_base.html" %}
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block title %}{% trans "Register" %}{% endblock %}
+
+
+
+{% block content %}
+
+    <div class="container d-flex flex-column justify-content-center align-items-center vh-100">
+
+        <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+            <!-- Logo and Login Form -->
+            <div class="text-center mb-4">
+                <img src="/shared_static/images/calculator_icon.svg" alt="Skorie logo" width="120">
+            </div>
+
+            <h2 class="text-center mb-4">Register for an Account</h2>
+
+            <form method="post">
+                {% csrf_token %}
+                {% bootstrap_field form.first_name %}
+                {% bootstrap_field form.last_name %}
+                {% bootstrap_field form.email %}
+                {% bootstrap_field form.password %}
+
+
+                <p>You can choose to verify your account by email or from an SMS. </p>
+                {% bootstrap_field form.preferred_channel %}
+                <div id="mobile" style="display:none;">
+          {% bootstrap_field form.mobile %}
+                    <div id="phone-feedback" class="invalid-feedback"></div>
+
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Signup</button>
+            </form>
+
+            <div class="text-center mt-3">
+                <p>Already Registered? &nbsp;<a href="{% url "users:signin" %}" class="text-primary">{% trans "Sign In" %}</a>
+            </div>
+
+        </div>
+    </div>
+
+
+
+
+    <!-- Include intl-tel-input CSS and JavaScript -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+
+    <!-- Include Google's libphonenumber utils for validation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"></script>
+
+    <script>
+        $(document).ready(function() {
+
+
+            // Initialize intl-tel-input with options
+            const phoneInputField = $("#id_mobile");
+            const iti = intlTelInput(phoneInputField[0], {
+                initialCountry: "auto",
+                utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js",
+                separateDialCode: true,
+                geoIpLookup: function(callback) {
+                    $.get('https://ipinfo.io', function() {}, 'jsonp').always(function(resp) {
+                        const countryCode = (resp && resp.country) ? resp.country : "us";
+                        callback(countryCode);
+                    });
+                }
+            });
+            $(".iti").addClass("w-100");
+            // Real-time validation on input event
+            phoneInputField.on("input", function() {
+                // Check if the phone number is valid
+                if (iti.isValidNumber()) {
+                    // Show success feedback
+                    phoneInputField.removeClass("is-invalid").addClass("is-valid");
+                    $("#phone-feedback").text("Valid phone number").removeClass("invalid-feedback").addClass("valid-feedback");
+                } else {
+                    // Show error feedback
+                    phoneInputField.removeClass("is-valid").addClass("is-invalid");
+                    $("#phone-feedback").text("Please enter a valid phone number").removeClass("valid-feedback").addClass("invalid-feedback");
+                }
+            });
+
+            // Form submit event handler to set the formatted phone number
+            $("#signup-form").on("submit", function(event) {
+                if (!iti.isValidNumber()) {
+                    event.preventDefault();
+                    alert("Please enter a valid phone number.");
+                    phoneInputField.addClass("is-invalid");
+                } else {
+                    // Set the phone number in international format before submitting
+                    const phoneNumber = iti.getNumber();
+                    phoneInputField.val(phoneNumber); // Set value in international format
+                }
+            });
+
+            // Remove error class when user starts editing
+            phoneInputField.on("input", function() {
+                phoneInputField.removeClass("is-invalid");
+            });
+
+
+            $("input[name='preferred_channel']").on("change", function(){
+                if ($(this).val() == "email") {
+                    $("#mobile").hide();
+                } else {
+                    $("#mobile").show();
+                }
+            });
+
+
+        });
+
+
+    </script>
+
+
+
+{% endblock %}

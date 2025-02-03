@@ -1,0 +1,2 @@
+Your verification code is valid for 10 minutes from {{NOW}}.  Please enter this code in the verification form to complete your registration.\n\n
+{{ code }}

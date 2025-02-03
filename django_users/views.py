@@ -216,26 +216,21 @@ def logout(request):
 
 
 def login_redirect(request):
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/login?next={request.GET.urlencode()}")
-    else:
-        # this doesn't seem to be working
-        return HttpResponseRedirect(f"/account/login/?next={request.GET.urlencode()}")
 
-
-def signup_redirect(request):
-    next = request.GET.urlencode()
-
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        url = f"/keycloak/register"
-    else:
-        url = f"/account/login/"
-
+    url = reverse(settings.LOGIN_URL)
     if 'next' in request.GET.urlencode():
         url += "?{request.GET.urlencode()}"
     elif request.GET.urlencode():
         url += "?next={request.GET.urlencode()}"
+    return HttpResponseRedirect(url)
 
+
+def signup_redirect(request):
+    url = reverse(settings.LOGIN_REGISTER)
+    if 'next' in request.GET.urlencode():
+        url += "?{request.GET.urlencode()}"
+    elif request.GET.urlencode():
+        url += "?next={request.GET.urlencode()}"
     return HttpResponseRedirect(url)
 
 
