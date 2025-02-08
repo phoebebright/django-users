@@ -45,7 +45,7 @@ from django.utils.translation import gettext_lazy as _
 
 import logging
 
-from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id
+from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, search_user_by_email_in_keycloak
 from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -812,6 +812,41 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return user, device_key
 
+    @classmethod
+    def check_register_status(cls, email):
+        '''check if user is registered and activated/verified'''
+
+        # get user in django
+        try:
+            # username will be set by keycloak so use email as key
+            django_user = cls.objects.get(email=email)
+        except cls.DoesNotExist:
+            django_user = None
+
+
+        keycloak_user = search_user_by_email_in_keycloak(email, request.user)
+
+        if keycloak_user:
+
+                return  {
+                    "keycloak_user_id": keycloak_user['id'],
+                    "keycloak_created": keycloak_user['createdTimestamp'],
+                    "keycloak_enabled": keycloak_user['enabled'],
+                    "keycloak_actions": keycloak_user['requiredActions'],
+                    "keycloak_verified": keycloak_user['emailVerified'],
+                    "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                    "django_user_id": django_user.pk if django_user else 0,
+                    "django_is_active": django_user.is_active,
+
+                }
+
+        else:
+            return {
+                "keycloak_user_id": '',
+                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                "django_user_id": django_user.pk if django_user else 0,
+
+            }
 
     def create_keycloak_user_from_user(self, password):
 
@@ -840,7 +875,9 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     def update_keycloak_email_verified(self):
         verify_user_without_email(self.keycloak_id)
 
-    #
+
+
+
     # def send_verification_code(self, method):
     #     self.verification_code = CustomUser.objects.make_random_password(length=6, allowed_chars='1234567890')
     #     self.save()

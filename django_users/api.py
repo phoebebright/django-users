@@ -117,17 +117,11 @@ class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
 class SendOTP2User(UserCanAdministerMixin, APIView):
 
     def post(self, request):
-        User = get_user_model()
-        user = User.objects.get(email=request.data['email'])
-        phone_no = request.data['phone_no']
-        pin = ''.join(random.choices(string.digits, k=6))
+        channel = CommsChannel.objects.get(pk=request.data['channel_id'])
+        otp = request.data['new_password']
 
-        try:
-            send_sms(user.id, phone_no, pin, request.user)
-        except Exception as e:
-            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            return Response({'pin': pin}, status=status.HTTP_200_OK)
+        channel_send_otp(channel, otp)
+        return Response(status=status.HTTP_200_OK)
 
 class ChangePassword(APIView):
     """
