@@ -5,10 +5,11 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
+from django.urls import reverse_lazy, reverse
 
 def send_otp(channel, code):
     subject = _('Your One Time Password')
-    message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME} .  Login link {reverse(settings.LOGIN_URL)}'
+    message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME}.  You will be asked to enter a new password when you log in.  Login link {settings.SITE_URL}{reverse(settings.LOGIN_URL)}'
     html_message = message
     mail.send(
         channel.value,

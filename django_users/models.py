@@ -813,7 +813,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         return user, device_key
 
     @classmethod
-    def check_register_status(cls, email):
+    def check_register_status(cls, email, requester):
         '''check if user is registered and activated/verified'''
 
         # get user in django
@@ -824,7 +824,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             django_user = None
 
 
-        keycloak_user = search_user_by_email_in_keycloak(email, request.user)
+        keycloak_user = search_user_by_email_in_keycloak(email, requester)
 
         if keycloak_user:
 

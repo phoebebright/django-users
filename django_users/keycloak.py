@@ -181,12 +181,38 @@ def set_temporary_password(user_id, payload, requester):
         return 401
 
     keycloak_admin.token = access_token  # Set the access token
+
+    try:
+        #TODO: should probably just clear reset password
+        keycloak_admin.update_user(user_id, {"requiredActions": []})
+        logger.info(f"Required actions cleared for user {user_id}")
+        return 204
+    except Exception as e:
+        logger.error(f"Failed to clear required actions in Keycloak: {e}")
+        return 500
+
     try:
         keycloak_admin.set_user_password(user_id=user_id, password=payload['value'], temporary=True)
         logger.info(f"Temporary password set for user {user_id}")
         return 204
     except Exception as e:
         logger.error(f"Failed to set temporary password in Keycloak: {e}")
+        return 500
+
+def clear_required_actions(user_id, requester):
+    '''Clear the required actions for a user in Keycloak'''
+
+    access_token = get_access_token(requester)
+    if not access_token:
+        return 401
+
+    keycloak_admin.token = access_token  # Set the access token
+    try:
+        keycloak_admin.clear_user_required_actions(user_id)
+        logger.info(f"Required actions cleared for user {user_id}")
+        return 204
+    except Exception as e:
+        logger.error(f"Failed to clear required actions in Keycloak: {e}")
         return 500
 
 
