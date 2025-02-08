@@ -1027,7 +1027,7 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         context['title'] = 'Unverified Users (Last Month)'
         return context
 
-class SendOpt(UserCanAdministerMixin, View):
+class SendOTP(UserCanAdministerMixin, View):
     def post(self, request):
         User = get_user_model()
         user = User.objects.get(id=request.POST.get('user_id'))

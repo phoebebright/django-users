@@ -6,7 +6,7 @@ from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
-    logout, Troubleshoot, UnverifiedUsersList
+    logout, Troubleshoot, UnverifiedUsersList, SendOTP
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -73,6 +73,6 @@ urlpatterns = [
     path('update_users/', update_users, name='update_users'),
     
     path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
-    path('send_opt/<int:pk>/', SendOpt.as_view(), name='send_opt'),
+    path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
 
 ]
