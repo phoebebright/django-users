@@ -57,6 +57,14 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
         ret = super().to_representation(instance)
         #TODO: prevent null in db so we don't have to do this
         ret['country'] = instance.country.name if instance.country else ''
+        if instance.person:
+            ret['friendly_name'] = instance.person.friendly_name
+            ret['formal_name'] = instance.person.formal_name
+            ret['sortable_name'] = instance.person.sortable_name
+        else:
+            ret['friendly_name'] = instance.name
+            ret['formal_name'] = instance.name
+            ret['sortable_name'] = instance.last_name + instance.first_name
         return ret
 
 class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):

@@ -73,5 +73,6 @@ urlpatterns = [
     path('update_users/', update_users, name='update_users'),
     
     path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
+    path('send_opt/<int:pk>/', SendOpt.as_view(), name='send_opt'),
 
 ]

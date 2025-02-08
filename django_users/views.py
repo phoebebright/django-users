@@ -69,58 +69,77 @@ class GoNextTemplateMixin(TemplateView):
         return context
 
 class AddUserBase(generic.CreateView):
-    '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)'''
-    # TODO: must be administrator or manager (?)
-    # form_class = CustomUserCreationForm
-    template_name = 'organiser/add_user.html'
+    '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)
+    To use, inherit this class and ensure correct permissions are set in the child class
+    Define success url that may pass on to a send message to user - this only creates the user
+    '''
+
+    template_name = 'users/organiser/add_user.html'
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
             raise NotImplementedError("Define `form_class` in the child class.")
         return self.form_class
 
-    def form_valid(self, form):
-        '''create the keycloak user first then the local user'''
-        me = self.request.user
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['message'] = self.get_message_template()
+        return context
 
+    # def get_message_template(self):
+    #
+    #     return '''Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {form.cleaned_data['password']}.  Please log in and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie'''
+
+    def create_keycloak_user(self, data, user):
+        '''at the moment we are creating the keycloak user then the django user to make it easier to
+        ensure the django user points to the keycloak user.  In future we might want to think about creating just
+        the django user at this point and then creating the keycloak user when the user signs in'''
         payload = {
-            "email": form.cleaned_data['email'],
-            "username": form.cleaned_data['email'],
-            "firstName": form.cleaned_data['first_name'],
-            "lastName": form.cleaned_data['last_name'],
+            "email": data['email'],
+            "username": data['email'],
+            "firstName": data['first_name'],
+            "lastName": data['last_name'],
             "enabled": True,
             "credentials": [{
                 "type": "password",
-                "value": form.cleaned_data['password'].replace(" ", ""),  # remove spaces
+                "value": data['password'].replace(" ", ""),  # remove spaces
                 "temporary": True
             }],
             "requiredActions": [],
 
         }
 
-        keycloak_id, status_code = create_keycloak_user(payload, me)
+        keycloak_id, status_code = create_keycloak_user(payload, user)
+
+        print(status_code)
+
+        return keycloak_id
+
+
+    def form_valid(self, form):
+        '''create the keycloak user first then the local user'''
+
+        me = self.request.user
+        keycloak_id = self.create_keycloak_user(form.cleaned_data, me)
+
 
         if keycloak_id:
             # now create the django instance
             user = form.save(commit=False)
             user.keycloak_id = keycloak_id
-            user.attributes = {'temporary_password': form.cleaned_data['password']}
+            user.attributes = {'temporary_password': form.cleaned_data['password']}   # lets use activation code (or verification code) to store the temporary password
+            user.activation_code = form.cleaned_data['password']
             user.creator = me
+            if not user.username:
+                user.username = user.email
             user.save()
 
-            message = f"Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {form.cleaned_data['password']}.  Please log in and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie"
-            mail.send(
-                subject="You are signed up with Skor.ie",
-                message=message,
-                html_message=message,
-                recipients=[user.email, ],
-                sender=settings.DEFAULT_FROM_EMAIL,
-                priority='now',
-            )
-        return HttpResponseRedirect(reverse_lazy('users:admin_user', kwargs={'pk': user.pk}))
+
+        return super().form_valid(form)
 
 
-class ManagerUserProfileBase(LoginRequiredMixin, generic.CreateView):
+
+class ManageUserProfileBase(LoginRequiredMixin, generic.CreateView):
     # form_class = CustomUserCreationForm
     template_name = 'organiser/users/manage_user_profile.html'
 
@@ -1007,3 +1026,10 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['title'] = 'Unverified Users (Last Month)'
         return context
+
+class SendOpt(UserCanAdministerMixin, View):
+    def post(self, request):
+        User = get_user_model()
+        user = User.objects.get(id=request.POST.get('user_id'))
+        user.send_verification_code()
+        return HttpResponseRedirect(reverse('users:unverified-users'))

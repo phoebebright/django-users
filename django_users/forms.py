@@ -107,7 +107,7 @@ class SignUpForm(forms.Form):
 class ForgotPasswordForm(forms.Form):
     email = forms.EmailField(label=_('Email Address'), required=False)
     channel = forms.ChoiceField(label=_('Channel to use'), required=False)
-    verification_code = forms.CharField(label=_('Verification Code'), required=False)
+    verification_code = forms.CharField(label=_('Verification Code'), required=False)    # verifications codes are for verifying comms channels NOT for activing the user account
     new_password = forms.CharField(
         widget=forms.PasswordInput(attrs={'placeholder': 'New Password'}),
         label="New Password",
