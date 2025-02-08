@@ -6,6 +6,19 @@ from django.conf import settings
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 
+def send_otp(channel, code):
+    subject = _('Your One Time Password')
+    message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME} .  Login link {reverse(settings.LOGIN_URL)}'
+    html_message = message
+    mail.send(
+        channel.value,
+        settings.DEFAULT_FROM_EMAIL,
+        subject=subject,
+        message=message,
+        html_message=html_message
+    )
+    return True
+
 def send_email_verification_code(verificationcode):
     subject = _('Your Verification Code')
     message = render_to_string('registration/email_verification_code.txt', {'code': verificationcode.code})

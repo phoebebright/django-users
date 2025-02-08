@@ -1,9 +1,12 @@
 import copy
+
+from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.http import QueryDict
 from django_countries.serializers import CountryFieldMixin
-from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
+
+User = get_user_model()
 
 class DynamicModelSerializer(serializers.ModelSerializer):
     """
@@ -20,7 +23,7 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
 
     class Meta:
         model = None
-        fields = ('active',  'date_joined',)
+        fields = ('is_active',  'date_joined',)
 
     def to_representation(self, instance):
 
@@ -29,7 +32,7 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
 
         ret = super().to_representation(instance)
         ret['competitor_name'] = None
-        ret['active'] = instance.active
+        ret['is_active'] = instance.is_active
         #ret['user_type'] = instance.user_type
         ret['date_joined'] = instance.date_joined
 
@@ -43,14 +46,14 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
         model = None
-        fields = ('id','username','first_name', 'last_name',  'active', 'country','date_joined','last_login','is_active','profile')
+        fields = ('id','username','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
 
 
 class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
         model = None
-        fields = ('id','username','email','first_name', 'last_name',  'active', 'country','date_joined','last_login','is_active','profile')
+        fields = ('id','username','email','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
 
     def to_representation(self, instance):
 
@@ -72,7 +75,7 @@ class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):
     city = serializers.CharField(max_length=255, required=False)
     class Meta:
         model = None
-        fields = ('id','username','first_name', 'last_name',  'full_name', 'active', 'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')
+        fields = ('id','username','first_name', 'last_name',  'full_name',  'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')
 
     def to_representation(self, instance):
 
@@ -174,13 +177,13 @@ class UserSyncSerializerBase(DynamicModelSerializer):
             if 'email' in data:
                 # do we know about this email
                 try:
-                    self.obj = CustomUser.objects.get(email=data['email'])
+                    self.obj = User.objects.get(email=data['email'])
                     if self.obj.username != data['username']:
                         self.message = _("This user already exists with a different username")
                     else:
                         self.message = _("User already exists")
 
-                except CustomUser.DoesNotExist:
+                except User.DoesNotExist:
                     pass
             else:
                 self.message = _(
@@ -190,9 +193,9 @@ class UserSyncSerializerBase(DynamicModelSerializer):
             if not self.obj:
                 if 'username' in data and len(data['username']) == 36:
                     try:
-                        self.obj = CustomUser.objects.get(username=data['username'])
+                        self.obj = User.objects.get(username=data['username'])
                         self.message = _("This user already exists with a different email")
-                    except CustomUser.DoesNotExist:
+                    except User.DoesNotExist:
                         pass
                 else:
                     self.message = _("Missing username field.  This is the GUID returned from keycloak in the username field.")

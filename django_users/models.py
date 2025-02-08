@@ -520,31 +520,23 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(_('last name'), max_length=30, null=True, blank=True, db_index=True)
 
     keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
-    # email_verified = models.DateTimeField(blank=True, null=True)
-    # mobile_verified = models.DateTimeField(blank=True, null=True)
-    # verification_code = models.CharField(max_length=6, blank=True, null=True)
-
-    # mobile = PhoneNumberField(null=True, blank=True)
-    #
-    # whatsapp = models.BooleanField(default=False, help_text=_("Do you use WhatsApp?"))
 
     country = CountryField(blank=True, null=True, help_text=_("Optional"))
 
     timezone = TimeZoneField(default='Europe/Dublin', help_text=_("Default timezone for this user"))
-    #####
 
     user_source = models.CharField(max_length=20, default="Unknown",
                                    help_text=_("How or where did this user get created"))
 
     profile = models.JSONField(default=dict, blank=True, help_text=_("Free form info related to this users profile"))
-    # ------------------
+
 
     # TODO: change organisation to M2M
     organisation = models.ForeignKey("users.Organisation", on_delete=models.CASCADE, blank=True, null=True)
 
     #TODO: can we remove this - very confusing as we have django is_active field as well
-    active = models.BooleanField(default=True,
-                                 db_index=True)  # true when user accepts an invitation or confirms account
+    #active = models.BooleanField(default=True,
+                                 #db_index=True)  # true when user accepts an invitation or confirms account
 
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
 

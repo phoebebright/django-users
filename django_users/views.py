@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+import string
 
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -74,7 +76,7 @@ class AddUserBase(generic.CreateView):
     Define success url that may pass on to a send message to user - this only creates the user
     '''
 
-    template_name = 'users/organiser/add_user.html'
+    template_name = 'users/admin/add_user.html'
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -340,14 +342,14 @@ class Troubleshoot(UserCanAdministerMixin, View):
 
 @method_decorator(never_cache, name='dispatch')
 class ProblemSignup(TemplateView):
-    template_name = "users/problem_signup.html"
+    template_name = "users/problem_register.html"
     verified = False
 
     def get_template_names(self):
         if self.request.user.is_authenticated and self.request.user.is_administrator:
-            return "users/problem_signup_admin.html"
+            return "users/admin/problem_register_admin.html"
         else:
-            return "users/problem_signup.html"
+            return "users/problem_register.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1027,9 +1029,13 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         context['title'] = 'Unverified Users (Last Month)'
         return context
 
-class SendOTP(UserCanAdministerMixin, View):
-    def post(self, request):
+class SendOTP(UserCanAdministerMixin, TemplateView):
+
+    template_name = 'users/admin/send_otp.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         User = get_user_model()
-        user = User.objects.get(id=request.POST.get('user_id'))
-        user.send_verification_code()
-        return HttpResponseRedirect(reverse('users:unverified-users'))
+        context['user'] = User.objects.get(id=kwargs['pk'])
+        context['otp'] = ''.join(random.choices(string.digits, k=6))
+        return context

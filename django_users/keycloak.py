@@ -45,7 +45,7 @@ def get_access_token(requester):
         return None
 
     try:
-        token = keycloak_admin.token(grant_type="client_credentials")
+        token = keycloak_openid.token(grant_type="client_credentials")
         logger.info(f"User {requester} requesting Keycloak access token")
         return token['access_token']
     except KeycloakAuthenticationError as e:

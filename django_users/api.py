@@ -114,6 +114,20 @@ class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
 
+class SendOTP2User(UserCanAdministerMixin, APIView):
+
+    def post(self, request):
+        User = get_user_model()
+        user = User.objects.get(email=request.data['email'])
+        phone_no = request.data['phone_no']
+        pin = ''.join(random.choices(string.digits, k=6))
+
+        try:
+            send_sms(user.id, phone_no, pin, request.user)
+        except Exception as e:
+            return Response(status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({'pin': pin}, status=status.HTTP_200_OK)
 
 class ChangePassword(APIView):
     """
@@ -334,7 +348,7 @@ class SendVerificationCode(APIView):
 
 class CheckEmailInKeycloakPublic(APIView):
     '''
-    check if an email has already been registered in the keycloak
+    check if an email has already been registered in keycloak
     '''
     authentication_classes = []
     permission_classes = []
@@ -344,6 +358,9 @@ class CheckEmailInKeycloakPublic(APIView):
         User = get_user_model()
         create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
         email = request.POST.get('email', None)
+        updated_keycloak_id = False
+
+
         if email:
             channels = []
 
@@ -370,9 +387,10 @@ class CheckEmailInKeycloakPublic(APIView):
             keycloak_user = search_user_by_email_in_keycloak(email, request.user)
 
             # make sure we can link users
-            if django_user and keycloak_user and not django_user.keycloak_id == keycloak_user['id']:
+            if (django_user and keycloak_user) and not str(django_user.keycloak_id) == keycloak_user['id']:
                 django_user.keycloak_id = keycloak_user['id']
                 django_user.save(update_fields=['keycloak_id', ])
+                updated_keycloak_id = True
 
             elif not django_user and keycloak_user and create_in_django:
                 # remove this code when all users transitioned to new signup system as should not apply
@@ -394,7 +412,9 @@ class CheckEmailInKeycloakPublic(APIView):
                 set_current_user(request, django_user.id, "REGISTER")
 
             if keycloak_user:
-                data = {
+                if request.user.is_authenticated and request.user.is_administrator:
+                    data = {
+                        'updated_keycloak_id': updated_keycloak_id,
                     "keycloak_user_id": keycloak_user['id'],
                     "keycloak_created": keycloak_user['createdTimestamp'],
                     "keycloak_enabled": keycloak_user['enabled'],
@@ -405,10 +425,20 @@ class CheckEmailInKeycloakPublic(APIView):
                     "django_is_active": django_user.is_active,
                     "channels": channels,
                 }
-
+                else:
+                    data = {
+                        'updated_keycloak_id': updated_keycloak_id,
+                        "keycloak_created": keycloak_user['createdTimestamp'],
+                        "keycloak_enabled": keycloak_user['enabled'],
+                        "keycloak_actions": keycloak_user['requiredActions'],
+                        "keycloak_verified": keycloak_user['emailVerified'],
+                        "django_is_active": django_user.is_active,
+                        "channels": channels,
+                    }
                 return JsonResponse(data)
             else:
                 return JsonResponse({
+                    'updated_keycloak_id': updated_keycloak_id,
                     "keycloak_user_id": '',
                     "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
                     "django_user_id": django_user.pk if django_user else 0,
