@@ -125,7 +125,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
 }
 
 
-function check_user(e) {
+function check_user() {
 
     $("#check_user").html("Checking if already setup...");
 
@@ -146,6 +146,9 @@ function check_user(e) {
                 $("#id_last_name").val(data.last_name);
                 $("#id_mobile").val(data.mobile);
                 $("#id_whatsapp").val(data.whatsapp);
+                $("#message_div").fadeIn();
+                $(".user_email").html(data.email);
+                $(".user_name").html(data.first_name + " " + data.last_name);
             }
 
             email_exists_keycloak($("#check_email").val(), function (d) {
@@ -181,6 +184,56 @@ function check_user(e) {
         });
 }
 
+function get_user_signup_info(email, callback) {
+    // same as version in users.js
+    $.ajax({
+        method: "POST",
+        url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+        data: {'email': email},
+
+        success: function (d) {
+
+            d.not_registered = (d.user_id == 0 && d.django_user == 0);
+
+            let output = "Created: "+(new Date(d.keycloak_created).toLocaleString()).toString()+"<br>";
+            output += "Django is active: " + (d.django_active ? 'Yes' : 'No') + "<br>";
+            if (d.django_user_keycloak_id) {
+                output += "Django linked to Keycloak: " + d.django_user_keycloak_id + "<br>";
+            }
+            output += "Keycloak verified: " + (d.verified ? 'Yes' : 'No') + "<br>";
+            output += "Keycloak enabled: " + (d.enabled ? 'Yes' : 'No') + "<br>";
+            if (d.keycloak_actions) {
+                output += "Keycloak Actions: " + d.keycloak_actions.length ? d.keycloak_actions.join(', ') : 'None' + "<br>";
+            }
+            d.output = output;
+            callback(d);
+
+
+        },
+        error: function () {
+            // If there's an error, show the error message
+            $('#apiError').show();
+            $('#apiResponse').hide();
+        }
+    });
+
+}
+function send_otp_via_channel(payload) {
+    return new Promise((resolve, reject) => {
+        $.ajax({
+            method: "POST",
+            url: SKORIE_API + "/api/v2/comms_otp/",
+            data: payload,
+        })
+        .done(resolve)
+        .fail((xhr, status, error) => {
+            console.log('Failed:', status, error);
+            reject(error);
+        });
+    });
+}
+
+
 function email_exists_keycloak(email, callback) {
     $.ajax({
         method: "POST",
@@ -210,17 +263,20 @@ function patch_user(pk, payload) {
         });
 }
 
-function set_keycloak_password(payload, callback) {
+
+function set_keycloak_password(payload) {
+
+    return new Promise((resolve, reject) => {
     $.ajax({
         method: "POST",
         url: SKORIE_API + "/api/v2/set_temp_password/",
         data: payload,
     })
-        .done(function (data) {
-            callback(data);
-        })
-        .fail(function (xhr, status, error) {
-            console.log('failed' + status)
+        .done(resolve)
+        .fail((xhr, status, error) => {
+            console.log('Failed:', status, error);
+            reject(error);
+        });
         });
 }
 

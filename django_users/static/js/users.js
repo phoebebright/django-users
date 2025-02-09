@@ -3,6 +3,41 @@
                 return urlParams.get(param);
             }
 
+  function get_user_signup_info(email, callback) {
+    // same as version in admin_users.js
+            $.ajax({
+                method: "POST",
+                url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+                data: {'email': email},
+
+                success: function (d) {
+
+                    d.not_registered = (d.user_id == 0 && d.django_user == 0);
+
+                    let output = "Created: "+(new Date(d.keycloak_created).toLocaleString()).toString()+"<br>";
+                    output += "Django is active: " + (d.django_active ? 'Yes' : 'No') + "<br>";
+                    if (d.django_user_keycloak_id) {
+                        output += "Django linked to Keycloak: " + d.django_user_keycloak_id + "<br>";
+                    }
+                    output += "Keycloak verified: " + (d.verified ? 'Yes' : 'No') + "<br>";
+                    output += "Keycloak enabled: " + (d.enabled ? 'Yes' : 'No') + "<br>";
+                    if (d.keycloak_actions) {
+                        output += "Keycloak Actions: " + d.keycloak_actions.length ? d.keycloak_actions.join(', ') : 'None' + "<br>";
+                    }
+                    d.output = output;
+                    callback(d);
+
+
+                },
+                error: function () {
+                    // If there's an error, show the error message
+                    $('#apiError').show();
+                    $('#apiResponse').hide();
+                }
+            });
+
+        }
+
 function problem_login(email){
 
     $.ajax({
@@ -170,10 +205,10 @@ $('#pin').on('input', function () {
 });
 
 $(document).on("click", ".goto_problem_login", function () {
-    const email = $('#id_email').val();
+    const email = encodeURIComponent($('#id_email').val());
     document.location.href = problem_login_url + '?email=' + email;
 });
 $(document).on("click", ".goto_problem_register", function () {
-    const email = $('#id_email').val();
+    const email = encodeURIComponent($('#id_email').val());
     document.location.href = problem_register_url + '?email=' + email;
 });
