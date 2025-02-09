@@ -644,7 +644,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         # Person has link to user, so can't create until user is saved
         if not self.person_id:
             self.person = self.Person.create_from_user(self)
-            super().quick_save(update_fields=['person', ])
+            self.quick_save(update_fields=['person', ])
 
         # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
         try:

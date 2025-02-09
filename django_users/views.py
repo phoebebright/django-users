@@ -78,6 +78,9 @@ class AddUserBase(generic.CreateView):
 
     template_name = 'users/admin/add_user.html'
 
+    def get_success_url(self):
+        return reverse('users:admin_user', kwargs={'pk': self.object.id})
+
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
             raise NotImplementedError("Define `form_class` in the child class.")
@@ -130,7 +133,7 @@ class AddUserBase(generic.CreateView):
             user = form.save(commit=False)
             user.keycloak_id = keycloak_id
             user.attributes = {'temporary_password': form.cleaned_data['password']}   # lets use activation code (or verification code) to store the temporary password
-            user.activation_code = form.cleaned_data['password']
+            # user.activation_code = form.cleaned_data['password']
             user.creator = me
             if not user.username:
                 user.username = user.email

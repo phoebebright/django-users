@@ -84,7 +84,7 @@ def logout_user_from_keycloak_and_django(request, user=None):
     # Redirect to a specified page after logout
     return redirect(settings.LOGOUT_REDIRECT_URL)
 
-def create_keycloak_user(user_details):
+def create_keycloak_user(user_details, requester):
     '''Create a Keycloak user and return the user ID that will be used as the username in Django'''
     '''
     new_user = keycloak_admin.create_user({"email": "example@example.com",
@@ -110,7 +110,7 @@ def create_keycloak_user(user_details):
 
     try:
         user_id = keycloak_admin.create_user(user_details)
-        logger.info(f"User created in Keycloak with ID {user_id} and name {user_details['firstName']} {user_details['lastName']}")
+        logger.info(f"User created in Keycloak with ID {user_id} and name {user_details['firstName']} {user_details['lastName']} by {requester}")
         return user_id, 201
     except Exception as e:
         if e.response_code == 409:
