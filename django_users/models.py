@@ -583,7 +583,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     subscription_ends = models.DateTimeField(blank=True, null=True)
     renew = models.BooleanField(default=False)
 
-    activation_code = models.IntegerField(blank=True, null=True)
+    activation_code = models.CharField(max_length=10, blank=True, null=True)
 
     free_account = models.BooleanField(_("Free Account"),
                                        help_text=_("No attempt to get subscription will be made on a free account"),

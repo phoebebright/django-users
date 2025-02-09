@@ -75,6 +75,7 @@ class AddUserBase(generic.CreateView):
     To use, inherit this class and ensure correct permissions are set in the child class
     Define success url that may pass on to a send message to user - this only creates the user
     '''
+    new_user = None
 
     template_name = 'users/admin/add_user.html'
 
@@ -133,12 +134,13 @@ class AddUserBase(generic.CreateView):
             user = form.save(commit=False)
             user.keycloak_id = keycloak_id
             user.attributes = {'temporary_password': form.cleaned_data['password']}   # lets use activation code (or verification code) to store the temporary password
-            # user.activation_code = form.cleaned_data['password']
+            user.activation_code = form.cleaned_data['password']  # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
             user.creator = me
             if not user.username:
                 user.username = user.email
             user.save()
 
+            self.new_user = user
 
         return super().form_valid(form)
 
