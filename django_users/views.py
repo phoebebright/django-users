@@ -105,11 +105,15 @@ class AddUserBase(generic.CreateView):
             "username": data['email'],
             "firstName": data['first_name'],
             "lastName": data['last_name'],
+            "emailVerified": True,
             "enabled": True,
+            "attributes": {
+                "django_created": "true",
+            },
             "credentials": [{
                 "type": "password",
                 "value": data['password'].replace(" ", ""),  # remove spaces
-                "temporary": True
+                "temporary": False,  # to allow login via keycloak before password is changed
             }],
             "requiredActions": [],
 
@@ -555,8 +559,14 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             return render(request, self.template, {'email': email})
         else:
             if user:
+                # keycloak won't allow login if temporary password so have to do it this way for now
+                if is_temporary_password(user) or user.activation_code:
+                    login(request, user)
 
-                if is_temporary_password(user):
+                    # do this already?
+                    user.activation_code = None
+                    user.save(update_fields=['activation_code'])
+
                     messages.warning(request, _('Your password is temporary. Please change your password.'))
                     return redirect('users:change_password_now')
                 else:
@@ -788,7 +798,7 @@ class ManageCommsChannelsView(View):
 class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
-    success_url = reverse_lazy("profile")
+    success_url = reverse_lazy("users:user-profile")
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:

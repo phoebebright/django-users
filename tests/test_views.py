@@ -201,7 +201,7 @@ class VerifyChannelViewTest(TestCase):
         response = self.client.post(reverse('users:verify_channel', args=[self.channel.id]), data={'code': self.code})
         self.channel.refresh_from_db()
         self.assertIsNotNone(self.channel.verified_at)
-        self.assertRedirects(response, reverse('users:profile'))
+        self.assertRedirects(response, reverse('users:user-profile'))
         self.assertContains(response, 'Communication channel has been verified.')
 
     def test_channel_verification_with_invalid_code(self):
