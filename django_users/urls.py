@@ -6,7 +6,7 @@ from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
-    logout, Troubleshoot, UnverifiedUsersList, SendOTP
+    Troubleshoot, UnverifiedUsersList, SendOTP
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'

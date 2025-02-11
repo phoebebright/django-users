@@ -125,7 +125,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
 }
 
 
-function check_user() {
+function check_user(callback) {
 
     $("#check_user").html("Checking if already setup...");
 
@@ -172,6 +172,9 @@ function check_user() {
                         }
 
                     }
+                }
+                if (callback) {
+                    callback(d);
                 }
 
 

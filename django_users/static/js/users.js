@@ -54,15 +54,7 @@ function problem_login(email){
             // check django keycloak_id is the same as the one in keycloak - if there is one
             if (d.channels ) {
                 // for each d.channel create a button to click
-                $('#existing_channels').html('');
-                d.channels.forEach(function (item) {
-                    if (item.email) {
-                        $('#existing_channels').append('<button  class="btn btn-primary verify w-100 mt-1" data-channel_pk="' + item.channel_id + '">Send Email to ' + item.email + '</button>');
-                    } else {
-                        $('#existing_channels').append('<button  class="btn btn-primary verify w-100 mt-1" data-channel_pk="' + item.channel_id + '">Send SMS to ' + item.mobile + '</button>');
-                    }
-                });
-
+                $('#existing_channels').html(show_channels(d.channels));
 
             }  else if (d.user_id == 0 && d.django_keycloak_user == 0) {
                 $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="'+register_url+'?email='+email+'" class="btn btn-primary-outline">'+REGISTER_TERM+'</div>');
@@ -212,3 +204,37 @@ $(document).on("click", ".goto_problem_register", function () {
     const email = encodeURIComponent($('#id_email').val());
     document.location.href = problem_register_url + '?email=' + email;
 });
+
+
+
+function add_user(payload, callback) {
+
+
+    $.ajax({
+        method: "POST",
+        url:  SKORIE_API + "/api/v2/create_user/",
+        data: payload,
+
+    })
+        .done(function (json) {
+            if (typeof callback != "undefined") {
+                callback(json);
+            }
+        });
+
+}
+
+function show_channels (channels) {
+
+    let html = '';
+    channels.forEach(function (item) {
+        if (item.channel_type == "email") {
+            html += '<button  class="btn btn-primary verify w-100 mt-1" data-channel_pk="' + item.channel_id + '">Send Email to ' + item.value + '</button>';
+        }
+        //else {
+        //    $('#existing_channels').append('<button  class="btn btn-primary verify w-100 mt-1" //data-channel_pk="' + item.channel_id + '">Send SMS to ' + item.value + '</button>');
+        //}
+    });
+
+    return html;
+}
