@@ -798,7 +798,10 @@ class ManageCommsChannelsView(View):
 class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
-    success_url = reverse_lazy("users:user-profile")
+
+
+    def get_success_url(self):
+        return "/"
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:

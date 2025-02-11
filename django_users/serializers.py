@@ -46,13 +46,6 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
         model = None
-        fields = ('id','username','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
-
-
-class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
-
-    class Meta:
-        model = None
         fields = ('id','username','email','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
 
     def to_representation(self, instance):

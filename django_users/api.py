@@ -22,7 +22,8 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.status import HTTP_400_BAD_REQUEST
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
@@ -32,20 +33,33 @@ from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
 from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
-    verify_user_without_email
+    verify_user_without_email, create_keycloak_user
+from .serializers import UserShortSerializerBase
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
 
 logger = logging.getLogger('django')
 
+User = get_user_model()
 
 class CustomAnonRateThrottle(AnonRateThrottle):
-    rate = '5/minute'
+    rate = '3/minute'
 
+class CustomOrdinaryUserRateThrottle(UserRateThrottle):
+    rate = '10/minute'
+
+class AdminUserRateThrottle(UserRateThrottle):
+    rate = '20/minute'
 
 def is_administrator(user):
     return user.is_administrator
+
+class UserSerializer(UserShortSerializerBase):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
+        'profile')
 
 
 class CommsChannelRateThrottle(SimpleRateThrottle):
@@ -258,10 +272,18 @@ class UserProfileUpdateBase(APIView):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-class CheckEmailInKeycloak(UserCanAdministerMixin, APIView):
+
+class CheckEmailInKeycloak(APIView):
     '''
     check if an email has already been registered in the keycloak
     '''
+    throttle_classes = [CustomOrdinaryUserRateThrottle,]
+
+    def get_throttles(self):
+        if self.request.user.is_administrator:
+            return [AdminUserRateThrottle,]
+        else:
+            return [CustomOrdinaryUserRateThrottle,]
 
     def post(self, request, *args, **kwargs):
         email = request.POST.get('email', None)
@@ -348,6 +370,19 @@ class CheckEmailInKeycloakPublic(APIView):
     permission_classes = []
     throttle_classes = [CustomAnonRateThrottle]
 
+    def get_throttles(self):
+        """
+        Dynamically assign throttles based on user type.
+        """
+        if self.request.user.is_authenticated:
+            if self.request.user.is_administrator:
+                return [AdminUserRateThrottle()]
+            else:
+                return [CustomOrdinaryUserRateThrottle()]
+        else:
+            return [CustomAnonRateThrottle()]
+
+
     def post(self, request, *args, **kwargs):
         User = get_user_model()
         create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
@@ -417,6 +452,8 @@ class CheckEmailInKeycloakPublic(APIView):
                     "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
                     "django_user_id": django_user.pk if django_user else 0,
                     "django_is_active": django_user.is_active,
+                        "formal_name": django_user.person.formal_name,
+                        "friendly_name": django_user.person.friendly_name,
                     "channels": channels,
                 }
                 else:
@@ -427,6 +464,8 @@ class CheckEmailInKeycloakPublic(APIView):
                         "keycloak_actions": keycloak_user['requiredActions'],
                         "keycloak_verified": keycloak_user['emailVerified'],
                         "django_is_active": django_user.is_active,
+                        "formal_name": django_user.person.formal_name,
+                        "friendly_name": django_user.person.friendly_name,
                         "channels": channels,
                     }
                 return JsonResponse(data)
@@ -437,6 +476,8 @@ class CheckEmailInKeycloakPublic(APIView):
                     "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
                     "django_user_id": django_user.pk if django_user else 0,
                     "channels": channels,
+                    "formal_name": django_user.person.formal_name if django_user else '',
+                    "friendly_name": django_user.person.friendly_name if django_user else '',
                 })
 
         else:
@@ -648,3 +689,69 @@ def toggle_role(request, personref):
         role.save()
 
     return Response({"status": "OK"})
+
+
+class CreateUser(APIView):
+
+    throttle_classes = [CustomOrdinaryUserRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+
+            '''at the moment we are creating the keycloak user then the django user to make it easier to
+            ensure the django user points to the keycloak user.  In future we might want to think about creating just
+            the django user at this point and then creating the keycloak user when the user signs in'''
+
+            data = request.data
+            requester = request.user
+
+            payload = {
+                "email": data['email'],
+                "username": data['email'],
+                "firstName": data['first_name'],
+                "lastName": data['last_name'],
+                "emailVerified": True,
+                "enabled": True,
+                "attributes": {
+                    "django_created": "true",
+                },
+                "credentials": [{
+                    "type": "password",
+                    "value": data['password'].replace(" ", ""),  # remove spaces
+                    "temporary": False,  # to allow login via keycloak before password is changed
+                }],
+                "requiredActions": [],
+
+            }
+
+            keycloak_id, status_code = create_keycloak_user(payload, requester)
+
+            if keycloak_id:
+
+                try:
+                    user = User.objects.get(keycloak_id = keycloak_id)
+                except User.DoesNotExist:
+                    try:
+                        user = User.objects.get(email = data['email'])
+                        logger.warning(f"User {user.pk} already exists with email but no keycloak id so attaching id {keycloak_id}")
+                        user.keycloak_id = keycloak_id
+                        user.save()
+                        serializer = UserSerializer(user)
+                        return Response(serializer.data, status=status.HTTP_200_OK)
+                    except User.DoesNotExist:
+
+
+                        # now create the django instance
+                        user = User.objects.create_user(email=data['email'], username=data['email'], first_name=data['first_name'],
+                                                        last_name=data['last_name'], keycloak_id=keycloak_id, creator=requester,
+                                                        activation_code=data['password'])
+                        # reconsider use of activation_code as temporary password.  Currently removed when user logs in.  Be better if this was all in keycloak
+                        serializer = UserSerializer(user)
+                        return Response(serializer.data, status=status.HTTP_201_CREATED)
+                else:
+                    # user already exists
+                    serializer = UserSerializer(user)
+                    return Response(serializer.data, status=status.HTTP_208_ALREADY_REPORTED)
+
+            else:
+                logger.error(f"Failed to create keycloak user for {data['email']}")
+                return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)

@@ -362,6 +362,7 @@ class CustomUserManager(BaseUserManager):
 
         return user
 
+    @transaction.atomic
     def create_user(self, email=None, password=None, **extra_fields):
         '''note that extra_fields only used in creating person not user'''
         is_active = True
@@ -383,6 +384,10 @@ class CustomUserManager(BaseUserManager):
             extra_fields.pop('username')
         if 'is_active' in extra_fields:
             is_active = extra_fields.pop('is_active')
+        if 'keycloak_id' in extra_fields:
+            user_extras['keycloak_id'] = extra_fields.pop('keycloak_id')
+        if 'activation_code' in extra_fields:
+            user_extras['activation_code'] = extra_fields.pop('activation_code')
 
 
         person = self.Person.objects.create(**extra_fields)
