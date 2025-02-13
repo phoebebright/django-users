@@ -355,7 +355,7 @@ class CustomUserManager(BaseUserManager):
         email = self.normalize_email(email)
 
         # this should be limited to if the user was only just created and somehow ending up with a duplicte rather than overwriting an existing user...
-        user, created = self.model.get_or_create(email=email, username=email, defaults={'is_staff': is_staff, 'is_active': True, 'is_superuser': is_superuser, 'last_login': now, 'date_joined': now, **extra_fields})
+        user, created = self.model.objects.get_or_create(email=email, username=email, defaults={'is_staff': is_staff, 'is_active': True, 'is_superuser': is_superuser, 'last_login': now, 'date_joined': now, **extra_fields})
         # user = self.model(email=email,
         #                   is_staff=is_staff, is_active=True,
         #                   is_superuser=is_superuser, last_login=now,
