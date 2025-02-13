@@ -353,10 +353,13 @@ class CustomUserManager(BaseUserManager):
         now = timezone.now()
 
         email = self.normalize_email(email)
-        user = self.model(email=email,
-                          is_staff=is_staff, is_active=True,
-                          is_superuser=is_superuser, last_login=now,
-                          date_joined=now, **extra_fields)
+
+        # this should be limited to if the user was only just created and somehow ending up with a duplicte rather than overwriting an existing user...
+        user, created = self.model.get_or_create(email=email, username=email, defaults={'is_staff': is_staff, 'is_active': True, 'is_superuser': is_superuser, 'last_login': now, 'date_joined': now, **extra_fields})
+        # user = self.model(email=email,
+        #                   is_staff=is_staff, is_active=True,
+        #                   is_superuser=is_superuser, last_login=now,
+        #                   date_joined=now, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
 
@@ -936,7 +939,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
     @cached_property
     def is_manager(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_MANAGER).exists()
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_MANAGER).exists()or self.is_superuser
+
 
     @cached_property
     def is_devteam(self):
