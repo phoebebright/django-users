@@ -59,7 +59,7 @@ urlpatterns = [
     # path('verify_account/<str:code>/', VerifyWithCode.as_view(), name="verify_with_code"),
 
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
-    path('logout_all/', logout_user_from_keycloak_and_django, name='logout_keycloak_and_django'),
+    path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),
     path('login/', LoginView.as_view(), name='login'),
     path('register/', RegisterView.as_view(), name='register'),
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
