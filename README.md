@@ -12,3 +12,8 @@ This will run without any additional settings but the following settings can be 
     USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
     LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
     LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
+
+
+## Setting up without Keycloak
+
+Create a users app and add django-users to the project and INSTALLED_APPS

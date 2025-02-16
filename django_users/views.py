@@ -227,15 +227,15 @@ def send_test_email(request):
 #                                 first_name=user_details['firstName'], last_name=user_details['lastName'])
 
 
-def logout(request):
-    nextpage = get_legitimate_redirect(request)
-
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
-
-    else:
-        log_out(request)
-        return HttpResponseRedirect(nextpage)
+# def logout(request):
+#     nextpage = get_legitimate_redirect(request)
+#
+#     if len(settings.AUTHENTICATION_BACKENDS) > 1:
+#         return HttpResponseRedirect(f"/keycloak/logout?next={nextpage}")
+#
+#     else:
+#         log_out(request)
+#         return HttpResponseRedirect(nextpage)
 
     # return_to = urlencode({'returnTo': request.build_absolute_uri('/')})
     # return HttpResponseRedirect("/keycloak/logout")

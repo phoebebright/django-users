@@ -660,13 +660,16 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
         if not settings.DEBUG:
             queryset = queryset.exclude(test=True)
 
-        # ignore default_authority=0
-        if self.request.query_params.get('default_authority', None) and self.request.query_params.get(
-                'default_authority') == '0':
-            # remove from filter
-            del self.request.query_params['default_authority']
+    # Create a mutable copy of request.query_params
+    query_params = self.request.query_params.copy()
 
-        country = self.request.query_params.get('country', None)
+    # Ignore default_authority=0
+    if query_params.get('default_authority') == '0':
+        # Remove the 'default_authority' parameter from the mutable copy
+        query_params.pop('default_authority')
+
+    # Filter by country if provided
+    country = query_params.get('country', None)
         if country:
             queryset = queryset.filter(country__in=[country, None])
 
