@@ -383,7 +383,8 @@ class ProblemLogin(ProblemSignup):
             except User.DoesNotExist:
                 pass
             else:
-                self.verified = django_user.is_verified
+                #self.verified = django_user.is_verified
+                self.verified = django_user.is_active
 
         else:
             # no email passed so continue
