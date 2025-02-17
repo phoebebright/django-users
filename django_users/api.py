@@ -8,7 +8,7 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth import get_user_model
-from django.core.checks import messages
+from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
@@ -64,7 +64,9 @@ class UserSerializer(UserShortSerializerBase):
 
 class CommsChannelRateThrottle(SimpleRateThrottle):
     scope = 'comms_channel'
-
+    THROTTLE_RATES = {
+        'comms_channel': '5/hour',  # Default rate: 5 requests per hour
+    }
     def get_cache_key(self, request, view):
         # Use user ID for authenticated requests, or IP address for anonymous
         if request.user.is_authenticated:
@@ -477,6 +479,7 @@ class CheckEmailInKeycloakPublic(APIView):
                     "channels": channels,
                     "formal_name": django_user.person.formal_name if django_user else '',
                     "friendly_name": django_user.person.friendly_name if django_user else '',
+                    "keycloak_verified": False,
                 })
 
         else:
@@ -556,7 +559,7 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
     # serializer_class = CommsChannelSerializer
     http_method_names = ['patch', 'delete', 'post', 'get']
 
-    # throttle_classes = [CommsChannelRateThrottle]
+    throttle_classes = [CommsChannelRateThrottle]
 
     def get_serializer_context(self):
         # Add user to the context for the serializer

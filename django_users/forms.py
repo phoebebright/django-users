@@ -275,8 +275,20 @@ class CommsChannelFormBase(forms.ModelForm):
 class AddCommsChannelFormBase(forms.ModelForm):
     email = forms.EmailField(label=_('Email'), required=False)
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
+    # need to review why I put this in, but likely to trace same call between steps.  Where should it be set?
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
         model = None
         fields = ['channel_type', 'email', 'mobile']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        email = cleaned_data.get('email')
+        mobile = cleaned_data.get('mobile')
+
+        # Validate that at least one of email or mobile is provided
+        if not email and not mobile:
+            raise ValidationError(_('You must provide either an email or a mobile number.'))
+
+        return cleaned_data

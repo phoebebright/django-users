@@ -5,8 +5,6 @@ from django.shortcuts import redirect
 from keycloak import KeycloakAdmin, KeycloakOpenID
 from keycloak.exceptions import KeycloakAuthenticationError, KeycloakGetError
 
-
-
 logger = logging.getLogger('django')
 
 try:
@@ -17,7 +15,6 @@ try:
 except:
     logger.error("Keycloak client ID and secret not found in settings")
     raise
-
 
 # Initialize KeycloakAdmin for administrative actions
 keycloak_admin = KeycloakAdmin(
@@ -37,7 +34,6 @@ keycloak_openid = KeycloakOpenID(
 )
 
 
-
 def get_access_token(requester):
     '''Get an access token for the Keycloak admin API'''
     if not requester.is_administrator and not requester.is_manager:
@@ -53,7 +49,6 @@ def get_access_token(requester):
         return None
 
 
-
 def logout_user_from_keycloak_and_django(request, user=None):
     """
     Logs out a user from both Keycloak and Django.
@@ -62,7 +57,6 @@ def logout_user_from_keycloak_and_django(request, user=None):
 
     if not user:
         user = request.user
-
 
     # check not logged out already
     if user.is_authenticated:
@@ -80,9 +74,10 @@ def logout_user_from_keycloak_and_django(request, user=None):
     else:
         # can be left partially logged out in django so force logout and clear session of _auth values
         logout(request)
-        
+
     # Redirect to a specified page after logout
     return redirect(settings.LOGOUT_REDIRECT_URL)
+
 
 def create_keycloak_user(user_details, requester):
     '''Create a Keycloak user and return the user ID that will be used as the username in Django'''
@@ -110,7 +105,8 @@ def create_keycloak_user(user_details, requester):
 
     try:
         user_id = keycloak_admin.create_user(user_details)
-        logger.info(f"User created in Keycloak with ID {user_id} and name {user_details['firstName']} {user_details['lastName']} by {requester}")
+        logger.info(
+            f"User created in Keycloak with ID {user_id} and name {user_details['firstName']} {user_details['lastName']} by {requester}")
         return user_id, 201
     except Exception as e:
         if e.response_code == 409:
@@ -120,6 +116,7 @@ def create_keycloak_user(user_details, requester):
         else:
             logger.error(f"Failed to create user in Keycloak: {e}")
             return None, 500
+
 
 def verify_user_without_email(user_id):
     '''allow user to be enabled and verified in keycloak without clicking the link in the email process'''
@@ -134,6 +131,7 @@ def verify_user_without_email(user_id):
         logger.info(f"User {user_id} verified successfully in Keycloak")
     except Exception as e:
         logger.error(f"Failed to verify user in Keycloak: {e}")
+
 
 def search_user_by_email_in_keycloak(email, requester):
     '''Search for a user by email in Keycloak'''
@@ -156,9 +154,10 @@ def search_user_by_email_in_keycloak(email, requester):
 
     return None
 
-def get_user_by_id(user_id):
 
+def get_user_by_id(user_id):
     return keycloak_admin.get_user(user_id)
+
 
 #
 # def update_users(request):
@@ -183,7 +182,7 @@ def set_temporary_password(user_id, payload, requester):
     keycloak_admin.token = access_token  # Set the access token
 
     try:
-        #TODO: should probably just clear reset password
+        # TODO: should probably just clear reset password
         keycloak_admin.update_user(user_id, {"requiredActions": []})
         logger.info(f"Required actions cleared for user {user_id}")
         return 204
@@ -198,6 +197,7 @@ def set_temporary_password(user_id, payload, requester):
     except Exception as e:
         logger.error(f"Failed to set temporary password in Keycloak: {e}")
         return 500
+
 
 def clear_required_actions(user_id, requester):
     '''Clear the required actions for a user in Keycloak'''
@@ -217,21 +217,19 @@ def clear_required_actions(user_id, requester):
 
 
 def is_temporary_password(user):
+    try:
+        # Retrieve the user's credentials from Keycloak
+        user_id = user.keycloak_id  # Assuming `keycloak_id` is stored on the user model
+        credentials = keycloak_admin.get_credentials(user_id)
 
-        try:
-            # Retrieve the user's credentials from Keycloak
-            user_id = user.keycloak_id  # Assuming `keycloak_id` is stored on the user model
-            credentials = keycloak_admin.get_credentials(user_id)
+        for credential in credentials:
+            if credential['type'] == 'password' and credential.get('temporary', False):
+                return True
 
-            for credential in credentials:
-                if credential['type'] == 'password' and credential.get('temporary', False):
-                    return True
+    except KeycloakAuthenticationError as e:
+        logger.error(f"Error accessing Keycloak API: {e}")
 
-        except KeycloakAuthenticationError as e:
-            logger.error(f"Error accessing Keycloak API: {e}")
-
-
-        return False
+    return False
 
 
 def verify_login(username, password):
@@ -243,6 +241,7 @@ def verify_login(username, password):
         return False
     else:
         return True
+
 
 def update_password(keycloak_id, new_password):
     '''Update the password for a Keycloak user'''

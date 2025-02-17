@@ -32,14 +32,12 @@ from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash, get_user_model)
 
-
 from tools.permission_mixins import UserCanAdministerMixin
 
 from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
     is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
 from .keycloak import create_keycloak_user
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
-
 
 User = get_user_model()
 
@@ -52,12 +50,14 @@ LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CommsChannel = apps.get_model('users.CommsChannel')  # Replace 'users' with your app name
 CHANNEL_EMAIL = CommsChannel.CHANNEL_EMAIL
 
+
 def get_legitimate_redirect(request):
     nextpage = request.GET.get('next', '/')
     if nextpage.startswith('http'):
         # prevent malicious redirects
         nextpage = '/'
     return nextpage
+
 
 class GoNextTemplateMixin(TemplateView):
     '''used for event views to work out where to go next'''
@@ -69,6 +69,7 @@ class GoNextTemplateMixin(TemplateView):
         context['next'] = self.request.GET.get('next', "")
 
         return context
+
 
 class AddUserBase(generic.CreateView):
     '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)
@@ -86,6 +87,7 @@ class AddUserBase(generic.CreateView):
         if not hasattr(self, 'form_class') or self.form_class is None:
             raise NotImplementedError("Define `form_class` in the child class.")
         return self.form_class
+
     #
     # def get_context_data(self, **kwargs):
     #     context = super().get_context_data(**kwargs)
@@ -125,20 +127,20 @@ class AddUserBase(generic.CreateView):
 
         return keycloak_id
 
-
     def form_valid(self, form):
         '''create the keycloak user first then the local user'''
 
         me = self.request.user
         keycloak_id = self.send_create_keycloak_user(form.cleaned_data, me)
 
-
         if keycloak_id:
             # now create the django instance
             user = form.save(commit=False)
             user.keycloak_id = keycloak_id
-            user.attributes = {'temporary_password': form.cleaned_data['password']}   # lets use activation code (or verification code) to store the temporary password
-            user.activation_code = form.cleaned_data['password']  # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
+            user.attributes = {'temporary_password': form.cleaned_data[
+                'password']}  # lets use activation code (or verification code) to store the temporary password
+            user.activation_code = form.cleaned_data[
+                'password']  # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
             user.creator = me
             if not user.username:
                 user.username = user.email
@@ -147,7 +149,6 @@ class AddUserBase(generic.CreateView):
             self.new_user = user
 
         return super().form_valid(form)
-
 
 
 class ManageUserProfileBase(LoginRequiredMixin, generic.CreateView):
@@ -243,7 +244,6 @@ def logout(request):
 
 
 def login_redirect(request):
-
     url = reverse(settings.LOGIN_URL)
     if 'next' in request.GET.urlencode():
         url += "?{request.GET.urlencode()}"
@@ -259,7 +259,6 @@ def signup_redirect(request):
     elif request.GET.urlencode():
         url += "?next={request.GET.urlencode()}"
     return HttpResponseRedirect(url)
-
 
 
 def after_login_redirect(request):
@@ -383,7 +382,7 @@ class ProblemLogin(ProblemSignup):
             except User.DoesNotExist:
                 pass
             else:
-                #self.verified = django_user.is_verified
+                # self.verified = django_user.is_verified
                 self.verified = django_user.is_active
 
         else:
@@ -597,7 +596,6 @@ class RegisterViewBase(FormView):
     def get_success_url(self):
         return reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
 
-
     # @transaction.atomic
     def form_valid(self, form):
         preferred_channel = form.cleaned_data['preferred_channel']
@@ -605,9 +603,8 @@ class RegisterViewBase(FormView):
         mobile = form.cleaned_data.get('mobile')
         password = form.cleaned_data['password']
 
-
         User = get_user_model()
-        #this code cannot find username=email but when you try to create it, it says can't create duplicate and you see it already there.
+        # this code cannot find username=email but when you try to create it, it says can't create duplicate and you see it already there.
         # save not being triggered
         try:
             # print(f"Trying to get user with email {email}")
@@ -621,13 +618,15 @@ class RegisterViewBase(FormView):
                     first_name=form.cleaned_data['first_name'],
                     last_name=form.cleaned_data['last_name'],
                     is_active=False
-            )
+                )
             except User.DoesNotExist:
                 # if there is old data where email != username then will get duplicate error here
-                messages.error(self.request, _(f'Failed to create user account - duplicate email {email}. Please try again later.'))
+                messages.error(self.request,
+                               _(f'Failed to create user account - duplicate email {email}. Please try again later.'))
                 return HttpResponseRedirect(reverse(LOGIN_REGISTER))
             except Exception as e:
-                messages.error(self.request, _(f'Failed to create user account with error {e}. Please try again later.'))
+                messages.error(self.request,
+                               _(f'Failed to create user account with error {e}. Please try again later.'))
                 raise
         else:
             if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
@@ -648,7 +647,7 @@ class RegisterViewBase(FormView):
         set_current_user(self.request, user.id, "REGISTER")
 
         if USE_KEYCLOAK and not user.keycloak_id:
-            status_code = user.create_keycloak_user_from_user(password)
+            status_code = user.create_keycloak_user_from_user(password, self.request.user)
             if status_code == 409:
                 messages.error(self.request, _('You already have an account.'))
                 return HttpResponseRedirect(reverse(LOGIN_REGISTER))
@@ -663,15 +662,15 @@ class RegisterViewBase(FormView):
         user.preferred_channel = self.create_comms_channels(preferred_channel, mobile or email, user)
         user.save(update_fields=['preferred_channel'])
 
-        #TODO: could try signing in - at least put email in login form
+        # TODO: could try signing in - at least put email in login form
         self.user = user
         return HttpResponseRedirect(self.get_success_url())
 
     def create_comms_channels(self, channel_type, value, user):
         CommsChannel = apps.get_model('users.CommsChannel')
         channel, created = CommsChannel.objects.get_or_create(
-                    user=user,
-                    channel_type=channel_type,
+            user=user,
+            channel_type=channel_type,
             value=value)
 
         return channel
@@ -684,17 +683,36 @@ class AddCommsChannelViewBase(View):
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
             raise NotImplementedError("Define `form_class` in the child class.")
+
+        form = super().get_form(form_class)
+        user, user_login_mode = get_current_user(request)
+        form.fields['username_code'].initial = user.password
         return self.form_class
 
     def get(self, request):
         # set form.keycloak_id to user.keycloak_id
 
-        user, user_login_mode = get_current_user(request)
-
         form = self.get_form_class()
-        form.fields['username_code'].initial = user.password
-
         return render(request, 'users/add_channel.html', {'form': form})
+
+    def post(self, request):
+        # set form.keycloak_id to user.keycloak_id
+        form = self.get_form_class()
+        if form.is_valid():
+            validated_data = form.cleaned_data
+            # check if user is already logged in
+            user, user_login_mode = get_current_user(request)
+            if user:
+                # add the channel
+                value = validated_data['email'] if validated_data['channel_type'] == CHANNEL_EMAIL else validated_data[
+                    'mobile']
+                channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=CHANNEL_EMAIL,
+                                                                      value=vvalue)
+
+                return HttpResponseRedirect(reverse('users:manage-channels'))
+            else:
+                # need to log in first
+                return HttpResponseRedirect(reverse('users:login'))
 
 
 def set_current_user(request, user_id=None, user_login_mode=None):
@@ -799,7 +817,6 @@ class ManageCommsChannelsView(View):
 class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
-
 
     def get_success_url(self):
         return "/"
@@ -933,7 +950,6 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 self.request.session['verification_code'] = vc.code
                 self.set_step(3)  # Move to Step 3
 
-
             # channel = CommsChannel.objects.filter(id=channel_id, verified_at__isnull=False).first()
             # if channel:
             #     self.channel = channel
@@ -969,7 +985,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                                        _('There is an issue with your account.  The administrator has been notified.'))
                         return self.form_invalid(form)
                     success = update_password(user.keycloak_id, new_password)
-                    #TODO: if channel was not verified set it to verified now
+                    # TODO: if channel was not verified set it to verified now
                     if success:
                         messages.success(self.request, _('Your password has been reset successfully.'))
                         # Clear session data after success
@@ -1048,8 +1064,8 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         context['title'] = 'Unverified Users (Last Month)'
         return context
 
-class SendOTP(UserCanAdministerMixin, TemplateView):
 
+class SendOTP(UserCanAdministerMixin, TemplateView):
     template_name = 'users/admin/send_otp.html'
 
     def get_context_data(self, **kwargs):

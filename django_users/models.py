@@ -529,6 +529,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
     keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
 
+
     country = CountryField(blank=True, null=True, help_text=_("Optional"))
 
     timezone = TimeZoneField(default='Europe/Dublin', help_text=_("Default timezone for this user"))
@@ -655,13 +656,17 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             self.quick_save(update_fields=['person', ])
 
         # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
-        try:
-            if not self.keycloak_id and self.oidc_profile:
-                self.keycloak_id = self.oidc_profile.sub
-        except Exception as e:
-            logger.warning(f"Error getting keycloak_id: {e}")
-        # should not need to do this always...
-        # self.match_user2competitor()
+
+        if settings.USE_KEYCLOAK:
+            try:
+                if not self.keycloak_id and self.oidc_profile:
+                    self.keycloak_id = self.oidc_profile.sub
+            except Exception as e:
+                logger.warning(f"Error getting keycloak_id: {e}")
+        else:
+            # hack to try and avoid issues with keycloak lookup in testing and having unique index on keycloak
+            # maybe there is a better way...
+            self.keycloak_id = uuid.uuid4()
 
     def quick_save(self, *args, **kwargs):
         '''save without calling save on person'''
@@ -856,7 +861,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
             }
 
-    def create_keycloak_user_from_user(self, password):
+    def create_keycloak_user_from_user(self, password, requester):
 
         user_data = {
             "firstName": self.first_name,
@@ -868,7 +873,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             "credentials": [{"value": password, "type": "password"}],
         }
         try:
-            keycloak_user_id, status_code = create_keycloak_user(user_data)
+            keycloak_user_id, status_code = create_keycloak_user(user_data, requester)
 
         except Exception as e:
             # Handle exceptions (e.g., user already exists)
