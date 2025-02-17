@@ -428,6 +428,32 @@ class TagForDeletionMixin(models.Model):
 
 
 
+class AliasForMixin(models.Model):
+    '''allow for more than one name to be used for a single entity - eg for testsheet, judge, rider or horse'''
+
+    STATUS_PENDING = "P"
+    STATUS_LIVE = "L"
+    STATUS_ALIAS = "A"
+    STATUS_ARCHIVED = "X"
+    DEFAULT_STATUS = "L"
+
+    STATUS_CHOICES = ((STATUS_PENDING, "Pending Approval"),
+                      (STATUS_LIVE, "Live"),
+                      (STATUS_ALIAS, "Archived"),
+                      (STATUS_ARCHIVED, "Alias"))
+
+    alias_for = models.ForeignKey("self", blank=True, null=True, on_delete=models.CASCADE,
+                                  limit_choices_to={'status': 'L'}, help_text=_("This name is an alias for a live instance"))
+    status = models.CharField(_("Status"), max_length=1, choices=STATUS_CHOICES, default=DEFAULT_STATUS, db_index=True)
+
+    class Meta:
+        abstract = True
+
+    @property
+    def master(self):
+        '''usually self, but where this is an alias for another object, return that object'''
+        return self if not self.alias_for else self.alias_for
+
 class DataQualityMixin(models.Model):
 
     '''quality of data from low if a user added to high if verified by data owner and locked on blockchain.
