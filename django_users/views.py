@@ -706,8 +706,7 @@ class AddCommsChannelViewBase(View):
                 # add the channel
                 value = validated_data['email'] if validated_data['channel_type'] == CHANNEL_EMAIL else validated_data[
                     'mobile']
-                channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=CHANNEL_EMAIL,
-                                                                      value=vvalue)
+                channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=CHANNEL_EMAIL,value=value)
 
                 return HttpResponseRedirect(reverse('users:manage-channels'))
             else:

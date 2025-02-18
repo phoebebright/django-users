@@ -26,8 +26,9 @@ from rest_framework.status import HTTP_400_BAD_REQUEST
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
-
-
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
+from rest_framework.permissions import AllowAny
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
@@ -364,12 +365,13 @@ class SendVerificationCode(APIView):
             return Response({'status': 'error'}, status=500)
 
 
+@method_decorator(never_cache, name='dispatch')
 class CheckEmailInKeycloakPublic(APIView):
     '''
     check if an email has already been registered in keycloak
     '''
-    authentication_classes = []
-    permission_classes = []
+
+    permission_classes = [AllowAny]
     throttle_classes = [CustomAnonRateThrottle]
 
     def get_throttles(self):
@@ -393,6 +395,8 @@ class CheckEmailInKeycloakPublic(APIView):
 
 
         if email:
+            email = email.lower()
+
             channels = []
 
             # get user in django
@@ -442,7 +446,7 @@ class CheckEmailInKeycloakPublic(APIView):
                 set_current_user(request, django_user.id, "REGISTER")
 
             if keycloak_user:
-                if request.user.is_authenticated and request.user.is_administrator:
+                if request.user.is_authenticated and request.user.is_organiser:
                     data = {
                         'updated_keycloak_id': updated_keycloak_id,
                     "keycloak_user_id": keycloak_user['id'],
@@ -454,7 +458,7 @@ class CheckEmailInKeycloakPublic(APIView):
                     "django_user_id": django_user.pk if django_user else 0,
                     "django_is_active": django_user.is_active,
                         "formal_name": django_user.person.formal_name,
-                        "friendly_name": django_user.person.friendly_name,
+                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
                     "channels": channels,
                 }
                 else:
@@ -466,7 +470,7 @@ class CheckEmailInKeycloakPublic(APIView):
                         "keycloak_verified": keycloak_user['emailVerified'],
                         "django_is_active": django_user.is_active,
                         "formal_name": django_user.person.formal_name,
-                        "friendly_name": django_user.person.friendly_name,
+                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
                         "channels": channels,
                     }
                 return JsonResponse(data)
