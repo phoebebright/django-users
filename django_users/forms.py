@@ -197,7 +197,7 @@ class ChangePasswordNowCurrentForm(forms.Form):
         return cleaned_data
 
 
-class ChangePasswordForm(ChangePasswordNowCurrentForm):
+class ChangePasswordForm(forms.Form):
     current_password = forms.CharField(
         widget=forms.PasswordInput(attrs={'placeholder': 'Current Password'}),
         label="Current Password",
@@ -213,6 +213,19 @@ class ChangePasswordForm(ChangePasswordNowCurrentForm):
         label="Confirm Password",
         required=True
     )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        current_password = cleaned_data.get("current_password")
+        new_password = cleaned_data.get("new_password")
+        confirm_password = cleaned_data.get("confirm_password")
+
+        if new_password and confirm_password and new_password != confirm_password:
+            raise ValidationError("New password and confirm password do not match.")
+
+
+        return cleaned_data
+
 
 class ProfileForm(Form):
     country = CountryField().formfield()
