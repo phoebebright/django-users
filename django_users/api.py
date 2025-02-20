@@ -1,9 +1,7 @@
 import logging
 import random
 import string
-from venv import create
-
-import requests
+from django.db.models import Q
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
@@ -767,3 +765,31 @@ class CreateUser(APIView):
             else:
                 logger.error(f"Failed to create keycloak user for {data['email']}")
                 return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
+
+
+class MemberViewSet(viewsets.ReadOnlyModelViewSet):
+
+    queryset = User.objects.none()
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        #TODO: can only access people if you are an organiser (?) and they have been on a team for an event organised
+        # by your organisation
+        # THIS API should only return a list of emails to match a query OR a single entry to match a full email
+        queryset = User.objects.icansee(self.request.user).select_related('person')
+        q = self.request.query_params.get('q', None)
+
+
+        if q is not None:
+            return queryset.filter(
+                Q(email__icontains=q) |
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q) |
+                Q(person__formal_name__icontains=q)
+            )
+
+        q = self.request.query_params.get('email', None)
+        if q is not None:
+            return queryset.filter(email=q)
+
+        return User.objects.none()
