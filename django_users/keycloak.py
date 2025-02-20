@@ -49,10 +49,10 @@ def get_access_token(requester):
         return None
 
 
-def logout_user_from_keycloak_and_django(request, user=None, redirect=True):
+def logout_user_from_keycloak_and_django(request, user=None, should_redirect=True):
     """
     Logs out a user from both Keycloak and Django.
-    set redirect=False if you want to run the function without redirecting to login page
+    set should_redirect=False if you want to run the function without redirecting to login page
     """
 
     if not user:
@@ -76,7 +76,7 @@ def logout_user_from_keycloak_and_django(request, user=None, redirect=True):
         logout(request)
 
     # Redirect to a specified page after logout
-    if redirect:
+    if should_redirect:
         return redirect(settings.LOGOUT_REDIRECT_URL)
 
 
