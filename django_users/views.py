@@ -753,7 +753,7 @@ def get_current_user(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelViewBase(View):
+class VerifyChannelView(View):
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
