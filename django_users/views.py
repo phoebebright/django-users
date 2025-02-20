@@ -1077,7 +1077,7 @@ class SendOTP(UserCanAdministerMixin, TemplateView):
 
 
 
-class ManageRoles(UserCanAdministerMixin, TemplateView):
+class ManageRolesBase(UserCanAdministerMixin, TemplateView):
     #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/manage_roles.html"
 
@@ -1091,7 +1091,7 @@ class ManageRoles(UserCanAdministerMixin, TemplateView):
         return context
 
 
-class ManageUsers(UserCanAdministerMixin, TemplateView):
+class ManageUsersBase(UserCanAdministerMixin, TemplateView):
     #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/manage_users.html"
 
