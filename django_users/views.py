@@ -27,16 +27,13 @@ from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView
-from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
+
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
-                                 update_session_auth_hash, get_user_model)
+                                 update_session_auth_hash)
 
 from tools.permission_mixins import UserCanAdministerMixin
 
-from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
-    is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
-from .keycloak import create_keycloak_user
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
 User = get_user_model()
@@ -46,10 +43,13 @@ logger = logging.getLogger('django')
 USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
+CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never need to change this
 
-CommsChannel = apps.get_model('users.CommsChannel')  # Replace 'users' with your app name
-CHANNEL_EMAIL = CommsChannel.CHANNEL_EMAIL
 
+if settings.USE_KEYCLOAK:
+    from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
+        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+        is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
 
 def get_legitimate_redirect(request):
     nextpage = request.GET.get('next', '/')
@@ -560,7 +560,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 # keycloak won't allow login if temporary password so have to do it this way for now
-                if is_temporary_password(user) or user.activation_code:
+                if  user.activation_code or (settings.USE_KEYCLOAK and is_temporary_password(user)):
                     login(request, user)
 
                     # do this already?
@@ -753,7 +753,7 @@ def get_current_user(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelView(View):
+class VerifyChannelViewBase(View):
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:

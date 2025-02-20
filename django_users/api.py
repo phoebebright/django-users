@@ -33,12 +33,15 @@ from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
-    verify_user_without_email, create_keycloak_user
+
 from .serializers import UserShortSerializerBase
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
+
+if settings.USE_KEYCLOAK:
+    from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
+        verify_user_without_email, create_keycloak_user
 
 logger = logging.getLogger('django')
 
