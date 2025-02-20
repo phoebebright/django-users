@@ -2,10 +2,13 @@ from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
 
 from tb_devices.models import Device
-from users.models import CustomUser
+
 from rest_framework import authentication
 from rest_framework import exceptions
 from logging import getLogger
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class TinyCloudAuthentication(authentication.BaseAuthentication):
 
@@ -18,10 +21,10 @@ class TinyCloudAuthentication(authentication.BaseAuthentication):
         _,username = bearer.split(" ")
 
         try:
-            user = CustomUser.objects.get(username=username)
-        except CustomUser.DoesNotExist:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
 
-            getLogger('django.auth').error(f"[CUSTOM AUTH] User {username} does not exist in skorie {settings.CLIENT}")
+            getLogger('django.auth').error(f"[CUSTOM AUTH] User {username} does not exist  {settings.SITE_URL}")
             raise exceptions.AuthenticationFailed('No such user')
 
         getLogger('django.auth').debug("[CUSTOM AUTH] User %s found" % username)

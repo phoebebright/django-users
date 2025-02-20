@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -1099,5 +1099,25 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         #
         # context['users'] = User.objects.all().order_by('last_name', 'first_name')
+
+        return context
+
+class ManageUserBase(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/admin_user.html"
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        try:
+            if 'pk' in kwargs:
+                context['object'] = User.objects.get(id=kwargs['pk'])
+            elif 'email' in kwargs:
+                context['object'] = User.objects.get(email=kwargs['email'])
+        except User.DoesNotExist:
+            raise Http404(_("No user found"))
+
+        context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
+        context['roles4user'] = context['object'].user_roles()
 
         return context
