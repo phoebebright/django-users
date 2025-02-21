@@ -1,6 +1,6 @@
+# create your own urls.py in your users views app - this is a template
 from django.contrib.auth.decorators import user_passes_test
 from django.urls import path
-from skorie.common.views import subscribers_list, ManageRoles, ManageUsers, ManageUser
 
 from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
@@ -78,3 +78,8 @@ urlpatterns = [
     path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
 
 ]
+
+'''API urls
+    path('api/v2/toggle_role/<personref:personref>/', toggle_role, name="toggle_role"),
+    router.register(r'members', MemberViewSet, basename="members")
+    '''

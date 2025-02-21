@@ -1275,11 +1275,11 @@ class CustomUserBase(CustomUserBaseBasic):
 
     initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
                                               help_text="use to delete users that are bots")
-    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
-                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
-
-    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
-    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
+    # org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
+    #                              help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
+    #
+    # event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
+    # event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
 
     trial_ends = models.DateTimeField(blank=True, null=True)
     subscription_ends = models.DateTimeField(blank=True, null=True)

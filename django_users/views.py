@@ -8,10 +8,11 @@ from urllib.parse import urlencode
 
 from django.apps import apps
 from django.utils.decorators import method_decorator
+from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
-from .keycloak_models import UserEntity
+
 
 import requests
 
@@ -20,23 +21,20 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView
-from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
+
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
-                                 update_session_auth_hash, get_user_model)
+                                 update_session_auth_hash)
 
 from tools.permission_mixins import UserCanAdministerMixin
 
-from .keycloak import get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
-    is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
-from .keycloak import create_keycloak_user
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
 User = get_user_model()
@@ -46,6 +44,7 @@ logger = logging.getLogger('django')
 USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
+CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never need to change this
 
 CommsChannel = apps.get_model('users.CommsChannel')  # Replace 'users' with your app name
 CHANNEL_EMAIL = CommsChannel.CHANNEL_EMAIL
@@ -753,7 +752,7 @@ def get_current_user(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelView(View):
+class VerifyChannelViewBase(View):
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -1043,6 +1042,7 @@ def update_users(request):
             user.save(update_fields=['keycloak_id', ])
 
 
+# this should only be used with keycloak, UserEntity is a link to the keycloak user model
 class UnverifiedUsersList(UserCanAdministerMixin, ListView):
     model = UserEntity
     template_name = 'users/unverified_users_report.html'
@@ -1072,4 +1072,52 @@ class SendOTP(UserCanAdministerMixin, TemplateView):
         User = get_user_model()
         context['user'] = User.objects.get(id=kwargs['pk'])
         context['otp'] = ''.join(random.choices(string.digits, k=6))
+        return context
+
+
+
+class ManageRolesBase(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/manage_roles.html"
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(**kwargs)
+        Role = apps.get_model('users.Role')
+        # see skorie roles_and_disciplines.py as an example - just defines lists and dicts
+        ModelRoles = import_string(settings.MODEL_ROLES_PATH)
+        context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
+
+        context['role_list'] = Role.objects.all()
+        return context
+
+
+class ManageUsersBase(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/manage_users.html"
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(**kwargs)
+        #
+        # context['users'] = User.objects.all().order_by('last_name', 'first_name')
+
+        return context
+
+class ManageUserBase(UserCanAdministerMixin, TemplateView):
+    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    template_name = "admin/admin_user.html"
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        try:
+            if 'pk' in kwargs:
+                context['object'] = User.objects.get(id=kwargs['pk'])
+            elif 'email' in kwargs:
+                context['object'] = User.objects.get(email=kwargs['email'])
+        except User.DoesNotExist:
+            raise Http404(_("No user found"))
+
+        context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
+        context['roles4user'] = context['object'].user_roles()
+
         return context
