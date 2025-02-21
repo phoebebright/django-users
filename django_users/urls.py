@@ -44,6 +44,7 @@ urlpatterns = [
     path('subscribers/', user_passes_test(has_role_administrator)(subscribers_list), name='subscriber_list'),
     path('manage_roles/', user_passes_test(has_role_administrator)(ManageRoles.as_view()), name="manage_roles"),
     path('manage_users/', user_passes_test(has_role_administrator)(ManageUsers.as_view()), name="manage_users"),
+
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('subscribe_only/', SubscribeView.as_view(), name="subscribe_only"),
@@ -78,3 +79,8 @@ urlpatterns = [
     path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
 
 ]
+
+'''API urls
+    path('api/v2/toggle_role/<personref:personref>/', toggle_role, name="toggle_role"),
+    router.register(r'members', MemberViewSet, basename="members")
+    '''

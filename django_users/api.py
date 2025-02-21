@@ -61,8 +61,25 @@ class UserSerializer(UserShortSerializerBase):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
-        'profile')
+        'profile','person')
 
+
+    def to_representation(self, instance):
+
+        if not instance:
+            return None
+
+        ret = super().to_representation(instance)
+        if instance.person:
+            ret['name'] = instance.person.name
+        else:
+            ret['name'] = instance.name
+        ret['roles'] = instance.user_roles()
+
+
+        ret['preferred_channel'] = instance.preferred_channel.channel_type if instance.preferred_channel and instance.preferred_channel.channel_type else 'email'
+
+        return ret
 
 class CommsChannelRateThrottle(SimpleRateThrottle):
     scope = 'comms_channel'

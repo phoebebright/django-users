@@ -500,14 +500,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     @property
     def ModelRoles(self):
         if not self._ModelRoles:
-            self._ModelRoles = lazy_import('web.models.ModelRoles')
+            self._ModelRoles = ModelRoles
         return self._ModelRoles
 
-    EXTRA_ROLES = {
-        'testmanager': "Testsheet Manager",
-        'testchecker': "Testsheet Checker",
-        'devteam': "Skorie Development Team",
-    }
+
 
     USER_STATUS_ANON = 0
     USER_STATUS_NA = 1  # used for system users
@@ -597,6 +593,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         verbose_name = _('user')
         verbose_name_plural = _('users')
         abstract = True
+        app_label = 'django_users'
 
     def save(self, *args, **kwargs):
 
@@ -734,6 +731,25 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             return self.person.formal_name
         else:
             return "Unknown"
+
+    @property
+    def is_subscribe_news(self):
+        return (self.subscribe_news and not self.unsubscribe_news)
+
+
+    def update_subscribed(self, subscribe):
+        '''call with true or false to update'''
+        if subscribe and not self.is_subscribe_news:
+            self.subscribed = timezone.now()
+        if not subscribe and self.is_subscribe_news:
+            self.unsubscribed = timezone.now()
+
+        # by subscribing (or not) status is at least confirmed
+        if self.status < self.USER_STATUS_CONFIRMED:
+            self.confirm(False)
+
+        # status is now at least
+        self.save()
 
     # @classmethod
     # def valid_profile_fields(cls):
@@ -1242,6 +1258,11 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
 class CustomUserBase(CustomUserBaseBasic):
 
+    EXTRA_ROLES = {
+        'testmanager': "Testsheet Manager",
+        'testchecker': "Testsheet Checker",
+        'devteam': "Skorie Development Team",
+    }
 
     keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
 
@@ -1271,6 +1292,11 @@ class CustomUserBase(CustomUserBaseBasic):
     free_account = models.BooleanField(_("Free Account"),
                                        help_text=_("No attempt to get subscription will be made on a free account"),
                                        default=False)  # used where users buy 3 for 2 deal, update by admin only
+
+    class Meta:
+        verbose_name = _('user')
+        verbose_name_plural = _('users')
+        abstract = True
 
 
     def save(self, *args, **kwargs):
@@ -1348,11 +1374,6 @@ class CustomUserBase(CustomUserBaseBasic):
     @cached_property
     def is_devteam(self):
         return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
-
-
-    @property
-    def is_subscribe_news(self):
-        return (self.subscribe_news and not self.unsubscribe_news)
 
     @property
     def is_testchecker(self):
@@ -1558,28 +1579,6 @@ class CustomUserBase(CustomUserBaseBasic):
         return roles[0]
 
 
-    def update_subscribed(self, subscribe):
-        '''call with true or false to update'''
-        if subscribe and not self.is_subscribe_news:
-            self.subscribed = timezone.now()
-        if not subscribe and self.is_subscribe_news:
-            self.unsubscribed = timezone.now()
-
-        # by subscribing (or not) status is at least confirmed
-        if self.status < self.USER_STATUS_CONFIRMED:
-            self.confirm(False)
-
-        # status is now at least
-        self.save()
-
-
-    # deprecated - use is_subscribe_news instead
-    def is_subscribed(self):
-        '''
-        is this user currently subscribed
-        :return:
-        '''
-        return (self.subscribe_news and not self.unsubscribe_news)
 
     def update_event_subscribed(self, subscribe):
         '''call with true or false to update'''

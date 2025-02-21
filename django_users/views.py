@@ -12,7 +12,7 @@ from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
-from .keycloak_models import UserEntity
+
 
 import requests
 
@@ -51,6 +51,8 @@ if settings.USE_KEYCLOAK:
     from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
         get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
         is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
+from .keycloak_models import UserEntity
+
 
 def get_legitimate_redirect(request):
     nextpage = request.GET.get('next', '/')
@@ -1044,6 +1046,7 @@ def update_users(request):
             user.save(update_fields=['keycloak_id', ])
 
 
+# this should only be used with keycloak, UserEntity is a link to the keycloak user model
 class UnverifiedUsersList(UserCanAdministerMixin, ListView):
     model = UserEntity
     template_name = 'users/unverified_users_report.html'
@@ -1083,11 +1086,12 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
+        Role = apps.get_model('users.Role')
         # see skorie roles_and_disciplines.py as an example - just defines lists and dicts
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
-        context['role_list'] = [key for key,value in ModelRoles.ROLE_DESCRIPTIONS.items()]
 
+        context['role_list'] = Role.objects.all()
         return context
 
 
