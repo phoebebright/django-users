@@ -10,11 +10,9 @@ from django.views.generic import TemplateView
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 
-from tools.exceptions import EventPermissionDenied
-from tools.permission_mixins import EventAPIMixin
-from web.models import Event, EventTeam
-from users.models import CustomUser as User
+User = get_user_model()
 
 logger = logging.getLogger('django')
 
@@ -110,48 +108,6 @@ class GoNextTemplateMixin(TemplateView):
         return context
 
 
-
-
-class EventUserMixin(EventAPIMixin):
-    '''extract event and user and add to class'''
-    user = None
-
-
-    def get(self, request, format=None, **kwargs):
-
-        if not request.user.is_authenticated:
-            try:
-                self.user = User.objects.get(email=request.query_params['username'])
-            except User.DoesNotExist:
-                logger.warning(f"In EventUserMixin User {request.query_params['username']} not found")
-                raise PermissionDenied(detail=f"Not valid user In EventUserMixin User {request.query_params['username']} not found")
-        else:
-            self.user = request.user
-
-        if 'event_ref' in request.query_params:
-            try:
-                self.event = Event.objects.get(ref=request.query_params.get('event_ref'))
-            except:
-                raise EventPermissionDenied('Invalid event_ref passed')
-
-
-
-        return super().get(request, format, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-
-        data = request.data
-
-        if 'roles' in data:
-            # is this supposed to be here?
-            obj, _ = EventTeam.objects.get_or_create(event = self.event, user_id=data['user'], creator=self.user, roles=data['roles'])
-
-            serializer = self.get_serializer(obj)
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
-        else:
-            return super().create(request, *args, **kwargs)
 
 
 

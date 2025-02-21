@@ -2,10 +2,13 @@ from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
 
 from tb_devices.models import Device
-from users.models import CustomUser
+
 from rest_framework import authentication
 from rest_framework import exceptions
 from logging import getLogger
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class TinyCloudAuthentication(authentication.BaseAuthentication):
 
