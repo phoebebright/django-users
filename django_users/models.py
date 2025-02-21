@@ -1912,9 +1912,9 @@ class RoleBase(CreatedUpdatedMixin):
 
     name = models.CharField(_("Name"), max_length=60, db_index=True)
 
-    # we may not want level and credentials - only really useful for competitor and judge and these have their own model (?)
-    level = models.CharField(_("List"), max_length=20, blank=True, null=True)
-    credentials = models.CharField(_("List of credentials"), max_length=254, blank=True, null=True)
+    # # we may not want level and credentials - only really useful for competitor and judge and these have their own model (?)
+    # level = models.CharField(_("List"), max_length=20, blank=True, null=True)
+    # credentials = models.CharField(_("List of credentials"), max_length=254, blank=True, null=True)
 
     country = CountryField(blank=True, null=True,
                            help_text=_("Optional"))
@@ -1951,6 +1951,9 @@ class RoleBase(CreatedUpdatedMixin):
         if self.user and self.user.person and self.person != self.user.person:
             raise ValidationError(
                 f"User and Person have a one to one link - user is linked to {self.user.person} and trying to save with link to person {self.person}")
+
+        if self.organisation != self.user.organisation:
+            self.organisation = self.user.organisation
 
         if not self.name and self.person:
             self.name = self.person.formal_name
