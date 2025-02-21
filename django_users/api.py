@@ -20,7 +20,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_400_BAD_REQUEST
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
@@ -31,8 +31,7 @@ from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-
-from .serializers import UserShortSerializerBase
+from .serializers import UserSerializerBase as UserSerializer
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
@@ -57,29 +56,17 @@ class AdminUserRateThrottle(UserRateThrottle):
 def is_administrator(user):
     return user.is_administrator
 
-class UserSerializer(UserShortSerializerBase):
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
-        'profile','person')
+def normalize_boolean(value):
+    """
+    Normalize different representations of a boolean value to a Python boolean.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 't', 'y')
+    return bool(value)
 
 
-    def to_representation(self, instance):
-
-        if not instance:
-            return None
-
-        ret = super().to_representation(instance)
-        if instance.person:
-            ret['name'] = instance.person.name
-        else:
-            ret['name'] = instance.name
-        ret['roles'] = instance.user_roles()
-
-
-        ret['preferred_channel'] = instance.preferred_channel.channel_type if instance.preferred_channel and instance.preferred_channel.channel_type else 'email'
-
-        return ret
 
 class CommsChannelRateThrottle(SimpleRateThrottle):
     scope = 'comms_channel'
@@ -703,19 +690,30 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
 @api_view(['PATCH'])
 @user_passes_test(is_administrator)
-def toggle_role(request, personref):
-    '''add or remove role for user'''
+def toggle_role(request):
+    '''add or remove role for user
+    payload example:
+    {
+        "username": "email or uuid",
+        "role": "D",
+        "active": true
+    }
+    '''
 
     me = request.user
     role = request.data['role']
-    Role = apps.get_model('users', 'Role')
-    role, created = Role.objects.get_or_create(person_id=personref, role_type=role)
+    user = User.objects.get(username=request.data['username'])
+    active = normalize_boolean(request.data.get('active', True))
 
-    if not created:
-        role.active = not role.active
+    Role = apps.get_model('users', 'Role')
+
+    role, created = Role.objects.get_or_create(user=user, role_type=role)
+
+    role.active = active
         role.save()
 
-    return Response({"status": "OK"})
+    response = HTTP_201_CREATED if created else HTTP_200_OK
+    return Response(response)
 
 
 class CreateUser(APIView):

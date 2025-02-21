@@ -42,6 +42,7 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
         return ret
 
 
+
 class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
@@ -62,13 +63,82 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
             ret['formal_name'] = instance.name
             ret['sortable_name'] = instance.last_name + instance.first_name
         return ret
+#
+# # TODO: these need to be tidied with skorie2 - remove city etc.
+# class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):
+#     where_did_you_hear = serializers.CharField(max_length=255, required=False)
+#     city = serializers.CharField(max_length=255, required=False)
+#     class Meta:
+#         model = None
+#         fields = ('id','username','first_name', 'last_name',  'full_name',  'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')
+#
+#     def to_representation(self, instance):
+#
+#         if not instance:
+#             return None
+#
+#         ret = super().to_representation(instance)
+#         if instance.person:
+#             ret['name'] = instance.person.name
+#         else:
+#             ret['name'] = instance.name
+#         ret['roles'] = instance.user_roles()
+#
+#         profile = instance.profile if instance.profile else {}
+#         ret['county'] = profile.get('county', '')
+#         ret['current_level'] = profile.get('current_level', '')
+#
+#         ret['preferred_channel'] = instance.preferred_channel.channel_type if instance.preferred_channel and instance.preferred_channel.channel_type else 'email'
+#
+#         return ret
+#
+#     def to_internal_value(self, data):
+#         '''merge attributes in profile with those in the user object'''
+#         if isinstance(data, QueryDict):
+#             data = data.copy()
+#
+#             # Extract profile fields from data
+#         profile_data = {
+#             'where_did_you_hear': data.pop('where_did_you_hear', None),
+#             'city': data.pop('city', None)
+#         }
+#
+#         internal_value = super().to_internal_value(data)
+#
+#         # Merge profile data
+#         profile = internal_value.get('profile', {})
+#         profile.update({k: v for k, v in profile_data.items() if v is not None})
+#         internal_value['profile'] = profile
+#
+#         return internal_value
+#
+#
+#     def create(self, validated_data):
+#         profile_data = validated_data.pop('profile', {})
+#         user = super().create(validated_data)
+#         user.profile = profile_data
+#         user.save()
+#         return user
+#
+#
+#     def update(self, instance, validated_data):
+#         profile_data = validated_data.pop('profile', {})
+#         instance = super().update(instance, validated_data)
+#
+#         # Update profile fields
+#         profile = instance.profile if instance.profile else {}
+#         profile.update(profile_data)
+#         instance.profile = profile
+#         instance.save()
+#
+#         return instance
 
-class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):
-    where_did_you_hear = serializers.CharField(max_length=255, required=False)
-    city = serializers.CharField(max_length=255, required=False)
+class UserSerializerBase(UserShortSerializerBase):
     class Meta:
-        model = None
-        fields = ('id','username','first_name', 'last_name',  'full_name',  'friendly_name','formal_name', 'person','country','date_joined','last_login','is_active')
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
+        'profile','person')
+
 
     def to_representation(self, instance):
 
@@ -82,54 +152,10 @@ class UserSerializerBase(CountryFieldMixin, DynamicModelSerializer):
             ret['name'] = instance.name
         ret['roles'] = instance.user_roles()
 
-        profile = instance.profile if instance.profile else {}
-        ret['county'] = profile.get('county', '')
-        ret['current_level'] = profile.get('current_level', '')
 
         ret['preferred_channel'] = instance.preferred_channel.channel_type if instance.preferred_channel and instance.preferred_channel.channel_type else 'email'
 
         return ret
-
-    def to_internal_value(self, data):
-        '''merge attributes in profile with those in the user object'''
-        if isinstance(data, QueryDict):
-            data = data.copy()
-
-            # Extract profile fields from data
-        profile_data = {
-            'where_did_you_hear': data.pop('where_did_you_hear', None),
-            'city': data.pop('city', None)
-        }
-
-        internal_value = super().to_internal_value(data)
-
-        # Merge profile data
-        profile = internal_value.get('profile', {})
-        profile.update({k: v for k, v in profile_data.items() if v is not None})
-        internal_value['profile'] = profile
-
-        return internal_value
-
-
-    def create(self, validated_data):
-        profile_data = validated_data.pop('profile', {})
-        user = super().create(validated_data)
-        user.profile = profile_data
-        user.save()
-        return user
-
-
-    def update(self, instance, validated_data):
-        profile_data = validated_data.pop('profile', {})
-        instance = super().update(instance, validated_data)
-
-        # Update profile fields
-        profile = instance.profile if instance.profile else {}
-        profile.update(profile_data)
-        instance.profile = profile
-        instance.save()
-
-        return instance
 
 class UserContactSerializerBase(DynamicModelSerializer):
     user = None
