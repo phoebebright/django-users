@@ -46,8 +46,12 @@ LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never need to change this
 
-CommsChannel = apps.get_model('users.CommsChannel')  # Replace 'users' with your app name
-CHANNEL_EMAIL = CommsChannel.CHANNEL_EMAIL
+
+if settings.USE_KEYCLOAK:
+    from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
+        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+        is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
+from .keycloak_models import UserEntity
 
 
 def get_legitimate_redirect(request):
