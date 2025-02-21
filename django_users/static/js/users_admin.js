@@ -1,4 +1,5 @@
 /*jshint sub:true*/
+/* LOAD USERS.JS AS WELL */
 
 function show_user_table(selection, page_length, columns, query, panes, col_reorder) {
 
@@ -25,7 +26,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
     }
 
 
-    var url = SKORIE_API + "/api/v2/userlist/?"+query;
+    var url = USER_API_URL + "/userlist/?"+query;
     console.log(url);
     var table_options = {
         "language": {
@@ -133,7 +134,7 @@ function check_user(callback) {
 
     $.ajax({
         method: "POST",   // using post so that email does not appear in logs
-        url: SKORIE_API + "/api/v2/email_exists/?detail=True",
+        url: USER_API_URL + "/email_exists/?detail=True",
         data: {'email': $("#check_email").val()},
 
     })
@@ -191,12 +192,12 @@ function get_user_signup_info(email, callback) {
     // same as version in users.js
     $.ajax({
         method: "POST",
-        url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+        url: USER_API_URL + "/email_exists_on_keycloak_p/",
         data: {'email': email},
 
         success: function (d) {
 
-            d.not_registered = (d.user_id == 0 && d.django_user == 0);
+            d.not_registered = !(d.django_is_active && d.keycloak_enabled);
 
             let output = "Created: "+(new Date(d.keycloak_created).toLocaleString()).toString()+"<br>";
             output += "Django is active: " + (d.django_active ? 'Yes' : 'No') + "<br>";
@@ -225,14 +226,14 @@ function send_otp_via_channel(payload) {
     return new Promise((resolve, reject) => {
         $.ajax({
             method: "POST",
-            url: SKORIE_API + "/api/v2/comms_otp/",
+            url: USER_API_URL + "/comms_otp/",
             data: payload,
         })
-        .done(resolve)
-        .fail((xhr, status, error) => {
-            console.log('Failed:', status, error);
-            reject(error);
-        });
+            .done(resolve)
+            .fail((xhr, status, error) => {
+                console.log('Failed:', status, error);
+                reject(error);
+            });
     });
 }
 
@@ -240,7 +241,7 @@ function send_otp_via_channel(payload) {
 function email_exists_keycloak(email, callback) {
     $.ajax({
         method: "POST",
-        url: SKORIE_API + "/api/v2/email_exists_on_keycloak/",
+        url: USER_API_URL + "/email_exists_on_keycloak/",
         data: {'email': email},
 
     })
@@ -255,7 +256,7 @@ function email_exists_keycloak(email, callback) {
 function patch_user(pk, payload) {
     $.ajax({
         method: "PATCH",
-        url: SKORIE_API + "/api/v2/users/" + payload.id + "/",
+        url: USER_API_URL + "/users/" + payload.id + "/",
         data: payload,
     })
         .done(function (data) {
@@ -270,17 +271,17 @@ function patch_user(pk, payload) {
 function set_keycloak_password(payload) {
 
     return new Promise((resolve, reject) => {
-    $.ajax({
-        method: "POST",
-        url: SKORIE_API + "/api/v2/set_temp_password/",
-        data: payload,
-    })
-        .done(resolve)
-        .fail((xhr, status, error) => {
-            console.log('Failed:', status, error);
-            reject(error);
-        });
-        });
+        $.ajax({
+            method: "POST",
+            url: USER_API_URL + "/set_temp_password/",
+            data: payload,
+        })
+            .done(resolve)
+            .fail((xhr, status, error) => {
+                console.log('Failed:', status, error);
+                reject(error);
+            });
+    });
 }
 
 
@@ -288,7 +289,7 @@ function set_keycloak_password(payload) {
 function check_user_exists(email, callback) {
     $.ajax({
         method: "POST",
-        url: SKORIE_API + "/api/v2/email_exists/",
+        url: USER_API_URL + "/email_exists/",
         data: {'email': email},
 
     })
@@ -318,3 +319,85 @@ function getSearchPaneConfig(panes) {
         return {};
     }
 }
+
+
+function usersearch(callback) {
+    $('.search4user').tinyAutocomplete({
+        url: USER_API_URL + "/members",
+        maxItems: 7,
+        showNoResults: true,
+        markAsBold: false,
+        wrapClasses: "autocomplete bootstrapped",
+        itemTemplate: '<li class="autocomplete-item">{{name}} - {{email}}</li>',
+        onSelect: function (el, val) {
+
+            if (typeof callback != "undefined") {
+                callback(val);
+            }
+
+
+
+
+        }
+    });
+}
+
+
+function toggleRoles(username, role, active) {
+
+    var payload = {username: username,
+        role: role,
+        active: active};
+
+    var url = USER_API_URL + "/toggle_role/";
+
+    $.ajax({
+        method: "PATCH",
+        url: url,
+        data: payload,
+
+    }).done(function (data) {
+
+        console.log("done");
+
+    }).fail(function (jqXHR, textStatus) {
+
+        console.log('failed to connect to server');
+
+    });
+
+}
+
+
+            function get_user_roles(email) {
+
+                // uncheck all
+                $('.role').prop('checked', false);
+
+                $.ajax({
+                    method: "GET",
+                    url:USER_API_URL + "/members/",
+                    data: {email: email},
+                    cache: false,
+
+                }).done(function (data) {
+
+                    $("#roles").fadeOut();
+                    if (data.length == 1) {
+                        var d = data[0];
+
+                        // save ref for this user
+                        $("#username").val(d.username);
+
+
+                        // check roles for this user
+                        d.roles.forEach((function(role) {
+                            $("#role_" + role).prop('checked', 'checked');
+
+                        }));
+
+                        $("#roles").fadeIn();
+                    }
+
+                });
+            }

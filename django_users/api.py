@@ -1,9 +1,7 @@
 import logging
 import random
 import string
-from venv import create
-
-import requests
+from django.db.models import Q
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
@@ -22,7 +20,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_400_BAD_REQUEST
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
@@ -33,12 +31,14 @@ from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
-    verify_user_without_email, create_keycloak_user
-from .serializers import UserShortSerializerBase
+from .serializers import UserSerializerBase as UserSerializer
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
+
+if settings.USE_KEYCLOAK:
+    from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
+    verify_user_without_email, create_keycloak_user
 
 logger = logging.getLogger('django')
 
@@ -56,11 +56,16 @@ class AdminUserRateThrottle(UserRateThrottle):
 def is_administrator(user):
     return user.is_administrator
 
-class UserSerializer(UserShortSerializerBase):
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
-        'profile')
+def normalize_boolean(value):
+    """
+    Normalize different representations of a boolean value to a Python boolean.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 't', 'y')
+    return bool(value)
+
 
 
 class CommsChannelRateThrottle(SimpleRateThrottle):
@@ -685,19 +690,30 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
 @api_view(['PATCH'])
 @user_passes_test(is_administrator)
-def toggle_role(request, personref):
-    '''add or remove role for user'''
+def toggle_role(request):
+    '''add or remove role for user
+    payload example:
+    {
+        "username": "email or uuid",
+        "role": "D",
+        "active": true
+    }
+    '''
 
     me = request.user
     role = request.data['role']
+    user = User.objects.get(username=request.data['username'])
+    active = normalize_boolean(request.data.get('active', True))
+
     Role = apps.get_model('users', 'Role')
-    role, created = Role.objects.get_or_create(person_id=personref, role_type=role)
 
-    if not created:
-        role.active = not role.active
-        role.save()
+    role, created = Role.objects.get_or_create(user=user, role_type=role)
 
-    return Response({"status": "OK"})
+    role.active = active
+    role.save()
+
+    response = HTTP_201_CREATED if created else HTTP_200_OK
+    return Response(response)
 
 
 class CreateUser(APIView):
@@ -764,3 +780,31 @@ class CreateUser(APIView):
             else:
                 logger.error(f"Failed to create keycloak user for {data['email']}")
                 return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
+
+
+class MemberViewSet(viewsets.ReadOnlyModelViewSet):
+
+    queryset = User.objects.none()
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        #TODO: can only access people if you are an organiser (?) and they have been on a team for an event organised
+        # by your organisation
+        # THIS API should only return a list of emails to match a query OR a single entry to match a full email
+        queryset = User.objects.icansee(self.request.user).select_related('person')
+        q = self.request.query_params.get('q', None)
+
+
+        if q is not None:
+            return queryset.filter(
+                Q(email__icontains=q) |
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q) |
+                Q(person__formal_name__icontains=q)
+            )
+
+        q = self.request.query_params.get('email', None)
+        if q is not None:
+            return queryset.filter(email=q)
+
+        return User.objects.none()

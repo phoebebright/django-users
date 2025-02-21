@@ -3,65 +3,43 @@
                 return urlParams.get(param);
             }
 
-  function get_user_signup_info(email, callback) {
-    // same as version in admin_users.js
-            $.ajax({
-                method: "POST",
-                url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
-                data: {'email': email},
-
-                success: function (d) {
-
-                    d.not_registered = (d.user_id == 0 && d.django_user == 0);
-
-                    let output = "Created: "+(new Date(d.keycloak_created).toLocaleString()).toString()+"<br>";
-                    output += "Django is active: " + (d.django_active ? 'Yes' : 'No') + "<br>";
-                    if (d.django_user_keycloak_id) {
-                        output += "Django linked to Keycloak: " + d.django_user_keycloak_id + "<br>";
-                    }
-                    output += "Keycloak verified: " + (d.verified ? 'Yes' : 'No') + "<br>";
-                    output += "Keycloak enabled: " + (d.enabled ? 'Yes' : 'No') + "<br>";
-                    if (d.keycloak_actions) {
-                        output += "Keycloak Actions: " + d.keycloak_actions.length ? d.keycloak_actions.join(', ') : 'None' + "<br>";
-                    }
-                    d.output = output;
-                    callback(d);
-
-
-                },
-                error: function () {
-                    // If there's an error, show the error message
-                    $('#apiError').show();
-                    $('#apiResponse').hide();
-                }
-            });
-
-        }
 
 function problem_login(email){
 
     $.ajax({
         method: "POST",
-        url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+        url: USER_API_URL + "/email_exists_on_keycloak_p/",
         data: {'email': email},
 
         success: function (d) {
             const keycloak_id = $('#keycloak_id').val();
-            $("#user_id").val(d.user_id);
-            $("#keycloak_id").val(d.django_keycloak_user);
+            $("#user_id").val(d.django_user_id);
+            $("#keycloak_id").val(d.django_user_keycloak_user);
 
 
-            // check django keycloak_id is the same as the one in keycloak - if there is one
+
             if (d.channels ) {
                 // for each d.channel create a button to click
                 $('#existing_channels').html(show_channels(d.channels));
 
-            }  else if (d.user_id == 0 && d.django_keycloak_user == 0) {
-                $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="'+register_url+'?email='+email+'" class="btn btn-primary-outline">'+REGISTER_TERM+'</div>');
+            }
+
+            // check django keycloak_id is the same as the one in keycloak - if there is one
+
+            // not registered locally or in keycloak
+            if (d.django_user_id == 0 && d.keycloak_user_id == '') {
+                $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or ' + REGISTER_TERM + ' again. <a href="' + register_url + '?email=' + email + '" class="btn btn-primary-outline">' + REGISTER_TERM + '</div>');
                 $("#result").slideDown();
                 return;
-            } else if (d.user_id && d.django_keycloak_user ) {
-                if (d.user_id != d.django_keycloak_user) {
+            }
+              else if (d.django_user_id == 0 && d.keycloak_user_id > '') {
+                    $('#result').html('<div class="alert alert-warning" role="alert">This email has been setup but needs verifying.</div>');
+                $("#result").slideDown();
+                    $("#verify_how").slideDown();
+                return;
+
+                } else if (d.django_user_id && d.django_user_keycloak_user == 0 && d.keycloak_user_id > '') {
+                    if (d.django_user_id != d.django_user_keycloak_user) {
                     $('#result').html('<div class="alert alert-danger" role="alert">The email you entered is already in use by another account.</div>');
                     $("#result").slideDown();
                     return;
@@ -151,7 +129,7 @@ $('#sendSmsBtn').on('click', function () {
     if (user_id && phone_no) {
         $.ajax({
             method: "POST",
-            url: SKORIE_API + "/api/v2/send_verification_sms/",
+            url: USER_API_URL + "/send_verification_sms/",
             data: {'user_id': user_id, 'phone_no': phone_no},
 
             success: function (d) {
@@ -181,7 +159,7 @@ $('#pin').on('input', function () {
 
         $.ajax({
             method: "POST",
-            url: SKORIE_API + "/api/v2/verify_user_with_sms/",
+            url: USER_API_URL + "/verify_user_with_sms/",
             data: {'user_id': user_id, 'phone_no':phone_no },
             success: function (d) {
                 $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href='+login_url+' class="btn btn-success-outline">Signin</a></div>');
@@ -212,7 +190,7 @@ function add_user(payload, callback) {
 
     $.ajax({
         method: "POST",
-        url:  SKORIE_API + "/api/v2/create_user/",
+        url:  USER_API_URL + "/create_user/",
         data: payload,
 
     })
@@ -238,3 +216,17 @@ function show_channels (channels) {
 
     return html;
 }
+
+     $('.toggle-password').click(function() {
+      const passwordInput = $('#password');
+      const icon = $(this).find('i');
+
+      // Toggle password visibility
+      if (passwordInput.attr('type') === 'password') {
+        passwordInput.attr('type', 'text');
+        icon.removeClass('bi-eye').addClass('bi-eye-slash'); // Change icon to "eye-slash"
+      } else {
+        passwordInput.attr('type', 'password');
+        icon.removeClass('bi-eye-slash').addClass('bi-eye'); // Change icon back to "eye"
+      }
+    });

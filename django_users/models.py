@@ -45,7 +45,10 @@ from django.utils.translation import gettext_lazy as _
 
 import logging
 
-from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, search_user_by_email_in_keycloak
+if settings.USE_KEYCLOAK:
+    from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, \
+        search_user_by_email_in_keycloak
+
 from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -137,7 +140,7 @@ class CommsChannelBase(models.Model):
 
     CHANNEL_CHOICES = [(c[0], c[1]) for c in ALL_CHANNEL_CHOICES if c[0] in CHANNEL_TYPES]
 
-    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='comms_channels')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comms_channels')
     channel_type = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
     value = models.CharField(max_length=255)
     verified_at = models.DateTimeField(null=True, blank=True)
@@ -200,27 +203,29 @@ class CommsChannelBase(models.Model):
         self.verified_at = timezone.now()
         self.save()
 
-        # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
-        keycloak_verified = False
+        if settings.USE_KEYCLOAK:
+            # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
+            keycloak_verified = False
 
-        # do we have keycloak user setup yet?
-        keycloak_user = None
-        if self.user.keycloak_id:
-            keycloak_user = get_user_by_id(self.user.keycloak_id)
-        if keycloak_user:
-            keycloak_verified =  keycloak_user['emailVerified']
-        else:
-            # let's create keycloak user and mark as verified
-            payload = {
-                "email": self.user.username,
-                "username": self.user.username,
-                "firstName": self.user.first_name,
-                "lastName": self.user.last_name,
-                "enabled": True,
-                'emailVerified': True,
-                "requiredActions": [],
-            }
-            keycloak_id, status_code = create_keycloak_user(payload)
+            # do we have keycloak user setup yet?
+            keycloak_user = None
+            if self.user.keycloak_id:
+                keycloak_user = get_user_by_id(self.user.keycloak_id)
+            if keycloak_user:
+                keycloak_verified =  keycloak_user['emailVerified']
+            else:
+                # let's create keycloak user and mark as verified
+                payload = {
+                    "email": self.user.username,
+                    "username": self.user.username,
+                    "firstName": self.user.first_name,
+                    "lastName": self.user.last_name,
+                    "enabled": True,
+                    'emailVerified': True,
+                    "requiredActions": [],
+                }
+                keycloak_id, status_code = create_keycloak_user(payload)
+
             self.user.is_active = True
             self.user.save()
 
@@ -247,7 +252,7 @@ class CommsChannelBase(models.Model):
 
 class VerificationCodeBase(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='verification_codes')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='verification_codes')
     channel = models.ForeignKey('CommsChannel', on_delete=models.CASCADE)
     code = models.CharField(max_length=6)
     expires_at = models.DateTimeField()
@@ -418,7 +423,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
 
-class CustomUserBase(AbstractBaseUser, PermissionsMixin):
+class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     # options for additional roles within skorie
 
     # Private attributes for lazy-loaded models
@@ -493,15 +498,10 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     @property
     def ModelRoles(self):
         if not self._ModelRoles:
-            self._ModelRoles = lazy_import('web.models.ModelRoles')
+            self._ModelRoles = ModelRoles
         return self._ModelRoles
 
 
-    EXTRA_ROLES = {
-        'testmanager': "Testsheet Manager",
-        'testchecker': "Testsheet Checker",
-        'devteam': "Skorie Development Team",
-    }
 
     USER_STATUS_ANON = 0
     USER_STATUS_NA = 1  # used for system users
@@ -527,15 +527,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(_('first name'), max_length=30, null=True, blank=True, db_index=True)
     last_name = models.CharField(_('last name'), max_length=30, null=True, blank=True, db_index=True)
 
-    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
-
 
     country = CountryField(blank=True, null=True, help_text=_("Optional"))
 
     timezone = TimeZoneField(default='Europe/Dublin', help_text=_("Default timezone for this user"))
 
-    user_source = models.CharField(max_length=20, default="Unknown",
-                                   help_text=_("How or where did this user get created"))
 
     profile = models.JSONField(default=dict, blank=True, help_text=_("Free form info related to this users profile"))
 
@@ -548,19 +544,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
                                  #db_index=True)  # true when user accepts an invitation or confirms account
 
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
-
-    # if adding new roles, make sure they are included in the list of ModelRoles in EXTRA_ROLES
-    extra_roles = models.CharField(max_length=100, blank=True, null=True,
-                                   help_text=_("Additional roles for this user"))
-    # ---------------------
-
-    # current extra roles: testmanager, testchecker
-    # TODO: add country, language, culture
-
-    initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
-                                              help_text="use to delete users that are bots")
-    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
-                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
 
     email = models.EmailField(_('email address'), unique=True)
 
@@ -578,25 +561,13 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     subscribe_news = models.DateTimeField(blank=True, null=True)
     unsubscribe_news = models.DateTimeField(blank=True, null=True)
 
-    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
-    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
-
-    # competitor = models.ForeignKey("Competitor", on_delete=models.CASCADE,  blank=True, null=True, related_name="competitor_object",
-    #                           help_text=_("Link to a competitor object if it applies"))
-
-    # reg_iofh = models.CharField(_("ID on InternetOfPartners"), max_length=120, blank=True, null=True)
 
     status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=USER_STATUS_UNCONFIRMED, db_index=True)
 
-    trial_ends = models.DateTimeField(blank=True, null=True)
-    subscription_ends = models.DateTimeField(blank=True, null=True)
-    renew = models.BooleanField(default=False)
+
 
     activation_code = models.CharField(max_length=10, blank=True, null=True)
 
-    free_account = models.BooleanField(_("Free Account"),
-                                       help_text=_("No attempt to get subscription will be made on a free account"),
-                                       default=False)  # used where users buy 3 for 2 deal, update by admin only
 
     # have to allow blank to prevent race condition on creating user
     person = models.ForeignKey("users.Person", on_delete=models.CASCADE, blank=True, null=True)
@@ -620,6 +591,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         verbose_name = _('user')
         verbose_name_plural = _('users')
         abstract = True
+        app_label = 'django_users'
 
     def save(self, *args, **kwargs):
 
@@ -657,16 +629,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
 
-        if settings.USE_KEYCLOAK:
-            try:
-                if not self.keycloak_id and self.oidc_profile:
-                    self.keycloak_id = self.oidc_profile.sub
-            except Exception as e:
-                logger.warning(f"Error getting keycloak_id: {e}")
-        else:
-            # hack to try and avoid issues with keycloak lookup in testing and having unique index on keycloak
-            # maybe there is a better way...
-            self.keycloak_id = uuid.uuid4()
+
 
     def quick_save(self, *args, **kwargs):
         '''save without calling save on person'''
@@ -680,11 +643,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         linked = 0
         # if this email is linked to a rider in a recent event, then make them a rider and link them as a user to those riders
-        for rider in self.Competitor.objects.filter(email=self.email, user__isnull=True,
+        for competitor in self.Competitor.objects.filter(email=self.email, user__isnull=True,
                                                created__gte=timezone.now() - timedelta(days=31)):
             linked += 1
-            rider.user = self
-            rider.save()
+            competitor.user = self
+            competitor.save()
 
             # # mark rosettes as collected
             # for rosette in Rosette.objects.filter(rider=rider):
@@ -767,6 +730,25 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         else:
             return "Unknown"
 
+    @property
+    def is_subscribe_news(self):
+        return (self.subscribe_news and not self.unsubscribe_news)
+
+
+    def update_subscribed(self, subscribe):
+        '''call with true or false to update'''
+        if subscribe and not self.is_subscribe_news:
+            self.subscribed = timezone.now()
+        if not subscribe and self.is_subscribe_news:
+            self.unsubscribed = timezone.now()
+
+        # by subscribing (or not) status is at least confirmed
+        if self.status < self.USER_STATUS_CONFIRMED:
+            self.confirm(False)
+
+        # status is now at least
+        self.save()
+
     # @classmethod
     # def valid_profile_fields(cls):
     #     '''used to remove any invalid profile_data - hacked together!'''
@@ -783,8 +765,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         # need a dummy person instance
         #person, _ = cls.Person.objects.get_or_create(formal_name="Skorie System") - doesn't work
         Person = apps.get_model('users', 'Person')
-        person, _ = Person.objects.get_or_create(formal_name="Skorie System")
-        system_user, _ = cls.objects.get_or_create(email="system@skor.ie",
+        person, _ = Person.objects.get_or_create(formal_name=settings.SITE_NAME)
+        system_user, _ = cls.objects.get_or_create(email="system@test.com",
                                                    defaults={'username': 'System',
                                                              'person': person,
                                                              'status': cls.USER_STATUS_NA}
@@ -836,24 +818,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         except cls.DoesNotExist:
             django_user = None
 
-
-        keycloak_user = search_user_by_email_in_keycloak(email, requester)
-
-        if keycloak_user:
-
-                return  {
-                    "keycloak_user_id": keycloak_user['id'],
-                    "keycloak_created": keycloak_user['createdTimestamp'],
-                    "keycloak_enabled": keycloak_user['enabled'],
-                    "keycloak_actions": keycloak_user['requiredActions'],
-                    "keycloak_verified": keycloak_user['emailVerified'],
-                    "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
-                    "django_user_id": django_user.pk if django_user else 0,
-                    "django_is_active": django_user.is_active,
-
-                }
-
-        else:
             return {
                 "keycloak_user_id": '',
                 "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
@@ -861,80 +825,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
             }
 
-    def create_keycloak_user_from_user(self, password, requester):
 
-        user_data = {
-            "firstName": self.first_name,
-            "lastName": self.last_name,
-            "email": self.email,
-            "username": self.username,
-            "enabled": True,
-            "emailVerified": False,
-            "credentials": [{"value": password, "type": "password"}],
-        }
-        try:
-            keycloak_user_id, status_code = create_keycloak_user(user_data, requester)
-
-        except Exception as e:
-            # Handle exceptions (e.g., user already exists)
-            print(f"Error creating Keycloak user: {e}")
-            return None
-        else:
-
-            self.keycloak_id = keycloak_user_id
-            self.save()
-            return status_code
-
-    def update_keycloak_email_verified(self):
-        verify_user_without_email(self.keycloak_id)
-
-
-
-
-    # def send_verification_code(self, method):
-    #     self.verification_code = CustomUser.objects.make_random_password(length=6, allowed_chars='1234567890')
-    #     self.save()
-    #     if method == 'email':
-    #         self.send_verification_email()
-    #     else:
-    #         self.send_verification_sms(self.mobile, self.verification_code)
-    #
-    # def send_verification_email(self):
-    #
-    #     msg = f"Please click on this link to activate your account and verify this email address: {settings.SITE_URL}/users/verify_account/{self.verification_code}/"
-    #     subject = "Link to verify your email address and active your Skorie account"
-    #     mail.send(
-    #         recipients=self.email,
-    #         subject=subject,
-    #         message=msg,
-    #         priority='now',
-    #         language="EN",
-    #     )
-    #
-    #
-    #     # for some reason context is not being applied to template - give up wondering why
-    #     # mail.send(
-    #     #     recipients=self.email,
-    #     #     template='verification_email',
-    #     #     context={"verification_code":  self.verification_code},
-    #     #     priority='now',
-    #     #     language="EN",
-    #     # )
-    # def resend_verification_code(self, method):
-    #     self.send_verification_code(method)
-    #
-    # def verify_code(self, code, method):
-    #     if self.verification_code == code:
-    #         if method == 'email':
-    #             self.email_verified = timezone.now()
-    #         else:
-    #             self.mobile_verified = timezone.now()
-    #         self.is_active = True
-    #         self.verification_code = ''
-    #         self.save()
-    #         self.update_keycloak_email_verified()
-    #         return True
-    #     return False
 
     # note we want to have properties rather than a more generic has_role(role_required) so we can use them in templates
     # and because there is a lot of legacy code that uses these properties (that used to be part of the data model)
@@ -947,21 +838,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_MANAGER).exists()or self.is_superuser
 
 
-    @cached_property
-    def is_devteam(self):
-        return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
-
-    # @cached_property
-    # def is_issuer(self):
-    #     return seRole.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ISSUER).exists()
-    # @property
-    # def is_bot(self):
-    #     return self.Role.objects.filter(user=self, role_type=self.ModelRoles.ROLE_BOT).exists()
-    @cached_property
-    # def is_reader(self):
-    #     #DEPRECATED
-    #     return self.Role.objects.filter(user=self, role_type=self.ModelRoles.ROLE_AUXJUDGE).exists()
-
+    # move to app code
     @cached_property
     def is_auxjudge(self):
         return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_AUXJUDGE).exists()
@@ -986,6 +863,19 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     @cached_property
     def is_scorer_pro(self):
         return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER).exists()
+
+
+    @property
+    def can_save_scores(self):
+        raise IntegrityError("Recode for event")
+        # TODO: this will be mroe complex - what type of account, if competitor has used max free saves, organiser for event
+        return (self.is_competitor or self.is_manager or self.is_scorer)
+
+    @property
+    def can_save_for_competitor_not_me(self):
+        return False
+        raise IntegrityError("Recode for event")
+        return (self.is_manager or self.is_scorer)
 
     @cached_property
     def is_competitor(self):
@@ -1034,11 +924,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             return self.friendly_name
         return str(self)
 
-
-    @property
-    def is_subscribe_news(self):
-        return (self.subscribe_news and not self.unsubscribe_news)
-
     @property
     def has_email(self):
         '''see if user has added an email at some point, may do this when making contact before registering
@@ -1067,18 +952,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         return self.status >= self.USER_STATUS_TRIAL
 
     @property
-    def can_save_scores(self):
-        raise IntegrityError("Recode for event")
-        # TODO: this will be mroe complex - what type of account, if competitor has used max free saves, organiser for event
-        return (self.is_competitor or self.is_manager or self.is_scorer)
-
-    @property
-    def can_save_for_competitor_not_me(self):
-        return False
-        raise IntegrityError("Recode for event")
-        return (self.is_manager or self.is_scorer)
-
-    @property
     def is_default(self):
         # no other roles
         self.Role.objects.filter(user=self).exists()
@@ -1088,9 +961,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return self.first_name == "System"
 
-    @property
-    def is_testchecker(self):
-        return self.is_administrator or self.has_role("testchecker") or self.has_role("testmanager")
 
     @property
     def users_default_mode(self):
@@ -1101,14 +971,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         if self.ModelRoles.ROLE_ADMINISTRATOR in roles:
             return self.ModelRoles.ROLE_ADMINISTRATOR
-        elif self.ModelRoles.ROLE_ORGANISER in roles:
-            return self.ModelRoles.ROLE_ORGANISER
-        elif self.ModelRoles.ROLE_AUXJUDGE in roles:
-            return self.ModelRoles.ROLE_AUXJUDGE
-        elif self.ModelRoles.ROLE_JUDGE in roles:
-            return self.ModelRoles.ROLE_JUDGE
-        elif self.ModelRoles.ROLE_COMPETITOR in roles:
-            return self.ModelRoles.ROLE_COMPETITOR
+        elif self.ModelRoles.ROLE_MANAGER in roles:
+            return self.ModelRoles.ROLE_MANAGER
 
         else:
             return self.ModelRoles.ROLE_DEFAULT
@@ -1123,32 +987,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         default_role = [self.ModelRoles.ROLE_DEFAULT, ]
 
         # get list of role types, eg. ['A','R'] and append default role
-        non_event_roles = list(self.Role.objects.filter(user=self, active=True).values_list('role_type', flat=True))
+        roles = list(self.Role.objects.filter(user=self, active=True).values_list('role_type', flat=True))
 
-        event_roles = []
-        if event_ref:
-            event_roles = list(
-                self.EventRole.objects.filter(event_ref=event_ref, user=self).values_list('role_type',
-                                                                                                    flat=True))
-            # try:
-            #     event_team = EventTeam.objects.values('roles',).get(event_ref=event_ref, user=self)
-            #     #print("found roles %s" % event_team.roles)
-            #     event_roles = event_team['roles']
-            #
-            #
-            # except EventTeam.DoesNotExist:
-            #     #print("No roles found")
-            #     # self is god!
-            #     event_roles = []
-
-            # don't make admins automatically organisers any more
-            # if self.is_superuser or self.is_administrator and not (self.ModelRoles.ROLE_ORGANISER, "Organiser") in event_roles:
-            #     event_roles.append(self.ModelRoles.ROLE_ORGANISER,)
-
-        extras = [] if not self.extra_roles else self.extra_roles.split(",")
-
-        # deduplicate as we can have the same role in both event role and non-event role, eg. Judge
-        roles = set(default_role + non_event_roles + event_roles + extras)
 
         if descriptions:
             roles_descriptions = self.ModelRoles.ROLE_DESCRIPTIONS
@@ -1160,113 +1000,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             return list(roles)
 
     # TODO: rename user_roles_list
-
-    def user_modes_list(self, request=None, event_ref=None):
-        # probably deprecated - use user_roles instead
-        ''' a list of lists (Mode, Description) of the roles availble for this user
-        if an event_ref is passed, include the roles for this event'''
-
-        if request and not event_ref:
-            request.session.get('event_ref', False)
-
-        modes = []
-        if self.is_administrator:
-            modes.append((self.ModelRoles.ROLE_ADMINISTRATOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_ADMINISTRATOR]))
-        if self.is_manager:
-            modes.append((self.ModelRoles.ROLE_MANAGER, self.ModelRoles.ROLES[self.ModelRoles.ROLE_MANAGER]))
-        if self.is_judge:
-            modes.append((self.ModelRoles.ROLE_JUDGE, self.ModelRoles.ROLES[self.ModelRoles.ROLE_JUDGE]))
-        if self.is_competitor:
-            modes.append((self.ModelRoles.ROLE_COMPETITOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_COMPETITOR]))
-        # if self.is_reader:
-        #     modes.append((self.ModelRoles.ROLE_AUXJUDGE, self.ModelRoles.ROLES[self.ModelRoles.ROLE_AUXJUDGE]))
-
-        if event_ref:
-            try:
-                event_team = self.EventTeam.objects.get(event_ref=event_ref, user=self)
-                for role in event_team.roles:
-                    if role:
-                        modes.append((role, self.ModelRoles.ROLES[role]))
-
-            except self.EventTeam.DoesNotExist:
-                pass
-
-        return modes
-
-    def my_events(self):
-        '''list of event refs that I am involved with.'''
-
-        events = self.Event.objects.nowish().mine(self).distinct()
-        # events = EventTeam.objects.filter(user=self).values_list('event_ref', flat=True).order_by('event_ref').distinct()
-
-        return list(events)
-
-    @cached_property
-    def has_outstanding_event_invites(self):
-        '''return a list of outstanding invitations to upcoming or current events'''
-        return self.EventTeam.objects.outstanding().filter(user=self).count()
-
-    @property
-    def outstanding_event_invites(self):
-        '''return a list of outstanding invitations to upcoming or current events'''
-        return self.EventTeam.objects.outstanding().filter(user=self)
-
-    # @property
-    # def competitor(self):
-    #     # depreacted - competitor should be specific to an event
-    #     try:
-    #         obj = Competitor.objects.get(user=self)
-    #         return obj
-    #     except Competitor.DoesNotExist:
-    #         return None
-    #     except Competitor.MultipleObjectsReturned:
-    #         # return the first one
-    #         # TODO: fix and notify admins
-    #         logger.warning("Multiple Competitors found for user %s id %s" % (self, self.id))
-    #         return Competitor.objects.filter(user=self).order_by('-created')[0]
-
-    def make_order(self, event=None, items=None):
-        """
-        create order with all current outstanding items or specific item(s)
-        or retrieve existing order
-        """
-        Order = apps.get_model('skorie_payments', 'order')  #
-        Entry = apps.get_model('web', 'entry')  #
-        try:
-            order, created = Order.objects.get_or_create(user=self,
-                                                         payid=None)
-        except Order.MultipleObjectsReturned:
-            # should not happen of course, but provide a way of recovering
-            logger.warning(f"Duplicate unpaid orders found for user {self} - deleting extras")
-            order = Order.objects.filter(user=self,
-                                         payid=None).order_by('-created')[0]
-            created = False
-            Order.objects.filter(user=self,
-                                 payid=None).exclude(ref=order.ref).delete()
-
-        # add all entries excluded from previous order
-        # TODO: should this sweep up any other entries or is it safe to assume that once the order is created they will all be added
-        if created:
-
-            entries = Entry.objects.mine(self).unpaid()
-
-            if event:
-                entries = entries.filter(event=event)
-            # don't include entries on orders which are in the process of being paid
-            # this is a bad way of doing this!
-            for entry in entries:
-                # add if not already existing
-                order.add_item(entry=entry)
-
-        return order
-
-    @property
-    def my_paid_orders(self):
-        """
-        NOTE: assumes all products are books!
-        """
-        Order = apps.get_model('skorie_payments', 'order')  #
-        return Order.objects.filter(user=self, payid__isnull=False)
 
     def signup(self, save=True):
         # TODO: REMOVE or update - users for an event now go through event pipeline - there will be another type
@@ -1312,11 +1045,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         # Simplest possible answer: Yes, always
         return True
 
-    def attach_competitor(self, name, source=None):
-
-        # for the moment add a new competitor - but should look for competitors that are not already attached to users
-
-        return self.Competitor.new(name, user=self, source=source)
 
     @classmethod
     def add_or_update_user(cls, username, first_name, last_name, email ,passw=None,  phone=None, data=None):
@@ -1343,7 +1071,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         if created:
             status = "created"
-        elif not user.keycloak_id and settings.USE_KEYCLOAK:
+        elif settings.USE_KEYCLOAK and not user.keycloak_id:
                 # need to create a keycloak user
                 keycloak_id = user.create_keycloak_user_from_user(passw)
                 status = "keycloak created"
@@ -1356,35 +1084,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return user, status
 
-    # deprecated - use add_or_update_user instead
-    #@classmethod
-    # def new_user(cls, email, passw='valegro', request=None):
-    #     ''' create a new user and all associated records - this way we only use edit forms never add forms
-    #
-    #     '''
-    #
-    #
-    #     if email:
-    #         user = cls.objects.create_user(email=email, password=passw)
-    #     else:
-    #         raise ValidationError("MIssing email on signup request")
-    #
-    #
-    #     # look for additional fields in request
-    #     if request:
-    #
-    #         # ip = request.META.get("HTTP_HOST", None)
-    #         # if ip in settings.BOT_LIST:
-    #         #     user.user_type = CustomUser.USER_TYPE_BOT
-    #
-    #         # get additional fields
-    #         for f in cls._meta.get_fields():
-    #             if f.name in request.POST and not f.name in ('email', 'username', 'password','csrfmiddlewaretoken'):
-    #                 setattr(user, f.name, request.POST[f.name])
-    #
-    #
-    #     user.save()
-    #     return user
 
     def send_activation(self):
 
@@ -1421,26 +1120,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
                          },
             )
 
-    def upgrade_to_competitor(self, creator=None, source="system"):
-        '''add role of competitor for this user'''
 
-        roles = self.add_roles([self.ModelRoles.ROLE_COMPETITOR, ])
-
-        return roles[0]
-
-    def update_subscribed(self, subscribe):
-        '''call with true or false to update'''
-        if subscribe and not self.is_subscribe_news:
-            self.subscribed = timezone.now()
-        if not subscribe and self.is_subscribe_news:
-            self.unsubscribed = timezone.now()
-
-        # by subscribing (or not) status is at least confirmed
-        if self.status < self.USER_STATUS_CONFIRMED:
-            self.confirm(False)
-
-        # status is now at least
-        self.save()
 
     def change_names_email(self):
         '''change names for this user and email (as it appears in similar places)'''
@@ -1480,23 +1160,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             role.email = self.email
             role.save()
 
-    # deprecated - use is_subscribe_news instead
-    def is_subscribed(self):
-        '''
-        is this user currently subscribed
-        :return:
-        '''
-        return (self.subscribe_news and not self.unsubscribe_news)
-
-    def update_event_subscribed(self, subscribe):
-        '''call with true or false to update'''
-        if subscribe and not self.event_notifications_subscribed:
-            self.event_notifications_subscribed = timezone.now()
-        if not subscribe and self.event_notifications_subscribed:
-            self.subscribe_news = None
-            self.event_notifications_unsubscribed = timezone.now()
-        self.save()
-
     def get_username(self):
         return self.email
 
@@ -1525,16 +1188,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             recipients=[self.email],
         )
 
-    @property
-    def has_scores(self):
-        '''
-        :return:only true if is_competitor and has at least one scoresheet
-        '''
-
-        if self.is_competitor:
-            return self.ScoreSheet.objects.mine(self).count() > 0
-
-        return False
 
     def delete_one(self):
         '''delete causing stack overflow'''
@@ -1586,6 +1239,365 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return True
 
+    def migrate_channels(self):
+        # migrate email to comms channel and mobile if available in profile
+        if not self.preferred_channel:
+            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
+                                                                                channel_type=self.CommsChannel.CHANNEL_EMAIL,
+                                                                                email=self.email)
+            self.save()
+
+            if 'mobile' in self.profile and self.profile['mobile']:
+                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
+                                                        mobile=self.profile['mobile'])
+
+
+class CustomUserBase(CustomUserBaseBasic):
+
+    EXTRA_ROLES = {
+        'testmanager': "Testsheet Manager",
+        'testchecker': "Testsheet Checker",
+        'devteam': "Skorie Development Team",
+    }
+
+    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
+
+    user_source = models.CharField(max_length=20, default="Unknown",
+                                   help_text=_("How or where did this user get created"))
+
+    # if adding new roles, make sure they are included in the list of ModelRoles in EXTRA_ROLES
+    extra_roles = models.CharField(max_length=100, blank=True, null=True,
+                                   help_text=_("Additional roles for this user"))
+    # ---------------------
+
+    # current extra roles: testmanager, testchecker
+    # TODO: add country, language, culture
+
+    initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
+                                              help_text="use to delete users that are bots")
+    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
+                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
+
+    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
+    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
+
+    trial_ends = models.DateTimeField(blank=True, null=True)
+    subscription_ends = models.DateTimeField(blank=True, null=True)
+    renew = models.BooleanField(default=False)
+
+    free_account = models.BooleanField(_("Free Account"),
+                                       help_text=_("No attempt to get subscription will be made on a free account"),
+                                       default=False)  # used where users buy 3 for 2 deal, update by admin only
+
+    class Meta:
+        verbose_name = _('user')
+        verbose_name_plural = _('users')
+        abstract = True
+
+
+    def save(self, *args, **kwargs):
+
+        super().save(*args, **kwargs)
+
+        if not self.keycloak_id:
+            self.keycloak_id = None
+
+        if not self.ref:
+            self.ref = get_new_ref("user")
+
+    @classmethod
+    def check_register_status(cls, email, requester):
+        '''check if user is registered and activated/verified'''
+
+        # get user in django
+        try:
+            # username will be set by keycloak so use email as key
+            django_user = cls.objects.get(email=email)
+        except cls.DoesNotExist:
+            django_user = None
+
+        keycloak_user = search_user_by_email_in_keycloak(email, requester)
+
+        if keycloak_user:
+
+            return {
+                "keycloak_user_id": keycloak_user['id'],
+                "keycloak_created": keycloak_user['createdTimestamp'],
+                "keycloak_enabled": keycloak_user['enabled'],
+                "keycloak_actions": keycloak_user['requiredActions'],
+                "keycloak_verified": keycloak_user['emailVerified'],
+                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                "django_user_id": django_user.pk if django_user else 0,
+                "django_is_active": django_user.is_active,
+
+            }
+
+        else:
+            return {
+                "keycloak_user_id": '',
+                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                "django_user_id": django_user.pk if django_user else 0,
+
+            }
+
+    def create_keycloak_user_from_user(self, password, requester):
+
+        user_data = {
+            "firstName": self.first_name,
+            "lastName": self.last_name,
+            "email": self.email,
+            "username": self.username,
+            "enabled": True,
+            "emailVerified": False,
+            "credentials": [{"value": password, "type": "password"}],
+        }
+        try:
+            keycloak_user_id, status_code = create_keycloak_user(user_data, requester)
+
+        except Exception as e:
+            # Handle exceptions (e.g., user already exists)
+            print(f"Error creating Keycloak user: {e}")
+            return None
+        else:
+
+            self.keycloak_id = keycloak_user_id
+            self.save()
+            return status_code
+
+    def update_keycloak_email_verified(self):
+        verify_user_without_email(self.keycloak_id)
+
+    @cached_property
+    def is_devteam(self):
+        return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
+
+    @property
+    def is_testchecker(self):
+        return self.is_administrator or self.has_role("testchecker") or self.has_role("testmanager")
+
+
+    @property
+    def users_default_mode(self):
+        '''if the user does not have a current mode, use this one.  Is the highest mode available'''
+        # sure there is some clever way to do this
+
+        roles = list(self.Role.objects.filter(user=self).values_list('role_type', flat=True))
+
+        if self.ModelRoles.ROLE_ADMINISTRATOR in roles:
+            return self.ModelRoles.ROLE_ADMINISTRATOR
+        elif self.ModelRoles.ROLE_ORGANISER in roles:
+            return self.ModelRoles.ROLE_ORGANISER
+        elif self.ModelRoles.ROLE_AUXJUDGE in roles:
+            return self.ModelRoles.ROLE_AUXJUDGE
+        elif self.ModelRoles.ROLE_JUDGE in roles:
+            return self.ModelRoles.ROLE_JUDGE
+        elif self.ModelRoles.ROLE_COMPETITOR in roles:
+            return self.ModelRoles.ROLE_COMPETITOR
+
+        else:
+            return self.ModelRoles.ROLE_DEFAULT
+
+    @property
+    def users_default_mode(self):
+        '''if the user does not have a current mode, use this one.  Is the highest mode available'''
+        # sure there is some clever way to do this
+
+        roles = list(self.Role.objects.filter(user=self).values_list('role_type', flat=True))
+
+        if self.ModelRoles.ROLE_ADMINISTRATOR in roles:
+            return self.ModelRoles.ROLE_ADMINISTRATOR
+        elif self.ModelRoles.ROLE_MANAGER in roles:
+            return self.ModelRoles.ROLE_MANAGER
+        elif self.ModelRoles.ROLE_AUXJUDGE in roles:
+            return self.ModelRoles.ROLE_AUXJUDGE
+        elif self.ModelRoles.ROLE_JUDGE in roles:
+            return self.ModelRoles.ROLE_JUDGE
+        elif self.ModelRoles.ROLE_COMPETITOR in roles:
+            return self.ModelRoles.ROLE_COMPETITOR
+
+        else:
+            return self.ModelRoles.ROLE_DEFAULT
+
+
+    def user_roles(self, event_ref: str = None, descriptions: bool = False):
+        '''return list of roles available to this user.
+        if event_ref is passed, include the roles for this event
+        if description is true return list of lists, eg. [('M', 'Manager'),('R', 'Competitor')]
+        if description is false, just return list of roles, eg. ['M','R']
+        '''
+
+        default_role = [self.ModelRoles.ROLE_DEFAULT, ]
+
+        # get list of role types, eg. ['A','R'] and append default role
+        non_event_roles = list(self.Role.objects.filter(user=self, active=True).values_list('role_type', flat=True))
+
+        event_roles = []
+        if event_ref:
+            event_roles = list(
+                self.EventRole.objects.filter(event_ref=event_ref, user=self).values_list('role_type',
+                                                                                          flat=True))
+            # try:
+            #     event_team = EventTeam.objects.values('roles',).get(event_ref=event_ref, user=self)
+            #     #print("found roles %s" % event_team.roles)
+            #     event_roles = event_team['roles']
+            #
+            #
+            # except EventTeam.DoesNotExist:
+            #     #print("No roles found")
+            #     # self is god!
+            #     event_roles = []
+
+            # don't make admins automatically organisers any more
+            # if self.is_superuser or self.is_administrator and not (self.ModelRoles.ROLE_ORGANISER, "Organiser") in event_roles:
+            #     event_roles.append(self.ModelRoles.ROLE_ORGANISER,)
+
+        extras = [] if not self.extra_roles else self.extra_roles.split(",")
+
+        # deduplicate as we can have the same role in both event role and non-event role, eg. Judge
+        roles = set(default_role + non_event_roles + event_roles + extras)
+
+        if descriptions:
+            roles_descriptions = self.ModelRoles.ROLE_DESCRIPTIONS
+            roles_descriptions.update(self.EXTRA_ROLES)
+            # these are roles added to the user model as a list
+            #
+            return [[code, roles_descriptions[code]] for code in list(roles)]
+        else:
+            return list(roles)
+
+
+    def user_modes_list(self, request=None, event_ref=None):
+        # probably deprecated - use user_roles instead
+        ''' a list of lists (Mode, Description) of the roles availble for this user
+        if an event_ref is passed, include the roles for this event'''
+
+        if request and not event_ref:
+            request.session.get('event_ref', False)
+
+        modes = []
+        if self.is_administrator:
+            modes.append(
+                (self.ModelRoles.ROLE_ADMINISTRATOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_ADMINISTRATOR]))
+        if self.is_manager:
+            modes.append((self.ModelRoles.ROLE_MANAGER, self.ModelRoles.ROLES[self.ModelRoles.ROLE_MANAGER]))
+        if self.is_judge:
+            modes.append((self.ModelRoles.ROLE_JUDGE, self.ModelRoles.ROLES[self.ModelRoles.ROLE_JUDGE]))
+        if self.is_competitor:
+            modes.append((self.ModelRoles.ROLE_COMPETITOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_COMPETITOR]))
+        # if self.is_reader:
+        #     modes.append((self.ModelRoles.ROLE_AUXJUDGE, self.ModelRoles.ROLES[self.ModelRoles.ROLE_AUXJUDGE]))
+
+        if event_ref:
+            try:
+                event_team = self.EventTeam.objects.get(event_ref=event_ref, user=self)
+                for role in event_team.roles:
+                    if role:
+                        modes.append((role, self.ModelRoles.ROLES[role]))
+
+            except self.EventTeam.DoesNotExist:
+                pass
+
+        return modes
+
+    def my_events(self):
+        '''list of event refs that I am involved with.'''
+
+        events = self.Event.objects.nowish().mine(self).distinct()
+        # events = EventTeam.objects.filter(user=self).values_list('event_ref', flat=True).order_by('event_ref').distinct()
+
+        return list(events)
+
+    @cached_property
+    def has_outstanding_event_invites(self):
+        '''return a list of outstanding invitations to upcoming or current events'''
+        return self.EventTeam.objects.outstanding().filter(user=self).count()
+
+    @property
+    def outstanding_event_invites(self):
+        '''return a list of outstanding invitations to upcoming or current events'''
+        return self.EventTeam.objects.outstanding().filter(user=self)
+
+    def make_order(self, event=None, items=None):
+        """
+        create order with all current outstanding items or specific item(s)
+        or retrieve existing order
+        """
+        Order = apps.get_model('skorie_payments', 'order')  #
+        Entry = apps.get_model('web', 'entry')  #
+        try:
+            order, created = Order.objects.get_or_create(user=self,
+                                                         payid=None)
+        except Order.MultipleObjectsReturned:
+            # should not happen of course, but provide a way of recovering
+            logger.warning(f"Duplicate unpaid orders found for user {self} - deleting extras")
+            order = Order.objects.filter(user=self,
+                                         payid=None).order_by('-created')[0]
+            created = False
+            Order.objects.filter(user=self,
+                                 payid=None).exclude(ref=order.ref).delete()
+
+        # add all entries excluded from previous order
+        # TODO: should this sweep up any other entries or is it safe to assume that once the order is created they will all be added
+        if created:
+
+            entries = Entry.objects.mine(self).unpaid()
+
+            if event:
+                entries = entries.filter(event=event)
+            # don't include entries on orders which are in the process of being paid
+            # this is a bad way of doing this!
+            for entry in entries:
+                # add if not already existing
+                order.add_item(entry=entry)
+
+        return order
+
+    @property
+    def my_paid_orders(self):
+        """
+        NOTE: assumes all products are books!
+        """
+        Order = apps.get_model('skorie_payments', 'order')  #
+        return Order.objects.filter(user=self, payid__isnull=False)
+
+
+    def attach_competitor(self, name, source=None):
+
+        # for the moment add a new competitor - but should look for competitors that are not already attached to users
+
+        return self.Competitor.new(name, user=self, source=source)
+
+    def upgrade_to_competitor(self, creator=None, source="system"):
+        '''add role of competitor for this user'''
+
+        roles = self.add_roles([self.ModelRoles.ROLE_COMPETITOR, ])
+
+        return roles[0]
+
+
+
+    def update_event_subscribed(self, subscribe):
+        '''call with true or false to update'''
+        if subscribe and not self.event_notifications_subscribed:
+            self.event_notifications_subscribed = timezone.now()
+        if not subscribe and self.event_notifications_subscribed:
+            self.subscribe_news = None
+            self.event_notifications_unsubscribed = timezone.now()
+        self.save()
+
+
+    @property
+    def has_scores(self):
+        '''
+        :return:only true if is_competitor and has at least one scoresheet
+        '''
+
+        if self.is_competitor:
+            return self.ScoreSheet.objects.mine(self).count() > 0
+
+        return False
+
+
     def can_notify(self, when=None):
 
         if not when:
@@ -1595,16 +1607,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         return self.event_notifications_subscribed and \
             self.event_notifications_subscribed <= when and \
             (not self.event_notifications_unsubscribed or self.event_notifications_unsubscribed > when)
-
-
-    def migrate_channels(self):
-        # migrate email to comms channel and mobile if available in profile
-        if not self.preferred_channel:
-            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, email=self.email)
-            self.save()
-
-            if 'mobile' in self.profile and self.profile['mobile']:
-                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS, mobile=self.profile['mobile'])
 
 
 class UserContactBase(models.Model):
@@ -1669,7 +1671,7 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
     @property
     def CustomUser(self):
         if not self._CustomUser:
-            self._CustomUser = apps.get_model('users', 'CustomUser')
+            self._CustomUser = apps.get_model('users', settings.AUTH_USER_MODEL)
         return self._CustomUser
 
     IDENTIFIER_TYPE_EMAIL = "E"
@@ -1907,9 +1909,9 @@ class RoleBase(CreatedUpdatedMixin):
 
     name = models.CharField(_("Name"), max_length=60, db_index=True)
 
-    # we may not want level and credentials - only really useful for competitor and judge and these have their own model (?)
-    level = models.CharField(_("List"), max_length=20, blank=True, null=True)
-    credentials = models.CharField(_("List of credentials"), max_length=254, blank=True, null=True)
+    # # we may not want level and credentials - only really useful for competitor and judge and these have their own model (?)
+    # level = models.CharField(_("List"), max_length=20, blank=True, null=True)
+    # credentials = models.CharField(_("List of credentials"), max_length=254, blank=True, null=True)
 
     country = CountryField(blank=True, null=True,
                            help_text=_("Optional"))
@@ -1946,6 +1948,9 @@ class RoleBase(CreatedUpdatedMixin):
         if self.user and self.user.person and self.person != self.user.person:
             raise ValidationError(
                 f"User and Person have a one to one link - user is linked to {self.user.person} and trying to save with link to person {self.person}")
+
+        if self.organisation != self.user.organisation:
+            self.organisation = self.user.organisation
 
         if not self.name and self.person:
             self.name = self.person.formal_name
