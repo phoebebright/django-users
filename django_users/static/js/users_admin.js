@@ -26,7 +26,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
     }
 
 
-    var url = API_URL + "/api/v2/userlist/?"+query;
+    var url = USER_API_URL + "/userlist/?"+query;
     console.log(url);
     var table_options = {
         "language": {
@@ -134,7 +134,7 @@ function check_user(callback) {
 
     $.ajax({
         method: "POST",   // using post so that email does not appear in logs
-        url: API_URL + "/api/v2/email_exists/?detail=True",
+        url: USER_API_URL + "/email_exists/?detail=True",
         data: {'email': $("#check_email").val()},
 
     })
@@ -192,7 +192,7 @@ function get_user_signup_info(email, callback) {
     // same as version in users.js
     $.ajax({
         method: "POST",
-        url: API_URL + "/api/v2/email_exists_on_keycloak_p/",
+        url: USER_API_URL + "/email_exists_on_keycloak_p/",
         data: {'email': email},
 
         success: function (d) {
@@ -226,14 +226,14 @@ function send_otp_via_channel(payload) {
     return new Promise((resolve, reject) => {
         $.ajax({
             method: "POST",
-            url: API_URL + "/api/v2/comms_otp/",
+            url: USER_API_URL + "/comms_otp/",
             data: payload,
         })
-        .done(resolve)
-        .fail((xhr, status, error) => {
-            console.log('Failed:', status, error);
-            reject(error);
-        });
+            .done(resolve)
+            .fail((xhr, status, error) => {
+                console.log('Failed:', status, error);
+                reject(error);
+            });
     });
 }
 
@@ -241,7 +241,7 @@ function send_otp_via_channel(payload) {
 function email_exists_keycloak(email, callback) {
     $.ajax({
         method: "POST",
-        url: API_URL + "/api/v2/email_exists_on_keycloak/",
+        url: USER_API_URL + "/email_exists_on_keycloak/",
         data: {'email': email},
 
     })
@@ -256,7 +256,7 @@ function email_exists_keycloak(email, callback) {
 function patch_user(pk, payload) {
     $.ajax({
         method: "PATCH",
-        url: API_URL + "/api/v2/users/" + payload.id + "/",
+        url: USER_API_URL + "/users/" + payload.id + "/",
         data: payload,
     })
         .done(function (data) {
@@ -271,17 +271,17 @@ function patch_user(pk, payload) {
 function set_keycloak_password(payload) {
 
     return new Promise((resolve, reject) => {
-    $.ajax({
-        method: "POST",
-        url: API_URL + "/api/v2/set_temp_password/",
-        data: payload,
-    })
-        .done(resolve)
-        .fail((xhr, status, error) => {
-            console.log('Failed:', status, error);
-            reject(error);
-        });
-        });
+        $.ajax({
+            method: "POST",
+            url: USER_API_URL + "/set_temp_password/",
+            data: payload,
+        })
+            .done(resolve)
+            .fail((xhr, status, error) => {
+                console.log('Failed:', status, error);
+                reject(error);
+            });
+    });
 }
 
 
@@ -289,7 +289,7 @@ function set_keycloak_password(payload) {
 function check_user_exists(email, callback) {
     $.ajax({
         method: "POST",
-        url: API_URL + "/api/v2/email_exists/",
+        url: USER_API_URL + "/email_exists/",
         data: {'email': email},
 
     })
@@ -323,7 +323,7 @@ function getSearchPaneConfig(panes) {
 
 function usersearch(callback) {
     $('.search4user').tinyAutocomplete({
-        url: API_URL + "/api/v2/members",
+        url: USER_API_URL + "/members",
         maxItems: 7,
         showNoResults: true,
         markAsBold: false,
@@ -331,9 +331,9 @@ function usersearch(callback) {
         itemTemplate: '<li class="autocomplete-item">{{name}} - {{email}}</li>',
         onSelect: function (el, val) {
 
-              if (typeof callback != "undefined") {
-                        callback(val);
-                    }
+            if (typeof callback != "undefined") {
+                callback(val);
+            }
 
 
 
@@ -343,26 +343,61 @@ function usersearch(callback) {
 }
 
 
-function toggleRoles(role) {
+function toggleRoles(username, role, active) {
 
-        var payload = {'person_id': $("#person_id").val(),
-            'role': role};
+    var payload = {username: username,
+        role: role,
+        active: active};
 
-        var url = API_URL + "/api/v2/toggle_role/"+$("#person_id").val()+"/";
+    var url = USER_API_URL + "/toggle_role/";
 
-        $.ajax({
-            method: "PATCH",
-            url: url,
-            data: payload,
+    $.ajax({
+        method: "PATCH",
+        url: url,
+        data: payload,
 
-        }).done(function (data) {
+    }).done(function (data) {
 
-            console.log("done");
+        console.log("done");
 
-        }).fail(function (jqXHR, textStatus) {
+    }).fail(function (jqXHR, textStatus) {
 
-            console.log('failed to connect to server');
+        console.log('failed to connect to server');
 
-        });
+    });
 
- }
+}
+
+
+            function get_user_roles(email) {
+
+                // uncheck all
+                $('.role').prop('checked', false);
+
+                $.ajax({
+                    method: "GET",
+                    url:USER_API_URL + "/members/",
+                    data: {email: email},
+                    cache: false,
+
+                }).done(function (data) {
+
+                    $("#roles").fadeOut();
+                    if (data.length == 1) {
+                        var d = data[0];
+
+                        // save ref for this user
+                        $("#username").val(d.username);
+
+
+                        // check roles for this user
+                        d.roles.forEach((function(role) {
+                            $("#role_" + role).prop('checked', 'checked');
+
+                        }));
+
+                        $("#roles").fadeIn();
+                    }
+
+                });
+            }

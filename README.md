@@ -42,3 +42,9 @@ models.py
     
 
 Note that if this is being built on top of an existing users model, then add the CustomUserBase or CustomUserBaseBasic model definition and migrate.  Then you will need to save each object individually so it can create a people instance.  Then you will need to setup roles for the different users, by hand or write a migration.
+
+
+In settings add this:
+
+    API_URL = "http://localhost:8001" - optional
+    USERS_API_URL = "http://localhost:8001/api/v1"  - not no trailing / and full path to users api

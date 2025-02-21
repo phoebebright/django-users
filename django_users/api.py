@@ -20,7 +20,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
@@ -710,7 +710,7 @@ def toggle_role(request):
     role, created = Role.objects.get_or_create(user=user, role_type=role)
 
     role.active = active
-        role.save()
+    role.save()
 
     response = HTTP_201_CREATED if created else HTTP_200_OK
     return Response(response)
