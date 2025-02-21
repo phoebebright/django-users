@@ -1085,8 +1085,8 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         # see skorie roles_and_disciplines.py as an example - just defines lists and dicts
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
-        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.ROLE_DESCRIPTIONS}
-        context['role_list'] = [key for key,value in ModelRoles.ROLE_DESCRIPTIONS]
+        context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
+        context['role_list'] = [key for key,value in ModelRoles.ROLE_DESCRIPTIONS.items()]
 
         return context
 

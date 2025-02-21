@@ -419,7 +419,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
 
-class CustomUserBase(AbstractBaseUser, PermissionsMixin):
+class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     # options for additional roles within skorie
 
     # Private attributes for lazy-loaded models
@@ -533,14 +533,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(_('first name'), max_length=30, null=True, blank=True, db_index=True)
     last_name = models.CharField(_('last name'), max_length=30, null=True, blank=True, db_index=True)
 
-    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
 
     country = CountryField(blank=True, null=True, help_text=_("Optional"))
 
     timezone = TimeZoneField(default='Europe/Dublin', help_text=_("Default timezone for this user"))
 
-    user_source = models.CharField(max_length=20, default="Unknown",
-                                   help_text=_("How or where did this user get created"))
 
     profile = models.JSONField(default=dict, blank=True, help_text=_("Free form info related to this users profile"))
 
@@ -552,19 +549,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     # db_index=True)  # true when user accepts an invitation or confirms account
 
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
-
-    # if adding new roles, make sure they are included in the list of ModelRoles in EXTRA_ROLES
-    extra_roles = models.CharField(max_length=100, blank=True, null=True,
-                                   help_text=_("Additional roles for this user"))
-    # ---------------------
-
-    # current extra roles: testmanager, testchecker
-    # TODO: add country, language, culture
-
-    initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
-                                              help_text="use to delete users that are bots")
-    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
-                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
 
     email = models.EmailField(_('email address'), unique=True)
 
@@ -583,25 +567,13 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     subscribe_news = models.DateTimeField(blank=True, null=True)
     unsubscribe_news = models.DateTimeField(blank=True, null=True)
 
-    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
-    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
-
-    # competitor = models.ForeignKey("Competitor", on_delete=models.CASCADE,  blank=True, null=True, related_name="competitor_object",
-    #                           help_text=_("Link to a competitor object if it applies"))
-
-    # reg_iofh = models.CharField(_("ID on InternetOfPartners"), max_length=120, blank=True, null=True)
 
     status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=USER_STATUS_UNCONFIRMED, db_index=True)
 
-    trial_ends = models.DateTimeField(blank=True, null=True)
-    subscription_ends = models.DateTimeField(blank=True, null=True)
-    renew = models.BooleanField(default=False)
+
 
     activation_code = models.CharField(max_length=10, blank=True, null=True)
 
-    free_account = models.BooleanField(_("Free Account"),
-                                       help_text=_("No attempt to get subscription will be made on a free account"),
-                                       default=False)  # used where users buy 3 for 2 deal, update by admin only
 
     # have to allow blank to prevent race condition on creating user
     person = models.ForeignKey("users.Person", on_delete=models.CASCADE, blank=True, null=True)
@@ -658,16 +630,7 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
 
-        if settings.USE_KEYCLOAK:
-            try:
-                if not self.keycloak_id and self.oidc_profile:
-                    self.keycloak_id = self.oidc_profile.sub
-            except Exception as e:
-                logger.warning(f"Error getting keycloak_id: {e}")
-        else:
-            # hack to try and avoid issues with keycloak lookup in testing and having unique index on keycloak
-            # maybe there is a better way...
-            self.keycloak_id = uuid.uuid4()
+
 
     def quick_save(self, *args, **kwargs):
         '''save without calling save on person'''
@@ -681,11 +644,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         linked = 0
         # if this email is linked to a rider in a recent event, then make them a rider and link them as a user to those riders
-        for rider in self.Competitor.objects.filter(email=self.email, user__isnull=True,
+        for competitor in self.Competitor.objects.filter(email=self.email, user__isnull=True,
                                                     created__gte=timezone.now() - timedelta(days=31)):
             linked += 1
-            rider.user = self
-            rider.save()
+            competitor.user = self
+            competitor.save()
 
             # # mark rosettes as collected
             # for rosette in Rosette.objects.filter(rider=rider):
@@ -788,8 +751,8 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         # need a dummy person instance
         # person, _ = cls.Person.objects.get_or_create(formal_name="Skorie System") - doesn't work
         Person = apps.get_model('users', 'Person')
-        person, _ = Person.objects.get_or_create(formal_name="Skorie System")
-        system_user, _ = cls.objects.get_or_create(email="system@skor.ie",
+        person, _ = Person.objects.get_or_create(formal_name=settings.SITE_NAME)
+        system_user, _ = cls.objects.get_or_create(email="system@test.com",
                                                    defaults={'username': 'System',
                                                              'person': person,
                                                              'status': cls.USER_STATUS_NA}
@@ -829,6 +792,496 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         user = authenticate(username=email, password=pw)
 
         return user, device_key
+
+    @classmethod
+    def check_register_status(cls, email, requester):
+        '''check if user is registered and activated/verified'''
+
+        # get user in django
+        try:
+            # username will be set by keycloak so use email as key
+            django_user = cls.objects.get(email=email)
+        except cls.DoesNotExist:
+            django_user = None
+
+        return {
+            "keycloak_user_id": '',
+            "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+            "django_user_id": django_user.pk if django_user else 0,
+
+        }
+
+
+
+    # note we want to have properties rather than a more generic has_role(role_required) so we can use them in templates
+    # and because there is a lot of legacy code that uses these properties (that used to be part of the data model)
+    @property
+    def is_administrator(self):
+        return self.Role.objects.active().filter(user=self,
+                                                 role_type=self.ModelRoles.ROLE_ADMINISTRATOR).exists() or self.is_superuser
+
+    @cached_property
+    def is_manager(self):
+        return self.Role.objects.active().filter(user=self,
+                                                 role_type=self.ModelRoles.ROLE_MANAGER).exists() or self.is_superuser
+
+
+    # move to app code
+    @cached_property
+    def is_auxjudge(self):
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_AUXJUDGE).exists()
+
+    @cached_property
+    def is_judge(self):
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_JUDGE).exists()
+
+    @cached_property
+    def is_organiser(self):
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ORGANISER).exists()
+
+    @cached_property
+    def is_scorer(self):
+        # for now return either scorer pro or basic
+        return self.Role.objects.active().filter(user=self, role_type__in=[self.ModelRoles.ROLE_SCORER,
+                                                                           self.ModelRoles.ROLE_SCORER_BASIC]).exists()
+
+    @cached_property
+    def is_scorer_basic(self):
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER_BASIC).exists()
+
+    @cached_property
+    def is_scorer_pro(self):
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER).exists()
+
+
+    @property
+    def can_save_scores(self):
+        raise IntegrityError("Recode for event")
+        # TODO: this will be mroe complex - what type of account, if competitor has used max free saves, organiser for event
+        return (self.is_competitor or self.is_manager or self.is_scorer)
+
+    @property
+    def can_save_for_competitor_not_me(self):
+        return False
+        raise IntegrityError("Recode for event")
+        return (self.is_manager or self.is_scorer)
+
+    @cached_property
+    def is_competitor(self):
+        '''Not adding everyone to role competitor anymore'''
+        roles = self.Role.objects.active().filter(user=self)
+        if roles.count() == 0:
+            return True
+        if roles.filter(role_type=self.ModelRoles.ROLE_COMPETITOR).exists():
+            return True
+        return False
+
+    def has_role(self, role):
+        '''check this user has the permission for this role'''
+
+        if self.is_superuser:
+            return True
+
+        # check for cached value before accessing db
+        if hasattr(self, 'roles'):
+            return role in self.roles
+
+        if self.Role.objects.active().filter(user=self, role_type=role).exists():
+            return True
+        elif self.extra_roles:
+            return role in self.extra_roles
+        return False
+
+    def add_roles(self, roles):
+
+        return self.person.add_roles(roles)
+
+    def add_device(self, name=None, device_id=None, activate=False):
+        return None
+        # obj = Device.objects.create(user=self, name=name, device_id=device_id)
+        # if activate:
+        #     obj.activate()
+
+        # return obj
+
+    def get_full_name(self):
+        if self.full_name:
+            return self.full_name
+        elif self.formal_name:
+            return self.formal_name
+        elif self.friendly_name:
+            return self.friendly_name
+        return str(self)
+
+    @property
+    def has_email(self):
+        '''see if user has added an email at some point, may do this when making contact before registering
+        see new_user() for format of temporary email '''
+
+        part1, part2 = self.email.split("@")
+        return not (len(part1) == 30 and part2 == "skor.ie")
+
+    @property
+    def is_anon(self):
+        '''not completed signup process'''
+        logger.warning("CustomUser.is_anon is still being used but is deprecated")
+        return len(self.email) == len("GTZXSWRUKCHKNQIUFAQLEEVWKTETMV@skor.ie") and 'skor.ie' in self.email
+        # return self.status == self.USER_STATUS_ANON
+
+    @property
+    def is_unconfirmed(self):
+        '''using keycloak so probably don't need this? '''
+        return False
+        return self.status == self.USER_STATUS_UNCONFIRMED
+
+    @property
+    def is_registered(self):
+        '''email is confirmed and account activated'''
+
+        return self.status >= self.USER_STATUS_TRIAL
+
+    @property
+    def is_default(self):
+        # no other roles
+        self.Role.objects.filter(user=self).exists()
+
+    @property
+    def is_system(self):
+
+        return self.first_name == "System"
+
+
+    @property
+    def users_default_mode(self):
+        '''if the user does not have a current mode, use this one.  Is the highest mode available'''
+        # sure there is some clever way to do this
+
+        roles = list(self.Role.objects.filter(user=self).values_list('role_type', flat=True))
+
+        if self.ModelRoles.ROLE_ADMINISTRATOR in roles:
+            return self.ModelRoles.ROLE_ADMINISTRATOR
+        elif self.ModelRoles.ROLE_MANAGER in roles:
+            return self.ModelRoles.ROLE_MANAGER
+
+        else:
+            return self.ModelRoles.ROLE_DEFAULT
+
+    def user_roles(self, event_ref: str = None, descriptions: bool = False):
+        '''return list of roles available to this user.
+        if event_ref is passed, include the roles for this event
+        if description is true return list of lists, eg. [('M', 'Manager'),('R', 'Competitor')]
+        if description is false, just return list of roles, eg. ['M','R']
+        '''
+
+        default_role = [self.ModelRoles.ROLE_DEFAULT, ]
+
+        # get list of role types, eg. ['A','R'] and append default role
+        roles = list(self.Role.objects.filter(user=self, active=True).values_list('role_type', flat=True))
+
+
+        if descriptions:
+            roles_descriptions = self.ModelRoles.ROLE_DESCRIPTIONS
+            roles_descriptions.update(self.EXTRA_ROLES)
+            # these are roles added to the user model as a list
+            #
+            return [[code, roles_descriptions[code]] for code in list(roles)]
+        else:
+            return list(roles)
+
+    # TODO: rename user_roles_list
+
+    def signup(self, save=True):
+        # TODO: REMOVE or update - users for an event now go through event pipeline - there will be another type
+        # of signup for users from the website.
+        # user has signed up but email has not been confirmed
+        self.status = self.USER_STATUS_UNCONFIRMED
+
+        self.activation_code = "%s" % ''.join(random.choice(digits) for i in range(6))
+
+        if save:
+            self.save()
+
+        return self
+
+    def activate(self, save=True):
+
+        self.status = self.USER_STATUS_TRIAL
+
+        self.activation_code = None
+
+        if save:
+            self.save()
+
+        return self
+
+    def confirm(self, save=True):
+
+        self.status = self.USER_STATUS_CONFIRMED
+
+        if save:
+            self.save()
+
+        return self
+
+    def has_perm(self, perm, obj=None):
+        "Does the user have a specific permission?"
+        # Simplest possible answer: Yes, always
+        return True
+
+    def has_module_perms(self, app_label):
+        "Does the user have permissions to view the app `app_label`?"
+        # Simplest possible answer: Yes, always
+        return True
+
+
+    @classmethod
+    def add_or_update_user(cls, username, first_name, last_name, email, passw=None, phone=None, data=None):
+        '''three aspects to creating a user:
+        - django user
+        - keycloak user
+        - comms channels (contact methods)
+        '''
+        # channel_type = form.cleaned_data['channel_type']
+        # email = form.cleaned_data['email']
+        # mobile = form.cleaned_data['mobile']
+        # password = form.cleaned_data['password']
+        if not passw:
+            random_number = random.randint(100000, 999999)
+            random_letter = random.choice(string.ascii_uppercase)
+            passw = f"{str(random_number)[:3]}{random_letter}{str(random_number)[3:]}"
+
+        # currently username is email
+        user, created = cls.objects.get(username=username, defaults={'email': email,
+                                                                     'first_name': first_name,
+                                                                     'last_name': last_name,
+                                                                     'is_active': False,
+                                                                     **data})
+
+        if created:
+            status = "created"
+        elif settings.USE_KEYCLOAK and not user.keycloak_id:
+            # need to create a keycloak user
+            keycloak_id = user.create_keycloak_user_from_user(passw)
+            status = "keycloak created"
+
+        elif not user.is_active:
+            # user is not is_active (not same same active field, such a bad naming choice)
+            # this happens if no comms channel has been verified
+            # need to redirect to verify comms
+            status = "not active"
+
+        return user, status
+
+
+    def send_activation(self):
+
+        # send email asking for confirmation
+        mail.send(
+            template="welcome_email",
+            context={'user': self},
+            recipients=[self.email, ],
+            sender=settings.DEFAULT_FROM_EMAIL,
+            priority='now',
+        )
+
+    def welcome_user(self):
+        '''do whatever is required when a user completes signup'''
+
+        logger.info(f"New User signed up {self.email}")
+
+        # send welcome email
+
+        mail.send(
+            self.email,
+            settings.DEFAULT_FROM_EMAIL,
+            template='welcome_email',
+            context={'user': self,
+                     },
+        )
+
+        if settings.NOTIFY_NEW_USER_EMAILS:
+            mail.send(
+                settings.NOTIFY_NEW_USER_EMAILS,
+                settings.DEFAULT_FROM_EMAIL,
+                template='welcome_email',
+                context={'user': self,
+                         },
+            )
+
+
+
+    def change_names_email(self):
+        '''change names for this user and email (as it appears in similar places)'''
+
+        # currently we are going to use first and last name and derive formal and friendly
+        # in future want to do away with first and last but django currently requires it (at least without further changes)
+
+        # called from save so we assume the changes have already been saved in user model
+
+        # name also appears in person
+        if self.person:
+            self.person.formal_name = self.formal_name
+            self.person.friendly_name = self.friendly_name
+            self.person.save()
+
+        # and as competitor
+        for competitor in self.Competitor.objects.filter(user=self):
+            competitor.name = self.formal_name
+            competitor.email = self.email
+            competitor.save()
+
+        # and as team member
+        for team in self.EventTeam.objects.filter(user=self):
+            team.name = self.formal_name
+            team.email = self.email
+            team.save()
+
+        # and as event role
+        for role in self.EventRole.objects.filter(user=self):
+            role.name = self.formal_name
+            role.email = self.email
+            role.save()
+
+        # and in Role
+        for role in self.Role.objects.filter(user=self):
+            role.name = self.formal_name
+            role.email = self.email
+            role.save()
+
+    def get_username(self):
+        return self.email
+
+    # def get_full_name(self):
+    #     """
+    #     Returns the first_name plus the last_name, with a space in between.
+    #     DEPRECATED - use property full_name instead
+    #     """
+    #     full_name = '%s %s' % (self.first_name, self.last_name)
+    #     return full_name.strip()
+
+    def get_short_name(self):
+        "Returns the short name for the user."
+        return self.email
+
+    def email_user(self, subject, message, from_email=settings.DEFAULT_FROM_EMAIL, **kwargs):
+        """
+        Sends an email to this User.
+        """
+
+        mail.send(
+
+            subject=subject,
+            message=message,
+            sender=from_email,
+            recipients=[self.email],
+        )
+
+
+    def delete_one(self):
+        '''delete causing stack overflow'''
+
+        person = self.person
+        if person:
+            self.person = None
+            self.save()
+            person.delete()
+
+        self.delete()
+
+    def remove(self):
+        '''remove all personal data and anonymising data added by the user'''
+
+        # want to keep any scores for the moment as they indicate trials (maybe) keep if there
+        # are scores attached (for now)
+        scores = self.ScoreSheet.objects.filter(creator=self).count()
+
+        if scores == 0:
+            logger.info("Deleting user with no scores: %s " % self.email)
+            self.delete()
+
+        else:
+
+            # replace with dummy email
+            logger.info("Removing user %s..." % self)
+            new_email = "%s@skor.ie" % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
+            msg = "User %d with email %s has been removed and new email is %s - delete this email  " % (
+                self.pk, self.email, new_email)
+
+            if settings.DEBUG:
+                print(msg)
+            else:
+                mail_admins("User %d has been removed" % self.pk, msg, fail_silently=False)
+
+            self.username = new_email
+            self.email = new_email
+            self.first_name = ''
+            self.last_name = ''
+            self.password = 'none'
+            self.is_active = False
+            self.country = None
+            self.org_types = None
+            self.removed_date = timezone.now()
+
+            self.save()
+            logger.info("Finished removing user %s" % self)
+
+        return True
+
+    def migrate_channels(self):
+        # migrate email to comms channel and mobile if available in profile
+        if not self.preferred_channel:
+            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
+                                                                                channel_type=self.CommsChannel.CHANNEL_EMAIL,
+                                                                                email=self.email)
+            self.save()
+
+            if 'mobile' in self.profile and self.profile['mobile']:
+                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
+                                                        mobile=self.profile['mobile'])
+
+
+class CustomUserBase(CustomUserBaseBasic):
+
+
+    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
+
+    user_source = models.CharField(max_length=20, default="Unknown",
+                                   help_text=_("How or where did this user get created"))
+
+    # if adding new roles, make sure they are included in the list of ModelRoles in EXTRA_ROLES
+    extra_roles = models.CharField(max_length=100, blank=True, null=True,
+                                   help_text=_("Additional roles for this user"))
+    # ---------------------
+
+    # current extra roles: testmanager, testchecker
+    # TODO: add country, language, culture
+
+    initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
+                                              help_text="use to delete users that are bots")
+    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
+                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
+
+    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
+    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
+
+    trial_ends = models.DateTimeField(blank=True, null=True)
+    subscription_ends = models.DateTimeField(blank=True, null=True)
+    renew = models.BooleanField(default=False)
+
+    free_account = models.BooleanField(_("Free Account"),
+                                       help_text=_("No attempt to get subscription will be made on a free account"),
+                                       default=False)  # used where users buy 3 for 2 deal, update by admin only
+
+
+    def save(self, *args, **kwargs):
+
+        super().save(*args, **kwargs)
+
+        if not self.keycloak_id:
+            self.keycloak_id = None
+
+        if not self.ref:
+            self.ref = get_new_ref("user")
 
     @classmethod
     def check_register_status(cls, email, requester):
@@ -892,207 +1345,19 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     def update_keycloak_email_verified(self):
         verify_user_without_email(self.keycloak_id)
 
-    # def send_verification_code(self, method):
-    #     self.verification_code = CustomUser.objects.make_random_password(length=6, allowed_chars='1234567890')
-    #     self.save()
-    #     if method == 'email':
-    #         self.send_verification_email()
-    #     else:
-    #         self.send_verification_sms(self.mobile, self.verification_code)
-    #
-    # def send_verification_email(self):
-    #
-    #     msg = f"Please click on this link to activate your account and verify this email address: {settings.SITE_URL}/users/verify_account/{self.verification_code}/"
-    #     subject = "Link to verify your email address and active your Skorie account"
-    #     mail.send(
-    #         recipients=self.email,
-    #         subject=subject,
-    #         message=msg,
-    #         priority='now',
-    #         language="EN",
-    #     )
-    #
-    #
-    #     # for some reason context is not being applied to template - give up wondering why
-    #     # mail.send(
-    #     #     recipients=self.email,
-    #     #     template='verification_email',
-    #     #     context={"verification_code":  self.verification_code},
-    #     #     priority='now',
-    #     #     language="EN",
-    #     # )
-    # def resend_verification_code(self, method):
-    #     self.send_verification_code(method)
-    #
-    # def verify_code(self, code, method):
-    #     if self.verification_code == code:
-    #         if method == 'email':
-    #             self.email_verified = timezone.now()
-    #         else:
-    #             self.mobile_verified = timezone.now()
-    #         self.is_active = True
-    #         self.verification_code = ''
-    #         self.save()
-    #         self.update_keycloak_email_verified()
-    #         return True
-    #     return False
-
-    # note we want to have properties rather than a more generic has_role(role_required) so we can use them in templates
-    # and because there is a lot of legacy code that uses these properties (that used to be part of the data model)
-    @property
-    def is_administrator(self):
-        return self.Role.objects.active().filter(user=self,
-                                                 role_type=self.ModelRoles.ROLE_ADMINISTRATOR).exists() or self.is_superuser
-
-    @cached_property
-    def is_manager(self):
-        return self.Role.objects.active().filter(user=self,
-                                                 role_type=self.ModelRoles.ROLE_MANAGER).exists() or self.is_superuser
-
     @cached_property
     def is_devteam(self):
         return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
 
-    # @cached_property
-    # def is_issuer(self):
-    #     return seRole.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ISSUER).exists()
-    # @property
-    # def is_bot(self):
-    #     return self.Role.objects.filter(user=self, role_type=self.ModelRoles.ROLE_BOT).exists()
-    @cached_property
-    # def is_reader(self):
-    #     #DEPRECATED
-    #     return self.Role.objects.filter(user=self, role_type=self.ModelRoles.ROLE_AUXJUDGE).exists()
-
-    @cached_property
-    def is_auxjudge(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_AUXJUDGE).exists()
-
-    @cached_property
-    def is_judge(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_JUDGE).exists()
-
-    @cached_property
-    def is_organiser(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ORGANISER).exists()
-
-    @cached_property
-    def is_scorer(self):
-        # for now return either scorer pro or basic
-        return self.Role.objects.active().filter(user=self, role_type__in=[self.ModelRoles.ROLE_SCORER,
-                                                                           self.ModelRoles.ROLE_SCORER_BASIC]).exists()
-
-    @cached_property
-    def is_scorer_basic(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER_BASIC).exists()
-
-    @cached_property
-    def is_scorer_pro(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER).exists()
-
-    @cached_property
-    def is_competitor(self):
-        '''Not adding everyone to role competitor anymore'''
-        roles = self.Role.objects.active().filter(user=self)
-        if roles.count() == 0:
-            return True
-        if roles.filter(role_type=self.ModelRoles.ROLE_COMPETITOR).exists():
-            return True
-        return False
-
-    def has_role(self, role):
-        '''check this user has the permission for this role'''
-
-        if self.is_superuser:
-            return True
-
-        # check for cached value before accessing db
-        if hasattr(self, 'roles'):
-            return role in self.roles
-
-        if self.Role.objects.active().filter(user=self, role_type=role).exists():
-            return True
-        elif self.extra_roles:
-            return role in self.extra_roles
-        return False
-
-    def add_roles(self, roles):
-
-        return self.person.add_roles(roles)
-
-    def add_device(self, name=None, device_id=None, activate=False):
-        return None
-        # obj = Device.objects.create(user=self, name=name, device_id=device_id)
-        # if activate:
-        #     obj.activate()
-
-        # return obj
-
-    def get_full_name(self):
-        if self.full_name:
-            return self.full_name
-        elif self.formal_name:
-            return self.formal_name
-        elif self.friendly_name:
-            return self.friendly_name
-        return str(self)
 
     @property
     def is_subscribe_news(self):
         return (self.subscribe_news and not self.unsubscribe_news)
 
     @property
-    def has_email(self):
-        '''see if user has added an email at some point, may do this when making contact before registering
-        see new_user() for format of temporary email '''
-
-        part1, part2 = self.email.split("@")
-        return not (len(part1) == 30 and part2 == "skor.ie")
-
-    @property
-    def is_anon(self):
-        '''not completed signup process'''
-        logger.warning("CustomUser.is_anon is still being used but is deprecated")
-        return len(self.email) == len("GTZXSWRUKCHKNQIUFAQLEEVWKTETMV@skor.ie") and 'skor.ie' in self.email
-        # return self.status == self.USER_STATUS_ANON
-
-    @property
-    def is_unconfirmed(self):
-        '''using keycloak so probably don't need this? '''
-        return False
-        return self.status == self.USER_STATUS_UNCONFIRMED
-
-    @property
-    def is_registered(self):
-        '''email is confirmed and account activated'''
-
-        return self.status >= self.USER_STATUS_TRIAL
-
-    @property
-    def can_save_scores(self):
-        raise IntegrityError("Recode for event")
-        # TODO: this will be mroe complex - what type of account, if competitor has used max free saves, organiser for event
-        return (self.is_competitor or self.is_manager or self.is_scorer)
-
-    @property
-    def can_save_for_competitor_not_me(self):
-        return False
-        raise IntegrityError("Recode for event")
-        return (self.is_manager or self.is_scorer)
-
-    @property
-    def is_default(self):
-        # no other roles
-        self.Role.objects.filter(user=self).exists()
-
-    @property
-    def is_system(self):
-
-        return self.first_name == "System"
-
-    @property
     def is_testchecker(self):
         return self.is_administrator or self.has_role("testchecker") or self.has_role("testmanager")
+
 
     @property
     def users_default_mode(self):
@@ -1114,6 +1379,28 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         else:
             return self.ModelRoles.ROLE_DEFAULT
+
+    @property
+    def users_default_mode(self):
+        '''if the user does not have a current mode, use this one.  Is the highest mode available'''
+        # sure there is some clever way to do this
+
+        roles = list(self.Role.objects.filter(user=self).values_list('role_type', flat=True))
+
+        if self.ModelRoles.ROLE_ADMINISTRATOR in roles:
+            return self.ModelRoles.ROLE_ADMINISTRATOR
+        elif self.ModelRoles.ROLE_MANAGER in roles:
+            return self.ModelRoles.ROLE_MANAGER
+        elif self.ModelRoles.ROLE_AUXJUDGE in roles:
+            return self.ModelRoles.ROLE_AUXJUDGE
+        elif self.ModelRoles.ROLE_JUDGE in roles:
+            return self.ModelRoles.ROLE_JUDGE
+        elif self.ModelRoles.ROLE_COMPETITOR in roles:
+            return self.ModelRoles.ROLE_COMPETITOR
+
+        else:
+            return self.ModelRoles.ROLE_DEFAULT
+
 
     def user_roles(self, event_ref: str = None, descriptions: bool = False):
         '''return list of roles available to this user.
@@ -1161,7 +1448,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         else:
             return list(roles)
 
-    # TODO: rename user_roles_list
 
     def user_modes_list(self, request=None, event_ref=None):
         # probably deprecated - use user_roles instead
@@ -1214,20 +1500,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         '''return a list of outstanding invitations to upcoming or current events'''
         return self.EventTeam.objects.outstanding().filter(user=self)
 
-    # @property
-    # def competitor(self):
-    #     # depreacted - competitor should be specific to an event
-    #     try:
-    #         obj = Competitor.objects.get(user=self)
-    #         return obj
-    #     except Competitor.DoesNotExist:
-    #         return None
-    #     except Competitor.MultipleObjectsReturned:
-    #         # return the first one
-    #         # TODO: fix and notify admins
-    #         logger.warning("Multiple Competitors found for user %s id %s" % (self, self.id))
-    #         return Competitor.objects.filter(user=self).order_by('-created')[0]
-
     def make_order(self, event=None, items=None):
         """
         create order with all current outstanding items or specific item(s)
@@ -1271,48 +1543,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         Order = apps.get_model('skorie_payments', 'order')  #
         return Order.objects.filter(user=self, payid__isnull=False)
 
-    def signup(self, save=True):
-        # TODO: REMOVE or update - users for an event now go through event pipeline - there will be another type
-        # of signup for users from the website.
-        # user has signed up but email has not been confirmed
-        self.status = self.USER_STATUS_UNCONFIRMED
-
-        self.activation_code = "%s" % ''.join(random.choice(digits) for i in range(6))
-
-        if save:
-            self.save()
-
-        return self
-
-    def activate(self, save=True):
-
-        self.status = self.USER_STATUS_TRIAL
-
-        self.activation_code = None
-
-        if save:
-            self.save()
-
-        return self
-
-    def confirm(self, save=True):
-
-        self.status = self.USER_STATUS_CONFIRMED
-
-        if save:
-            self.save()
-
-        return self
-
-    def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
-        # Simplest possible answer: Yes, always
-        return True
-
-    def has_module_perms(self, app_label):
-        "Does the user have permissions to view the app `app_label`?"
-        # Simplest possible answer: Yes, always
-        return True
 
     def attach_competitor(self, name, source=None):
 
@@ -1320,115 +1550,13 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return self.Competitor.new(name, user=self, source=source)
 
-    @classmethod
-    def add_or_update_user(cls, username, first_name, last_name, email, passw=None, phone=None, data=None):
-        '''three aspects to creating a user:
-        - django user
-        - keycloak user
-        - comms channels (contact methods)
-        '''
-        # channel_type = form.cleaned_data['channel_type']
-        # email = form.cleaned_data['email']
-        # mobile = form.cleaned_data['mobile']
-        # password = form.cleaned_data['password']
-        if not passw:
-            random_number = random.randint(100000, 999999)
-            random_letter = random.choice(string.ascii_uppercase)
-            passw = f"{str(random_number)[:3]}{random_letter}{str(random_number)[3:]}"
-
-        # currently username is email
-        user, created = cls.objects.get(username=username, defaults={'email': email,
-                                                                     'first_name': first_name,
-                                                                     'last_name': last_name,
-                                                                     'is_active': False,
-                                                                     **data})
-
-        if created:
-            status = "created"
-        elif settings.USE_KEYCLOAK and not user.keycloak_id:
-            # need to create a keycloak user
-            keycloak_id = user.create_keycloak_user_from_user(passw)
-            status = "keycloak created"
-
-        elif not user.is_active:
-            # user is not is_active (not same same active field, such a bad naming choice)
-            # this happens if no comms channel has been verified
-            # need to redirect to verify comms
-            status = "not active"
-
-        return user, status
-
-    # deprecated - use add_or_update_user instead
-    # @classmethod
-    # def new_user(cls, email, passw='valegro', request=None):
-    #     ''' create a new user and all associated records - this way we only use edit forms never add forms
-    #
-    #     '''
-    #
-    #
-    #     if email:
-    #         user = cls.objects.create_user(email=email, password=passw)
-    #     else:
-    #         raise ValidationError("MIssing email on signup request")
-    #
-    #
-    #     # look for additional fields in request
-    #     if request:
-    #
-    #         # ip = request.META.get("HTTP_HOST", None)
-    #         # if ip in settings.BOT_LIST:
-    #         #     user.user_type = CustomUser.USER_TYPE_BOT
-    #
-    #         # get additional fields
-    #         for f in cls._meta.get_fields():
-    #             if f.name in request.POST and not f.name in ('email', 'username', 'password','csrfmiddlewaretoken'):
-    #                 setattr(user, f.name, request.POST[f.name])
-    #
-    #
-    #     user.save()
-    #     return user
-
-    def send_activation(self):
-
-        # send email asking for confirmation
-        mail.send(
-            template="welcome_email",
-            context={'user': self},
-            recipients=[self.email, ],
-            sender=settings.DEFAULT_FROM_EMAIL,
-            priority='now',
-        )
-
-    def welcome_user(self):
-        '''do whatever is required when a user completes signup'''
-
-        logger.info(f"New User signed up {self.email}")
-
-        # send welcome email
-
-        mail.send(
-            self.email,
-            settings.DEFAULT_FROM_EMAIL,
-            template='welcome_email',
-            context={'user': self,
-                     },
-        )
-
-        if settings.NOTIFY_NEW_USER_EMAILS:
-            mail.send(
-                settings.NOTIFY_NEW_USER_EMAILS,
-                settings.DEFAULT_FROM_EMAIL,
-                template='welcome_email',
-                context={'user': self,
-                         },
-            )
-
     def upgrade_to_competitor(self, creator=None, source="system"):
         '''add role of competitor for this user'''
 
         roles = self.add_roles([self.ModelRoles.ROLE_COMPETITOR, ])
 
         return roles[0]
+
 
     def update_subscribed(self, subscribe):
         '''call with true or false to update'''
@@ -1444,43 +1572,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         # status is now at least
         self.save()
 
-    def change_names_email(self):
-        '''change names for this user and email (as it appears in similar places)'''
-
-        # currently we are going to use first and last name and derive formal and friendly
-        # in future want to do away with first and last but django currently requires it (at least without further changes)
-
-        # called from save so we assume the changes have already been saved in user model
-
-        # name also appears in person
-        if self.person:
-            self.person.formal_name = self.formal_name
-            self.person.friendly_name = self.friendly_name
-            self.person.save()
-
-        # and as competitor
-        for competitor in self.Competitor.objects.filter(user=self):
-            competitor.name = self.formal_name
-            competitor.email = self.email
-            competitor.save()
-
-        # and as team member
-        for team in self.EventTeam.objects.filter(user=self):
-            team.name = self.formal_name
-            team.email = self.email
-            team.save()
-
-        # and as event role
-        for role in self.EventRole.objects.filter(user=self):
-            role.name = self.formal_name
-            role.email = self.email
-            role.save()
-
-        # and in Role
-        for role in self.Role.objects.filter(user=self):
-            role.name = self.formal_name
-            role.email = self.email
-            role.save()
 
     # deprecated - use is_subscribe_news instead
     def is_subscribed(self):
@@ -1499,33 +1590,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
             self.event_notifications_unsubscribed = timezone.now()
         self.save()
 
-    def get_username(self):
-        return self.email
-
-    # def get_full_name(self):
-    #     """
-    #     Returns the first_name plus the last_name, with a space in between.
-    #     DEPRECATED - use property full_name instead
-    #     """
-    #     full_name = '%s %s' % (self.first_name, self.last_name)
-    #     return full_name.strip()
-
-    def get_short_name(self):
-        "Returns the short name for the user."
-        return self.email
-
-    def email_user(self, subject, message, from_email=settings.DEFAULT_FROM_EMAIL, **kwargs):
-        """
-        Sends an email to this User.
-        """
-
-        mail.send(
-
-            subject=subject,
-            message=message,
-            sender=from_email,
-            recipients=[self.email],
-        )
 
     @property
     def has_scores(self):
@@ -1538,55 +1602,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
 
         return False
 
-    def delete_one(self):
-        '''delete causing stack overflow'''
-
-        person = self.person
-        if person:
-            self.person = None
-            self.save()
-            person.delete()
-
-        self.delete()
-
-    def remove(self):
-        '''remove all personal data and anonymising data added by the user'''
-
-        # want to keep any scores for the moment as they indicate trials (maybe) keep if there
-        # are scores attached (for now)
-        scores = self.ScoreSheet.objects.filter(creator=self).count()
-
-        if scores == 0:
-            logger.info("Deleting user with no scores: %s " % self.email)
-            self.delete()
-
-        else:
-
-            # replace with dummy email
-            logger.info("Removing user %s..." % self)
-            new_email = "%s@skor.ie" % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
-            msg = "User %d with email %s has been removed and new email is %s - delete this email  " % (
-                self.pk, self.email, new_email)
-
-            if settings.DEBUG:
-                print(msg)
-            else:
-                mail_admins("User %d has been removed" % self.pk, msg, fail_silently=False)
-
-            self.username = new_email
-            self.email = new_email
-            self.first_name = ''
-            self.last_name = ''
-            self.password = 'none'
-            self.is_active = False
-            self.country = None
-            self.org_types = None
-            self.removed_date = timezone.now()
-
-            self.save()
-            logger.info("Finished removing user %s" % self)
-
-        return True
 
     def can_notify(self, when=None):
 
@@ -1597,18 +1612,6 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
         return self.event_notifications_subscribed and \
             self.event_notifications_subscribed <= when and \
             (not self.event_notifications_unsubscribed or self.event_notifications_unsubscribed > when)
-
-    def migrate_channels(self):
-        # migrate email to comms channel and mobile if available in profile
-        if not self.preferred_channel:
-            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
-                                                                                channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                                email=self.email)
-            self.save()
-
-            if 'mobile' in self.profile and self.profile['mobile']:
-                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
-                                                        mobile=self.profile['mobile'])
 
 
 class UserContactBase(models.Model):
