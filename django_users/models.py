@@ -35,10 +35,13 @@ from post_office.models import EmailTemplate
 from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
 
-from .tools.model_mixins import CreatedMixin, CreatedUpdatedMixin, TrackChangesMixin, DataQualityMixin, AliasForMixin
+
+from .tools.model_mixins import CreatedMixin,  CreatedUpdatedMixin, TrackChangesMixin, DataQualityMixin,  AliasForMixin
 from django.db import IntegrityError, models, transaction
 
+
 from django.utils.translation import gettext_lazy as _
+
 
 import logging
 
@@ -52,7 +55,6 @@ ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
 CHANNEL_TYPES = getattr(settings, 'CHANNEL_TYPES', ['email', 'sms', 'whatsapp'])
-
 
 def get_new_ref(model):
     '''
@@ -1192,6 +1194,38 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             recipients=[self.email],
         )
 
+    @property
+    def is_deleteable(self):
+        '''if user not being used then can be deleted, otherwise list where they are used'''
+
+        # check has no usage in other dbs
+        deleteable = True
+        if self.Competitor.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.EventRole.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.EventTeam.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.Role.objects.filter(user=self).exists():
+            deleteable = False
+
+
+        return deleteable
+
+    @property
+    def footprint(self):
+        usage = []
+        if self.Competitor.objects.filter(user=self).exists():
+            usage.append(f"Competitor: {self.Competitor.objects.filter(user=self).count()}")
+        if self.EventRole.objects.filter(user=self).exists():
+            usage.append(f"Event Role: {self.EventRole.objects.filter(user=self).count()}")
+        if self.EventTeam.objects.filter(user=self).exists():
+            usage.append(f"Event Team: {self.EventTeam.objects.filter(user=self).count()}")
+        if self.Role.objects.filter(user=self).exists():
+            usage.append(f"Role: {self.Role.objects.filter(user=self).count()}")
+
+
+        return usage
 
     def delete_one(self):
         '''delete causing stack overflow'''
@@ -1219,7 +1253,8 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
             # replace with dummy email
             logger.info("Removing user %s..." % self)
-            new_email = "%s@skor.ie" % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
+            random_id = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
+            new_email = f"{random_id}@skor.ie"
             msg = "User %d with email %s has been removed and new email is %s - delete this email  " % (
                 self.pk, self.email, new_email)
 
@@ -1228,7 +1263,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             else:
                 mail_admins("User %d has been removed" % self.pk, msg, fail_silently=False)
 
-            self.username = new_email
+            self.username = random_id
             self.email = new_email
             self.first_name = ''
             self.last_name = ''
@@ -1279,11 +1314,11 @@ class CustomUserBase(CustomUserBaseBasic):
 
     initial_ip = models.GenericIPAddressField(blank=True, null=True, editable=False,
                                               help_text="use to delete users that are bots")
-    org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
-                                 help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
-
-    event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
-    event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
+    # org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
+    #                              help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
+    #
+    # event_notifications_subscribed = models.DateTimeField(blank=True, null=True)
+    # event_notifications_unsubscribed = models.DateTimeField(blank=True, null=True)
 
     trial_ends = models.DateTimeField(blank=True, null=True)
     subscription_ends = models.DateTimeField(blank=True, null=True)
@@ -1306,8 +1341,11 @@ class CustomUserBase(CustomUserBaseBasic):
         if not self.keycloak_id:
             self.keycloak_id = None
 
-        if not self.ref:
-            self.ref = get_new_ref("user")
+        # assuming we are using email to login and want a unique random id to use in urls
+        # if creating own unique username then this will not be triggered
+        if not self.username:
+            # random uuid
+            self.username = str(uuid.uuid4())
 
     @classmethod
     def check_register_status(cls, email, requester):
@@ -1899,7 +1937,7 @@ class RoleBase(CreatedUpdatedMixin):
 
     ref = models.CharField(max_length=7, unique=True, null=True, blank=True)
 
-    role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES)
+    role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES, db_index=True)
 
     # making person not required so that where you have a person with little info other than a name , eg. a competitor at a historical event
     # you do not necessarily need to create a person, and very likely end up with many duplicate Person records.

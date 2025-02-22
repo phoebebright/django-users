@@ -8,7 +8,7 @@ function problem_login(email){
 
     $.ajax({
         method: "POST",
-        url: USER_API_URL + "/email_exists_on_keycloak_p/",
+        url: USERS_API_URL + "email_exists_on_keycloak_p/",
         data: {'email': email},
 
         success: function (d) {
@@ -129,7 +129,7 @@ $('#sendSmsBtn').on('click', function () {
     if (user_id && phone_no) {
         $.ajax({
             method: "POST",
-            url: USER_API_URL + "/send_verification_sms/",
+            url: USERS_API_URL + "send_verification_sms/",
             data: {'user_id': user_id, 'phone_no': phone_no},
 
             success: function (d) {
@@ -159,7 +159,7 @@ $('#pin').on('input', function () {
 
         $.ajax({
             method: "POST",
-            url: USER_API_URL + "/verify_user_with_sms/",
+            url: USERS_API_URL + "verify_user_with_sms/",
             data: {'user_id': user_id, 'phone_no':phone_no },
             success: function (d) {
                 $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href='+login_url+' class="btn btn-success-outline">Signin</a></div>');
@@ -190,7 +190,7 @@ function add_user(payload, callback) {
 
     $.ajax({
         method: "POST",
-        url:  USER_API_URL + "/create_user/",
+        url:  USERS_API_URL + "create_user/",
         data: payload,
 
     })

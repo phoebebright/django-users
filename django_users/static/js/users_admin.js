@@ -26,7 +26,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
     }
 
 
-    var url = USER_API_URL + "/userlist/?"+query;
+    var url = USERS_API_URL + "userlist/?"+query;
     console.log(url);
     var table_options = {
         "language": {
@@ -134,7 +134,7 @@ function check_user(callback) {
 
     $.ajax({
         method: "POST",   // using post so that email does not appear in logs
-        url: USER_API_URL + "/email_exists/?detail=True",
+        url: USERS_API_URL + "email_exists/?detail=True",
         data: {'email': $("#check_email").val()},
 
     })
@@ -192,7 +192,7 @@ function get_user_signup_info(email, callback) {
     // same as version in users.js
     $.ajax({
         method: "POST",
-        url: USER_API_URL + "/email_exists_on_keycloak_p/",
+        url: USERS_API_URL + "email_exists_on_keycloak_p/",
         data: {'email': email},
 
         success: function (d) {
@@ -226,7 +226,7 @@ function send_otp_via_channel(payload) {
     return new Promise((resolve, reject) => {
         $.ajax({
             method: "POST",
-            url: USER_API_URL + "/comms_otp/",
+            url: USERS_API_URL + "comms_otp/",
             data: payload,
         })
             .done(resolve)
@@ -241,7 +241,7 @@ function send_otp_via_channel(payload) {
 function email_exists_keycloak(email, callback) {
     $.ajax({
         method: "POST",
-        url: USER_API_URL + "/email_exists_on_keycloak/",
+        url: USERS_API_URL + "email_exists_on_keycloak/",
         data: {'email': email},
 
     })
@@ -256,7 +256,7 @@ function email_exists_keycloak(email, callback) {
 function patch_user(pk, payload) {
     $.ajax({
         method: "PATCH",
-        url: USER_API_URL + "/users/" + payload.id + "/",
+        url: USERS_API_URL + "users/" + payload.id + "/",
         data: payload,
     })
         .done(function (data) {
@@ -273,7 +273,7 @@ function set_keycloak_password(payload) {
     return new Promise((resolve, reject) => {
         $.ajax({
             method: "POST",
-            url: USER_API_URL + "/set_temp_password/",
+            url: USERS_API_URL + "set_temp_password/",
             data: payload,
         })
             .done(resolve)
@@ -289,7 +289,7 @@ function set_keycloak_password(payload) {
 function check_user_exists(email, callback) {
     $.ajax({
         method: "POST",
-        url: USER_API_URL + "/email_exists/",
+        url: USERS_API_URL + "email_exists/",
         data: {'email': email},
 
     })
@@ -323,7 +323,7 @@ function getSearchPaneConfig(panes) {
 
 function usersearch(callback) {
     $('.search4user').tinyAutocomplete({
-        url: USER_API_URL + "/members",
+        url: USERS_API_URL + "members",
         maxItems: 7,
         showNoResults: true,
         markAsBold: false,
@@ -349,7 +349,7 @@ function toggleRoles(username, role, active) {
         role: role,
         active: active};
 
-    var url = USER_API_URL + "/toggle_role/";
+    var url = USERS_API_URL + "toggle_role/";
 
     $.ajax({
         method: "PATCH",
@@ -376,7 +376,7 @@ function toggleRoles(username, role, active) {
 
                 $.ajax({
                     method: "GET",
-                    url:USER_API_URL + "/members/",
+                    url:USERS_API_URL + "members/",
                     data: {email: email},
                     cache: false,
 
