@@ -1188,6 +1188,23 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             recipients=[self.email],
         )
 
+    @property
+    def is_deleteable(self):
+        '''if user not being used then can be deleted, otherwise list where they are used'''
+
+        # check has no usage in other dbs
+        usage = []
+        if self.Competitor.objects.filter(user=self).exists():
+            usage.append(f"Competitor: {self.Competitor.objects.filter(user=self).count()}")
+        if self.EventRole.objects.filter(user=self).exists():
+            usage.append(f"Event Role: {self.EventRole.objects.filter(user=self).count()}")
+        if self.EventTeam.objects.filter(user=self).exists():
+            usage.append(f"Event Team: {self.EventTeam.objects.filter(user=self).count()}")
+        if self.Role.objects.filter(user=self).exists():
+            usage.append(f"Role: {self.Role.objects.filter(user=self).count()}")
+
+
+        return usage
 
     def delete_one(self):
         '''delete causing stack overflow'''
@@ -1215,7 +1232,8 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
             # replace with dummy email
             logger.info("Removing user %s..." % self)
-            new_email = "%s@skor.ie" % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
+            random_id = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(40))
+            new_email = f"{random_id}@skor.ie"
             msg = "User %d with email %s has been removed and new email is %s - delete this email  " % (
                 self.pk, self.email, new_email)
 
@@ -1224,7 +1242,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             else:
                 mail_admins("User %d has been removed" % self.pk, msg, fail_silently=False)
 
-            self.username = new_email
+            self.username = random_id
             self.email = new_email
             self.first_name = ''
             self.last_name = ''
