@@ -1302,8 +1302,11 @@ class CustomUserBase(CustomUserBaseBasic):
         if not self.keycloak_id:
             self.keycloak_id = None
 
-        if not self.ref:
-            self.ref = get_new_ref("user")
+        # assuming we are using email to login and want a unique random id to use in urls
+        # if creating own unique username then this will not be triggered
+        if not self.username:
+            # random uuid
+            self.username = str(uuid.uuid4())
 
     @classmethod
     def check_register_status(cls, email, requester):
@@ -1896,7 +1899,7 @@ class RoleBase(CreatedUpdatedMixin):
 
     ref = models.CharField(max_length=7, unique=True, null=True, blank=True)
 
-    role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES)
+    role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES, db_index=True)
 
     # making person not required so that where you have a person with little info other than a name , eg. a competitor at a historical event
     # you do not necessarily need to create a person, and very likely end up with many duplicate Person records.

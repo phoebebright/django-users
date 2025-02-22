@@ -48,7 +48,7 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never ne
 
 
 if settings.USE_KEYCLOAK:
-    from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
+    from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
         get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
         is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
 from .keycloak_models import UserEntity
@@ -1091,7 +1091,7 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
 
-        context['role_list'] = Role.objects.all()
+        context['role_list'] = Role.objects.all().select_related('user','person')
         return context
 
 
