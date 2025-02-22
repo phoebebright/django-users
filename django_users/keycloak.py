@@ -217,7 +217,7 @@ def clear_required_actions(user_id, requester):
         return 500
 
 
-def is_temporary_password(user):
+def is_temporary_password_keycloak(user):
     try:
         # Retrieve the user's credentials from Keycloak
         user_id = user.keycloak_id  # Assuming `keycloak_id` is stored on the user model

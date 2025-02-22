@@ -49,8 +49,9 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never ne
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
-        is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
+    get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+    is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak, is_temporary_password_keycloak
+
 from .keycloak_models import UserEntity
 
 
@@ -563,7 +564,12 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 # keycloak won't allow login if temporary password so have to do it this way for now
-                if is_temporary_password(user) or user.activation_code:
+                if settings.USE_KEYCLOAK and is_temporary_password_keycloak(user):
+                    is_temporary_password = is_temporary_password_keycloak(user)
+                else:
+                    is_temporary_password = is_temporary_password_django(user)
+
+                if is_temporary_password_keycloak or user.activation_code:
                     login(request, user)
 
                     # do this already?
@@ -1125,3 +1131,8 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
         context['roles4user'] = context['object'].user_roles()
 
         return context
+
+
+def is_temporary_password_django(user):
+    # point to this version if not using keycloak
+    return user.activation_code <= ' '
