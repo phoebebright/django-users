@@ -1193,6 +1193,21 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         '''if user not being used then can be deleted, otherwise list where they are used'''
 
         # check has no usage in other dbs
+        deleteable = True
+        if self.Competitor.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.EventRole.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.EventTeam.objects.filter(user=self).exists():
+            deleteable = False
+        elif self.Role.objects.filter(user=self).exists():
+            deleteable = False
+
+
+        return deleteable
+
+    @property
+    def footprint(self):
         usage = []
         if self.Competitor.objects.filter(user=self).exists():
             usage.append(f"Competitor: {self.Competitor.objects.filter(user=self).count()}")
