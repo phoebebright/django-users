@@ -233,7 +233,7 @@ def is_temporary_password_keycloak(user):
     return False
 
 
-def verify_login(username, password):
+def verify_login_keycloak(username, password):
     '''Verify a user's login credentials'''
 
     try:

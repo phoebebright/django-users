@@ -49,7 +49,7 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never ne
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-    get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+    get_access_token, verify_user_without_email, keycloak_admin, verify_login_keycloak, update_password, \
     is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak, is_temporary_password_keycloak
 
 from .keycloak_models import UserEntity
@@ -1026,7 +1026,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         new_password = form.cleaned_data.get("new_password")
         user, user_login_mode = get_current_user(self.request)
 
-        if not verify_login(self.request.user.email, current_password):
+        if not verify_login_keycloak(self.request.user.email, current_password):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
@@ -1136,3 +1136,8 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
 def is_temporary_password_django(user):
     # point to this version if not using keycloak
     return user.activation_code <= ' '
+
+def verify_login_django(email, password) -> bool:
+    # point to this version if not using keycloak
+    user = authenticate(username=email, password=password)
+    return user.is_authenticated
