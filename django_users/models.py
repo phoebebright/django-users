@@ -1283,12 +1283,12 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         if not self.preferred_channel:
             self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
                                                                                 channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                                email=self.email)
+                                                                                value=self.email)
             self.save()
 
             if 'mobile' in self.profile and self.profile['mobile']:
                 self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
-                                                        mobile=self.profile['mobile'])
+                                                        value=self.profile['mobile'])
 
 
 class CustomUserBase(CustomUserBaseBasic):

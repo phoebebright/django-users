@@ -76,7 +76,7 @@ def filename_to_bootstrap_icon(filename):
 
 def is_temporary_password_django(user):
     # point to this version if not using keycloak
-    return user.activation_code <= ' '
+    return user.activation_code and user.activation_code > ' '
 
 def verify_login_django(email, password) -> bool:
     # point to this version if not using keycloak
