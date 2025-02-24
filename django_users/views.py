@@ -1135,7 +1135,7 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
 
 
 
-class ContactView(FormView):
+class ContactViewBase(FormView):
 
     form_class = ContactForm
     success_url = reverse_lazy('contact-thanks')
@@ -1145,8 +1145,7 @@ class ContactView(FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         me = self.request.user
-        if me and me.is_authenticated:
-            context['entries'] = Entry.objects.filter(competitor__user=me).order_by('-created')
+
         return context
 
     def form_valid(self, form):
