@@ -305,3 +305,10 @@ class AddCommsChannelFormBase(forms.ModelForm):
             raise ValidationError(_('You must provide either an email or a mobile number.'))
 
         return cleaned_data
+
+class ContactFormBase(Form):
+
+
+    email = forms.EmailField()
+    message = forms.CharField( widget=forms.Textarea(attrs={'cols': 80, 'rows': 20}) )
+    passed = forms.CharField(widget=forms.HiddenInput())

@@ -11,8 +11,7 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
-
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, ProfileForm
 
 import requests
 
@@ -1133,3 +1132,107 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
         context['roles4user'] = context['object'].user_roles()
 
         return context
+
+
+
+class ContactView(FormView):
+
+    form_class = ContactForm
+    success_url = reverse_lazy('contact-thanks')
+    template_name = "contact.html"
+
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        me = self.request.user
+        if me and me.is_authenticated:
+            context['entries'] = Entry.objects.filter(competitor__user=me).order_by('-created')
+        return context
+
+    def form_valid(self, form):
+
+        # contact form where there is not a logged in user includes a question.  If answered correctly "passed" field is set to "yes"
+        method = "Contact"
+        email = form.cleaned_data['email']
+        user = None
+        if self.request.user and self.request.user.is_authenticated:
+            user = self.request.user
+            method = "Support"
+
+        # if user is logged in, we let them use a different email
+        # if they are not logged in, we try to link them to a user to give them higher priority
+        if not user:
+            try:
+                user = User.objects.get(email=email)
+                method = "Support2"
+            except:
+                pass
+
+
+        #user, _ = User.objects.update_or_create(email=email)
+
+        # allow known users to pass through, otherwise do quick filter for bots
+        if not user:
+            msg = form.cleaned_data['message'].lower().strip()
+            # if 'robot' in msg or 'income' in msg or form.cleaned_data['passed'] != "yes":
+            if 'robot' in msg or 'income' in msg :
+                logger.warning(f"Dumped contact message from {email} message {json.dumps(form.cleaned_data)} ")
+                # no feedback if junk
+                return HttpResponseRedirect("/")
+
+            user = User.system_user()
+
+        data = form.cleaned_data
+        email = data['email'] or user.email
+        # add contact note
+        UserContact = apps.get_model('users.UserContact')
+        UserContact.add(user=user, method=method, notes = data['message'], data=form.cleaned_data)
+
+        # send email to support
+        if settings.CONTACT_FORM_NOTIFICATION_TO:
+            subject = f"Contact from {settings.SITE_NAME}"
+            message = f"Message from {email}:\n\n{data['message']}"
+            mail.send(subject=subject, message=message, sender=settings.DEFAULT_FROM_EMAIL, recipients=settings.CONTACT_FORM_NOTIFICATION_TO)
+        #
+        # # can only use API if admin - sigh
+        # # url = f'{settings.SITE_URL}/helpdesk/api/tickets/'
+        # # response = requests.post(url, data={
+        # #     'queue': settings.HELPDESK_DEFAULT_QUEUE,
+        # #     'title': "Send us a message",
+        # #     'description': data['message'],
+        # #     'submitter_email': email,
+        # # })
+        #
+        #
+        #
+        # data['title'] = 'Contact Us Form'
+        # data['body'] = data['message']
+        # data['priority'] = 1
+        #
+        # # TicketForm needs id for ForeignKey (not the instance themselves)
+        # queue_choices = [(q.id, q.title) for q in Queue.objects.all()]
+        #
+        # try:
+        #     data['queue'] = Queue.objects.get(slug=settings.HELPDESK_DEFAULT_QUEUE).pk
+        # except Queue.DoesNotExist:
+        #     data['queue'] = Queue.objects.all().first().pk
+        #
+        # files = {'attachment': data.pop('attachment', None)}
+        #
+        # ticket_form = TicketForm(
+        #     data=data, files=files,
+        #     queue_choices=queue_choices )
+        # if ticket_form.is_valid():
+        #     ticket = ticket_form.save(user=user)
+        #     ticket.submitter_email =  data['email']
+        #     ticket.save()
+        #     # should be in the form - but not working so hacking for now
+        #     custom_field = self.request.POST.get('custom_entryid', None)
+        #     if custom_field:
+        #         ticket.save_custom_field_values({'custom_entryid': custom_field})
+        #     # ticket.save_custom_field_values(form.cleaned_data)
+        #     # ticket.set_custom_field_values()
+        # else:
+        #     raise ValidationError(ticket_form.errors)
+
+        return super().form_valid(form)
