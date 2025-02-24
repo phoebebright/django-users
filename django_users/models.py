@@ -1600,11 +1600,11 @@ class CustomUserBase(AbstractBaseUser, PermissionsMixin):
     def migrate_channels(self):
         # migrate email to comms channel and mobile if available in profile
         if not self.preferred_channel:
-            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, email=self.email)
+            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, value=self.email)
             self.save()
 
             if 'mobile' in self.profile and self.profile['mobile']:
-                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS, mobile=self.profile['mobile'])
+                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS, value=self.profile['mobile'])
 
 
 class UserContactBase(models.Model):
