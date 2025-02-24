@@ -49,9 +49,10 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never ne
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-    get_access_token, verify_user_without_email, keycloak_admin, verify_login_keycloak as verify_login, update_password, \
-    is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak, is_temporary_password_keycloak
-
+    get_access_token, verify_user_without_email, keycloak_admin, verify_login_keycloak as verify_login, update_password_keycloak, \
+    get_user_by_id, search_user_by_email_in_keycloak, is_temporary_password_keycloak as is_temporary_password
+else:
+    from .tools.utils import verify_login_django as verify_login, is_temporary_password_django as is_temporary_password
 from .keycloak_models import UserEntity
 
 
@@ -564,12 +565,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 # keycloak won't allow login if temporary password so have to do it this way for now
-                if settings.USE_KEYCLOAK and is_temporary_password_keycloak(user):
-                    is_temporary_password = is_temporary_password_keycloak(user)
-                else:
-                    is_temporary_password = is_temporary_password_django(user)
 
-                if is_temporary_password_keycloak or user.activation_code:
+                if is_temporary_password(user) or user.activation_code:
                     login(request, user)
 
                     # do this already?
@@ -646,7 +643,7 @@ class RegisterViewBase(FormView):
                     return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
                 else:
                     # as they never finished setting up the user, let's update the password so they can continue
-                    update_password(user.keycloak_id, password)
+                    update_password_keycloak(user.keycloak_id, password)
                     logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
             elif user.is_active:
                 messages.warning(self.request,
@@ -841,7 +838,7 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password(user_id, new_password)
+            update_password_keycloak(user_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
@@ -992,7 +989,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         form.add_error('confirm_password',
                                        _('There is an issue with your account.  The administrator has been notified.'))
                         return self.form_invalid(form)
-                    success = update_password(user.keycloak_id, new_password)
+                    success = update_password_keycloak(user.keycloak_id, new_password)
                     # TODO: if channel was not verified set it to verified now
                     if success:
                         messages.success(self.request, _('Your password has been reset successfully.'))
@@ -1026,46 +1023,24 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         new_password = form.cleaned_data.get("new_password")
         user, user_login_mode = get_current_user(self.request)
 
-        @method_decorator(never_cache, name='dispatch')
-        class ChangePasswordView(GoNextTemplateMixin, FormView):
-            template_name = "users/change_password.html"
-            form_class = ChangePasswordForm
-            success_url = reverse_lazy("users:user-profile")
-
-            def form_valid(self, form):
-                current_password = form.cleaned_data.get("current_password")
-                new_password = form.cleaned_data.get("new_password")
-                user, user_login_mode = get_current_user(self.request)
-
-                if settings.USE_KEYCLOAK:
-                    if not verify_login_keycloak(self.request.user.email, current_password):
-                        form.add_error('current_password', "Current password is incorrect.")
-                        return self.form_invalid(form)
-                else:
-                    if not verify_login_django(self.request.user.email, current_password):
-                        form.add_error('current_password', "Current password is incorrect.")
-                        return self.form_invalid(form)
-
-                if settings.USE_KEYCLOAK:
-                    # Update the password in Keycloak
-                    try:
-                        update_password(user.keycloak_id, new_password)
-                        messages.success(self.request, "Password updated successfully.")
-                        return super().form_valid(form)
-                    except Exception as e:
-                        form.add_error(None, f"Failed to update password: {e}")
-                        return self.form_invalid(form)
-
-
-        # Update the password in Keycloak
-        try:
-            update_password(user.keycloak_id, new_password)
-            messages.success(self.request, "Password updated successfully.")
-            return super().form_valid(form)
-        except Exception as e:
-            form.add_error(None, f"Failed to update password: {e}")
+        if not verify_login(self.request.user.email, current_password):
+            form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
+        # Update the password in Keycloak
+        if settings.USE_KEYCLOAK:
+            try:
+                update_password_keycloak(user.keycloak_id, new_password)
+                messages.success(self.request, "Password updated successfully.")
+                return super().form_valid(form)
+            except Exception as e:
+                form.add_error(None, f"Failed to update password: {e}")
+                return self.form_invalid(form)
+        else:
+            user.set_password(new_password)
+            user.save()
+            messages.success(self.request, "Password updated successfully.")
+            return super().form_valid(form)
 
 def update_users(request):
     # temporary function to update all users with keycloak_id - comment out once used
@@ -1158,13 +1133,3 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
         context['roles4user'] = context['object'].user_roles()
 
         return context
-
-
-def is_temporary_password_django(user):
-    # point to this version if not using keycloak
-    return user.activation_code <= ' '
-
-def verify_login_django(email, password) -> bool:
-    # point to this version if not using keycloak
-    user = authenticate(username=email, password=password)
-    return user.is_authenticated
