@@ -11,8 +11,8 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, ContactFormBase as ContactForm
-
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
+    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase
 
 import requests
 
@@ -27,7 +27,7 @@ from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
-from django.views.generic import FormView, TemplateView, DetailView, ListView
+from django.views.generic import FormView, TemplateView, DetailView, ListView, UpdateView
 
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
@@ -1282,3 +1282,39 @@ class ContactViewBase(FormView):
 def update_password_django(user, password):
     user.set_password(password)
     user.save()
+
+
+class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
+
+    form_class = OrganisationFormBase
+    template_name = 'organisations/organisation_detail.html'
+    pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
+
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organisation = self.object
+        context['users'] = User.objects.filter(organisation=organisation)
+        # context['gadgets'] = Gadget.objects.filter(organisation=organisation)
+        context['user_form'] = self.get_user_form()
+        # context['gadget_form'] = GadgetForm()  # Form for adding a new device
+        return context
+
+    def get_user_form(self, data=None, instance=None):
+        """Returns a user form instance, either blank or with data for validation."""
+        return CustomUserCreationFormBase(data, instance=instance)
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        organisation = self.object
+
+        if 'add_user' in request.POST:
+            user_form = self.get_user_form(request.POST, instance=self.object)
+            if user_form.is_valid():
+                new_user = user_form.save(commit=False)
+                new_user.organisation = organisation
+                new_user.set_password(user_form.cleaned_data['password1'])  # Ensure password hashing
+                new_user.save()
+                return redirect(self.object.get_absolute_url())
+
+        return self.get(request, *args, **kwargs)
