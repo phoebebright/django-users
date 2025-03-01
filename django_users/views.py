@@ -1287,7 +1287,7 @@ def update_password_django(user, password):
 class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
 
     form_class = OrganisationFormBase
-    template_name = 'organisations/organisation_detail.html'
+    template_name = 'users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
 
 
@@ -1304,6 +1304,9 @@ class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
         """Returns a user form instance, either blank or with data for validation."""
         return CustomUserCreationFormBase(data, instance=instance)
 
+    def get_object(self):
+        return self.queryset.get(code=self.kwargs['code'])
+
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         organisation = self.object
@@ -1318,3 +1321,9 @@ class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
                 return redirect(self.object.get_absolute_url())
 
         return self.get(request, *args, **kwargs)
+
+
+class OrganisationListViewBase(ListView):
+    model = None
+    template_name = "user/organisation_list.html"
+    context_object_name = "organisations"
