@@ -244,7 +244,7 @@ def verify_login(username, password):
         return True
 
 
-def update_password(keycloak_id, new_password):
+def update_password_keycloak(keycloak_id, new_password):
     '''Update the password for a Keycloak user'''
 
     try:

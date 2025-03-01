@@ -172,13 +172,3 @@ class CommsChannelSerializerBase(DynamicModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user  # Use user from context if needed
         return super().create(validated_data)
-
-    def validate(self, attrs):
-        '''validate the phone number'''
-        if attrs['channel_type'] == 'email':
-            if not attrs['email']:
-                raise serializers.ValidationError(_("Missing email"))
-        else:
-            if not attrs['mobile']:
-                raise serializers.ValidationError(_("Missing mobile number"))
-        return attrs

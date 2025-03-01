@@ -82,4 +82,5 @@ urlpatterns = [
 '''API urls
     path('api/v2/toggle_role/', toggle_role, name="toggle_role"),
     router.register(r'members', MemberViewSet, basename="members")
+    router.register(r'comms_channel', CommsChannelViewSet, basename="commschannel")
     '''

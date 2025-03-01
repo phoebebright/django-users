@@ -11,8 +11,8 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
-
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
+    ContactFormBase as ContactForm
 
 import requests
 
@@ -44,13 +44,13 @@ logger = logging.getLogger('django')
 USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
-CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')    # should never need to change this
-
+CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need to change this
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password, \
+        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password_keycloak, \
         is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
+
 from .keycloak_models import UserEntity
 
 
@@ -563,7 +563,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 # keycloak won't allow login if temporary password so have to do it this way for now
-                if is_temporary_password(user) or user.activation_code:
+                if user.activation_code or (settings.USE_KEYCLOAK and is_temporary_password(user)):
                     login(request, user)
 
                     # do this already?
@@ -680,41 +680,54 @@ class RegisterViewBase(FormView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class AddCommsChannelViewBase(View):
-    '''this can be called after the user has logged in or before.  If before then there needs to be some throttling'''
+class AddCommsChannelViewBase(FormView):
+    '''This can be called after the user has logged in or before. If before, there needs to be some throttling'''
+
+    form_class = None  # Ensure this is defined in subclasses
 
     def get_form_class(self):
-        if not hasattr(self, 'form_class') or self.form_class is None:
+        """Return the form class for this view."""
+        if not self.form_class:
             raise NotImplementedError("Define `form_class` in the child class.")
-
-        form = super().get_form(form_class)
-        user, user_login_mode = get_current_user(request)
-        form.fields['username_code'].initial = user.password
         return self.form_class
 
     def get(self, request):
-        # set form.keycloak_id to user.keycloak_id
+        """Handle GET request and render form."""
+        form_class = self.get_form_class()
+        form = form_class()
 
-        form = self.get_form_class()
+        user, user_login_mode = get_current_user(request)
+        if user:
+            form.fields['username_code'].initial = user.password
+
         return render(request, 'users/add_channel.html', {'form': form})
 
     def post(self, request):
-        # set form.keycloak_id to user.keycloak_id
-        form = self.get_form_class()
+        """Handle POST request, validate form, and create communication channel."""
+        form = self.get_form_class()(request.POST)
+
         if form.is_valid():
             validated_data = form.cleaned_data
-            # check if user is already logged in
             user, user_login_mode = get_current_user(request)
             if user:
-                # add the channel
+                # Determine the value for the communication channel
                 value = validated_data['email'] if validated_data['channel_type'] == CHANNEL_EMAIL else validated_data[
                     'mobile']
-                channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=CHANNEL_EMAIL,value=value)
+
+                # Create or get an existing communication channel
+                channel, created = CommsChannel.objects.get_or_create(
+                    user=user,
+                    channel_type=validated_data['channel_type'],
+                    value=value
+                )
 
                 return HttpResponseRedirect(reverse('users:manage-channels'))
             else:
-                # need to log in first
+                # Redirect to login if the user is not authenticated
                 return HttpResponseRedirect(reverse('users:login'))
+
+        # If form is invalid, re-render the form with errors
+        return render(request, 'users/add_channel.html', {'form': form})
 
 
 def set_current_user(request, user_id=None, user_login_mode=None):
@@ -835,7 +848,7 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password(user_id, new_password)
+            update_password_keycloak(user_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
@@ -866,7 +879,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
         # Retrieve session values and set them as initial values in the form
         if step == 1:
-            email = self.request.GET.get('email', None)
+            email = self.request.GET.get('email', self.request.POST.get('email', None))
             if email:
                 kwargs['initial'] = {
                     'email': email,
@@ -874,7 +887,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         elif step > 1:
             email = self.request.session.get('forgot_email')
             User = get_user_model()
-            self.user = User.objects.filter(username=email).first()
+            self.user = User.objects.filter(email=email).first()
             if self.user:
                 kwargs['user'] = self.user  # Pass the user to populate channels in step 2
 
@@ -916,7 +929,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         step = self.get_step()
         email = form.cleaned_data['email']
         User = get_user_model()
-        user = User.objects.filter(username=email).first()
+        # we are using the email field to login so need to use that to find the user
+        user = User.objects.filter(email=email).first()
 
         if step == 1:
             # Step 1: Check if email exists and save it in session
@@ -981,12 +995,24 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 email = self.request.session.get('forgot_email')
 
                 if user:
-                    if not user.keycloak_id:
-                        logger.error(f"User {user.pk} does not have a keycloak_id.")
-                        form.add_error('confirm_password',
-                                       _('There is an issue with your account.  The administrator has been notified.'))
-                        return self.form_invalid(form)
-                    success = update_password(user.keycloak_id, new_password)
+                    if settings.USE_KEYCLOAK:
+                        if not user.keycloak_id:
+                            logger.error(f"User {user.pk} does not have a keycloak_id.")
+                            form.add_error('confirm_password',
+                                           _('There is an issue with your account.  The administrator has been notified.'))
+                            return self.form_invalid(form)
+
+                        success = update_password_keycloak(user.keycloak_id, new_password)
+                    else:
+                        update_password_django(user, new_password)
+                        user.save()
+
+                        # if user changing own password here, then need to stop them being logged out
+                        if user == self.request.user:
+                            update_session_auth_hash(self.request, user)
+
+                        success = True
+
                     # TODO: if channel was not verified set it to verified now
                     if success:
                         messages.success(self.request, _('Your password has been reset successfully.'))
@@ -1026,7 +1052,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password(user.keycloak_id, new_password)
+            update_password_keycloak(user.keycloak_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
@@ -1079,9 +1105,8 @@ class SendOTP(UserCanAdministerMixin, TemplateView):
         return context
 
 
-
 class ManageRolesBase(UserCanAdministerMixin, TemplateView):
-    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/manage_roles.html"
 
     def get_context_data(self, *args, **kwargs):
@@ -1091,12 +1116,12 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
 
-        context['role_list'] = Role.objects.all().select_related('user','person')
+        context['role_list'] = Role.objects.all().select_related('user', 'person')
         return context
 
 
 class ManageUsersBase(UserCanAdministerMixin, TemplateView):
-    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/manage_users.html"
 
     def get_context_data(self, *args, **kwargs):
@@ -1106,8 +1131,9 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
 
         return context
 
+
 class ManageUserBase(UserCanAdministerMixin, TemplateView):
-    #NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
+    # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/admin_user.html"
 
     def get_context_data(self, *args, **kwargs):
@@ -1127,13 +1153,10 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
         return context
 
 
-
 class ContactViewBase(FormView):
-
     form_class = ContactForm
     success_url = reverse_lazy('contact-thanks')
     template_name = "contact.html"
-
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1160,14 +1183,13 @@ class ContactViewBase(FormView):
             except:
                 pass
 
-
-        #user, _ = User.objects.update_or_create(email=email)
+        # user, _ = User.objects.update_or_create(email=email)
 
         # allow known users to pass through, otherwise do quick filter for bots
         if not user:
             msg = form.cleaned_data['message'].lower().strip()
             # if 'robot' in msg or 'income' in msg or form.cleaned_data['passed'] != "yes":
-            if 'robot' in msg or 'income' in msg :
+            if 'robot' in msg or 'income' in msg:
                 logger.warning(f"Dumped contact message from {email} message {json.dumps(form.cleaned_data)} ")
                 # no feedback if junk
                 return HttpResponseRedirect("/")
@@ -1178,13 +1200,14 @@ class ContactViewBase(FormView):
         email = data['email'] or user.email
         # add contact note
         UserContact = apps.get_model('users.UserContact')
-        UserContact.add(user=user, method=method, notes = data['message'], data=form.cleaned_data)
+        UserContact.add(user=user, method=method, notes=data['message'], data=form.cleaned_data)
 
         # send email to support
         if settings.CONTACT_FORM_NOTIFICATION_TO:
             subject = f"Contact from {settings.SITE_NAME}"
             message = f"Message from {email}:\n\n{data['message']}"
-            mail.send(subject=subject, message=message, sender=settings.DEFAULT_FROM_EMAIL, recipients=settings.CONTACT_FORM_NOTIFICATION_TO)
+            mail.send(subject=subject, message=message, sender=settings.DEFAULT_FROM_EMAIL,
+                      recipients=settings.CONTACT_FORM_NOTIFICATION_TO)
         #
         # # can only use API if admin - sigh
         # # url = f'{settings.SITE_URL}/helpdesk/api/tickets/'
@@ -1228,3 +1251,8 @@ class ContactViewBase(FormView):
         #     raise ValidationError(ticket_form.errors)
 
         return super().form_valid(form)
+
+
+def update_password_django(user, password):
+    user.set_password(password)
+    user.save()

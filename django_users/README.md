@@ -71,3 +71,7 @@ MyRider -> MyCompetitor
 Users continue to login with email used during signup
 
 Can have a preferred channel that is an alternate email
+
+# Migrating Users
+
+When adding comms channels we use the value in the password field to locate and verify the user to avoid using just the id field or passing email.  When migrating, ensure there is a unique value in password.

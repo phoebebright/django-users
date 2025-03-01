@@ -535,6 +535,65 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
         return self.list(request, *args, **kwargs)
 
+class CheckUserPublicBase(CheckEmailBase):
+
+        authentication_classes = []
+        permission_classes = [AllowAny]
+        throttle_classes = [CustomAnonRateThrottle]
+
+        def get_throttles(self):
+            """
+            Dynamically assign throttles based on user type.
+            """
+            if self.request.user.is_authenticated:
+                if self.request.user.is_administrator:
+                    return [AdminUserRateThrottle()]
+                else:
+                    return [CustomOrdinaryUserRateThrottle()]
+            else:
+                return [CustomAnonRateThrottle()]
+
+
+        def post(self, request, *args, **kwargs):
+            User = get_user_model()
+            email = request.POST.get('email', None)
+
+
+            if email:
+                email = email.lower()
+
+                channels = []
+
+                # get user in django
+                try:
+                    # username will be set by keycloak so use email as key
+                    django_user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    return Response(status=status.HTTP_404_NOT_FOUND)
+                else:
+                    set_current_user(request, django_user.id, "PROBLEM")
+                    channels = []
+
+                    # migrate existing channels
+                    django_user.migrate_channels()
+
+                    for item in django_user.comms_channels.all():
+                        channels.append(
+                            {'channel_id': item.pk, 'channel_type': item.channel_type, 'email': item.obfuscated_email,
+                             'mobile': item.obfuscated_mobile, 'verified': item.is_verified})
+
+                    # django_user = django_user.keycloak_id
+
+
+                    return JsonResponse({
+
+                        "django_user_id": django_user.pk if django_user else 0,
+                        "django_is_active": django_user.is_active,
+                        "formal_name": django_user.person.formal_name,
+                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
+                        "channels": channels,
+                    })
+
 
 class SetTemporaryPassword(APIView):
     permission_classes([IsAuthenticated, IsAdministratorPermission])
@@ -602,6 +661,7 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         '''create a new comms channel for the user'''
+        #TODO: at the moment we can arrive here with no user object created - need to fix this
         CommsChannel = apps.get_model('users','CommsChannel')
         username_code = request.POST.get('username_code', None)
         if username_code:
@@ -618,15 +678,11 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
 
         # check we don't already have this one
         channel_type = serializer.validated_data['channel_type']
-        email = serializer.validated_data['email']
-        mobile = serializer.validated_data['mobile']
+        value = serializer.validated_data['value']
+
 
         created = False
-
-        if channel_type == "email":
-            channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type, email=email)
-        else:
-            channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type, mobile=mobile)
+        channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type, value=value)
 
         if not created:
             # if channel exists but is unverified then continue to verificiation step else return error
