@@ -80,6 +80,6 @@ urlpatterns = [
 ]
 
 '''API urls
-    path('api/v2/toggle_role/<personref:personref>/', toggle_role, name="toggle_role"),
+    path('api/v2/toggle_role/', toggle_role, name="toggle_role"),
     router.register(r'members', MemberViewSet, basename="members")
     '''
