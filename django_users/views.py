@@ -11,8 +11,8 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
-    ContactFormBase as ContactForm
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, ContactFormBase as ContactForm
+
 
 import requests
 
@@ -579,6 +579,24 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                     else:
                         return redirect(settings.LOGIN_REDIRECT_URL)
             else:
+                try:
+                    user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    messages.error(request, _('Invalid email or password.'))
+                    return render(request, self.template, {'email': email})
+                else:
+                    # if activation code matches than force authentication and reroute to change password
+                    if  user.activation_code and user.activation_code == password:
+                        login(request, user)
+
+                        # do this already?
+                        user.activation_code = None
+                        user.save(update_fields=['activation_code'])
+
+                        messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
+                        return redirect('users:change_password_now')
+
+
                 messages.error(request, _('Invalid email or password.'))
                 context = super().get_context_data()
                 context['email'] = email
@@ -844,7 +862,8 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     def form_valid(self, form):
 
         new_password = form.cleaned_data.get("new_password")
-        user_id = self.request.user.keycloak_id  # Assume user has a keycloak_id field
+        if settings.USE_KEYCLOAK:
+            user_id = self.request.user.keycloak_id
 
         # Update the password in Keycloak
         try:
@@ -855,6 +874,13 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
             form.add_error(None, f"Failed to update password: {e}")
             return self.form_invalid(form)
 
+        else:
+            # Update the password in Django
+            update_password_django(self.request.user, new_password)
+
+            messages.success(self.request, "Password updated successfully.")
+            update_session_auth_hash(self.request, self.request.user)
+            return super().form_valid(form)
 
 @method_decorator(never_cache, name='dispatch')
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
@@ -1052,7 +1078,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password_keycloak(user.keycloak_id, new_password)
+            update_password(user.keycloak_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
