@@ -865,14 +865,14 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
         if settings.USE_KEYCLOAK:
             user_id = self.request.user.keycloak_id
 
-        # Update the password in Keycloak
-        try:
-            update_password_keycloak(user_id, new_password)
-            messages.success(self.request, "Password updated successfully.")
-            return super().form_valid(form)
-        except Exception as e:
-            form.add_error(None, f"Failed to update password: {e}")
-            return self.form_invalid(form)
+            # Update the password in Keycloak
+            try:
+                update_password_keycloak(user_id, new_password)
+                messages.success(self.request, "Password updated successfully.")
+                return super().form_valid(form)
+            except Exception as e:
+                form.add_error(None, f"Failed to update password: {e}")
+                return self.form_invalid(form)
 
         else:
             # Update the password in Django
