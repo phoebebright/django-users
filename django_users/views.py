@@ -217,8 +217,8 @@ def unsubscribe_only(request):
 def send_test_email(request):
     # send_test_message('smtp', to=request.user)
     mail.send(
-        subject="Test Message from Skor.ie",
-        message="This is a test message to check that email can be sent to your account.",
+        subject=f"Test Message from {settings.SITE_NAME}",
+        message="This is a test message to check that email can be sent to your account. ",
         recipients=[request.user.email, ],
         sender=settings.DEFAULT_FROM_EMAIL,
         priority='now',

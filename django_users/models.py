@@ -321,7 +321,7 @@ class CustomUserQuerySet(models.QuerySet):
 
     def active(self):
 
-        return self.filter(active=True)
+        return self.filter(is_active=True)
 
     def competitors(self):
         return self.filter(is_competitor=True)
