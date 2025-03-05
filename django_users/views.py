@@ -215,11 +215,19 @@ def unsubscribe_only(request):
 
 @login_required()
 def send_test_email(request):
-    # send_test_message('smtp', to=request.user)
+    CommsChannel = apps.get_model('users.CommsChannel')
+    to_email = request.user.email
+    # can also send a test from another email belonging to this user
+    chid = request.POST.get('chid', None)
+    if chid:
+        channel = CommsChannel.objects.filter(user=request.user, pk=chid, channel_type="email").first()
+        if channel:
+            to_email = channel.value
+
     mail.send(
         subject=f"Test Message from {settings.SITE_NAME}",
         message="This is a test message to check that email can be sent to your account. ",
-        recipients=[request.user.email, ],
+        recipients=[to_email, ],
         sender=settings.DEFAULT_FROM_EMAIL,
         priority='now',
     )
@@ -268,7 +276,7 @@ def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
     if request.user.status < User.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
-        url = reverse("subscribe_only")
+        url = reverse("users:subscribe_only")
     else:
         url = "/"
 
@@ -556,8 +564,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         try:
             user = authenticate(request, username=email, password=password)
         except Exception as e:
-            # get required actions
-
+            #TODO:  need to identify if error other than invalid email or password
+            logger.warning(str(e))
             messages.error(request, _('Invalid email or password.'))
             return render(request, self.template, {'email': email})
         else:
