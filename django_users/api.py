@@ -865,6 +865,6 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
 
         return User.objects.none()
 
-class RoleViewsetBase(viewsets.ModelViewSet):
+class RoleViewSetBase(viewsets.ModelViewSet):
     model = None
     serializer = RoleSerializerBase
