@@ -1995,7 +1995,7 @@ class RoleBase(CreatedUpdatedMixin):
             raise ValidationError(
                 f"User and Person have a one to one link - user is linked to {self.user.person} and trying to save with link to person {self.person}")
 
-        if self.organisation != self.user.organisation:
+        if self.user and self.organisation and self.organisation != self.user.organisation:
             self.organisation = self.user.organisation
 
         if not self.name and self.person:
