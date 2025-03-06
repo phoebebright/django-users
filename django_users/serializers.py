@@ -172,3 +172,9 @@ class CommsChannelSerializerBase(DynamicModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user  # Use user from context if needed
         return super().create(validated_data)
+
+class RoleSerializerBase(serializers.ModelSerializer):
+
+    class Meta:
+        model = None
+        fields = '__all__'
