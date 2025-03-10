@@ -419,8 +419,7 @@ class CheckEmailInKeycloakPublic(APIView):
 
                 for item in django_user.comms_channels.all():
                     channels.append(
-                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'email': item.obfuscated_email,
-                         'mobile': item.obfuscated_mobile, 'verified': item.is_verified})
+                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,'verified': item.is_verified})
 
                 # django_user = django_user.keycloak_id
 
