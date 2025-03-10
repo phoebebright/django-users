@@ -1699,7 +1699,7 @@ class UserContactBase(models.Model):
                 language='EN',
             )
 
-
+        return obj
 #------------------  MODELS CUSTOMISED FOR THIS APPLICATION -----------------------
 
 
