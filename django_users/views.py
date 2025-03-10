@@ -199,8 +199,9 @@ class SubscribeView(LoginRequiredMixin, FormView):
         user.update_subscribed(form.cleaned_data['subscribe'])
 
         # add contact note
-        notify = settings.NOTIFY_NEW_USER_EMAILS > ""
-        UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
+        notify = settings.get("NOTIFY_NEW_USER_EMAILS", False)
+        if notify:
+            UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
                         data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)
@@ -257,18 +258,18 @@ def logout(request):
 def login_redirect(request):
     url = reverse(settings.LOGIN_URL)
     if 'next' in request.GET.urlencode():
-        url += "?{request.GET.urlencode()}"
+        url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
-        url += "?next={request.GET.urlencode()}"
+        url += f"?next={request.GET.urlencode()}"
     return HttpResponseRedirect(url)
 
 
 def signup_redirect(request):
     url = reverse(settings.LOGIN_REGISTER)
     if 'next' in request.GET.urlencode():
-        url += "?{request.GET.urlencode()}"
+        url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
-        url += "?next={request.GET.urlencode()}"
+        url += f"?next={request.GET.urlencode()}"
     return HttpResponseRedirect(url)
 
 
