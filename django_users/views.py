@@ -7,10 +7,12 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from django.apps import apps
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
-from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm
+from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
+    InvitationCreateForm, AcceptInvitationForm
 from .keycloak_models import UserEntity
 
 import requests
@@ -26,7 +28,7 @@ from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
 from django.conf import settings
-from django.views.generic import FormView, TemplateView, DetailView, ListView
+from django.views.generic import FormView, TemplateView, DetailView, ListView, CreateView
 from keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError
 from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
@@ -1073,3 +1075,89 @@ class SendOTP(UserCanAdministerMixin, TemplateView):
         context['user'] = User.objects.get(id=kwargs['pk'])
         context['otp'] = ''.join(random.choices(string.digits, k=6))
         return context
+
+
+
+
+class InvitationCreateView(CreateView):
+    """
+    Staff uses this page to create a new Invitation.
+    """
+    model = None
+    form_class = InvitationCreateForm
+    template_name = 'invitations/invitation_create.html'
+
+    # We'll determine the success URL dynamically so we can go to the detail page.
+    def get_success_url(self):
+        return reverse('invitation_detail', kwargs={'token': self.object.token})
+
+    def form_valid(self, form):
+        # Let the ModelForm create the Invitation record
+        response = super().form_valid(form)
+        messages.success(self.request, "Invitation created successfully!")
+        return response
+
+
+class InvitationDetailView(DetailView):
+    """
+    After staff creates an invitation, they can view its details
+    (the link, optional QR, etc.) to distribute to the user.
+    """
+    model = None
+    template_name = 'invitations/invitation_detail.html'
+    context_object_name = 'invitation'
+
+    # We'll look up by 'token' rather than the default 'pk'
+    slug_field = 'token'
+    slug_url_kwarg = 'token'
+
+
+class InvitationAcceptView(FormView):
+    """
+    Public-facing page where the invited user enters their email/phone
+    to finalize the invitation, create/merge user, and log in.
+    """
+    template_name = 'invitations/invitation_accept.html'
+    form_class = AcceptInvitationForm
+
+    def dispatch(self, request, *args, **kwargs):
+        # Load the Invitation by token
+        self.invitation = get_object_or_404(Invitation, token=kwargs['token'])
+        # Check validity
+        if self.invitation.is_expired_or_revoked():
+            return redirect('invitation_invalid')
+        if self.invitation.used_by is not None:
+            # Already used (if single-use)
+            return redirect('invitation_invalid')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        # This method is called on POST when form is valid
+        email = form.cleaned_data.get('email')
+        phone = form.cleaned_data.get('phone')
+        proposed_name = self.invitation.proposed_name
+
+        with transaction.atomic():
+            # Merge or create a user account. In a real app, you'd call Keycloak or your logic
+            user = handle_user_merge_or_create(proposed_name, email, phone)
+
+            # Mark invitation as used
+            self.invitation.used_by = user
+            self.invitation.used_at = timezone.now()
+            self.invitation.save()
+
+            # If using local roles, you might assign them here;
+            # or in Keycloak, you'd add roles via the admin API
+            # e.g., user.profile.assign_roles(self.invitation.roles.all())
+
+            # Log in the user (Django session-based)
+            login(self.request, user)
+
+        messages.success(self.request, "Invitation accepted! You are now logged in.")
+        return redirect('/dashboard/')
+
+class InvitationInvalidView(TemplateView):
+    """
+    Simple page for invalid or expired invitations.
+    """
+    template_name = 'invitations/invitation_invalid.html'

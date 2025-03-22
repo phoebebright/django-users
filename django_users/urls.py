@@ -6,7 +6,8 @@ from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
-    Troubleshoot, UnverifiedUsersList, SendOTP
+    Troubleshoot, UnverifiedUsersList, SendOTP, InvitationCreateView, InvitationDetailView, InvitationAcceptView, \
+    InvitationInvalidView
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -76,5 +77,13 @@ urlpatterns = [
 
     path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
     path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
+
+    path('create/', InvitationCreateView.as_view(), name='invitation_create'),
+    # Staff sees detail (shows link/QR)
+    path('<uuid:token>/', InvitationDetailView.as_view(), name='invitation_detail'),
+    # User accepts invitation
+    path('accept/<uuid:token>/', InvitationAcceptView.as_view(), name='invitation_accept'),
+    # Invalid or expired
+    path('invalid/', InvitationInvalidView.as_view(), name='invitation_invalid'),
 
 ]

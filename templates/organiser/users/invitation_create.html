@@ -1,0 +1,15 @@
+<!-- invitations/templates/invitations/invitation_create.html -->
+{% extends 'organiser/base.html' %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block content %}
+<h1>Create a New Invitation</h1>
+<form method="post" class="card p-3 bg-white">
+  {% csrf_token %}
+    {% bootstrap_form form %}
+
+
+  <button type="submit" class="btn btn-primary">Create Invitation</button>
+</form>
+{% endblock %}

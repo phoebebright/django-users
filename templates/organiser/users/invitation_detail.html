@@ -1,0 +1,20 @@
+<!-- invitations/templates/invitations/invitation_detail.html -->
+{% extends 'organiser/base.html' %}
+
+{% block content %}
+<h1>Invitation Created</h1>
+<div class="alert alert-success">
+  <strong>Proposed Name:</strong> {{ invitation.proposed_name }}
+</div>
+
+<p>Share this link with the user:</p>
+<pre class="bg-light p-2">
+{{ request.scheme }}://{{ request.get_host }}{% url 'invitation_accept' invitation.token %}
+</pre>
+
+<p>Or generate a QR code (example uses an external API):</p>
+<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ request.scheme }}://{{ request.get_host }}{% url 'invitation_accept' invitation.token %}"
+     alt="Invitation QR Code">
+
+<a href="{% url 'invitation_create' %}" class="btn btn-secondary mt-3">Create Another</a>
+{% endblock %}

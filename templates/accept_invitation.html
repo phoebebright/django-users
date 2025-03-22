@@ -1,0 +1,52 @@
+<!-- invitations/templates/invitations/invitation_accept.html -->
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Accept Invitation</h1>
+<div class="card p-3">
+  <p><strong>Name:</strong> {{ invitation.proposed_name }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="mb-3" id="emailGroup">
+      {{ form.email.label_tag }}
+      {{ form.email }}
+    </div>
+
+    <div class="mb-3" id="phoneGroup">
+      {{ form.phone.label_tag }}
+      {{ form.phone }}
+    </div>
+
+    <button type="submit" class="btn btn-success">Confirm</button>
+  </form>
+</div>
+
+<script>
+  $(function() {
+    // Example: Hide the phone field if email is filled, and vice versa
+    function toggleFields() {
+      let emailVal = $('#id_email').val().trim();
+      let phoneVal = $('#id_phone').val().trim();
+
+      if(emailVal) {
+        $('#phoneGroup').fadeOut();
+      } else {
+        $('#phoneGroup').fadeIn();
+      }
+
+      if(phoneVal) {
+        $('#emailGroup').fadeOut();
+      } else {
+        $('#emailGroup').fadeIn();
+      }
+    }
+
+    $('#id_email, #id_phone').on('input', toggleFields);
+    toggleFields(); // run at page load
+  });
+</script>
+
+{% endblock %}

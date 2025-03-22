@@ -2020,3 +2020,40 @@ class OrganisationBase(CreatedUpdatedMixin):
     @property
     def is_test(self):
         return self.test
+
+
+
+class InvitationBase(CreatedMixin):
+    """
+    Invitation for a user to join an Event with certain roles.
+    The staff enters a 'proposed_name' for clarity, which is shown to the user on acceptance.
+    """
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    # event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invitations')
+    # roles = models.ManyToManyField(EventRole, related_name='invitations')
+
+    # The name staff typed in. The user sees this name when accepting the invite.
+    proposed_name = models.CharField(max_length=100, blank=True)
+
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    used_by = models.ForeignKey(
+        CustomUserBase,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='used_invitations'
+    )
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    is_revoked = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Invitation: {self.proposed_name or 'Unnamed'} ({self.token})"
+
+    def is_expired_or_revoked(self):
+        if self.is_revoked:
+            return True
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        return False

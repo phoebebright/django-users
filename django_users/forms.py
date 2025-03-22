@@ -305,3 +305,35 @@ class AddCommsChannelFormBase(forms.ModelForm):
             raise ValidationError(_('You must provide either an email or a mobile number.'))
 
         return cleaned_data
+
+
+class InvitationCreateForm(forms.ModelForm):
+    class Meta:
+        model = None
+        fields = ['proposed_name',  'expires_at']
+        widgets = {
+            'roles': forms.CheckboxSelectMultiple()
+        }
+        help_texts = {
+            'proposed_name': "e.g., John Doe",
+            'expires_at': "Leave blank for no automatic expiration.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['event'].label = "Select Event"
+        self.fields['roles'].label = "Assign Roles"
+        self.fields['proposed_name'].label = "User Name (as known by staff)"
+
+class AcceptInvitationForm(forms.Form):
+    # We'll display the proposed_name in the template (read-only).
+    email = forms.EmailField(label="Email (optional)", required=False)
+    phone = forms.CharField(label="Phone (optional)", max_length=20, required=False)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        email = cleaned_data.get('email')
+        phone = cleaned_data.get('phone')
+        if not email and not phone:
+            raise forms.ValidationError("Please provide at least an email or a phone number.")
+        return cleaned_data
