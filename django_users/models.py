@@ -511,6 +511,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     USER_STATUS_SUBSCRIBED = 7
     USER_STATUS_TRIAL_LAPSED = 8
     USER_STATUS_SUBSCRIBED_LAPSED = 9
+    DEFAULT_USER_STATUS = USER_STATUS_UNCONFIRMED
 
     USER_STATUS = (
         (USER_STATUS_ANON, "Unknown"),
@@ -562,7 +563,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     unsubscribe_news = models.DateTimeField(blank=True, null=True)
 
 
-    status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=USER_STATUS_UNCONFIRMED, db_index=True)
+    status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=DEFAULT_USER_STATUS, db_index=True)
 
 
 

@@ -287,7 +287,7 @@ class CheckEmailInKeycloak(APIView):
     '''
     throttle_classes = [CustomOrdinaryUserRateThrottle,]
 
-    def get_throttles(self):
+    def get_throttle_classes(self):
         if self.request.user.is_administrator:
             return [AdminUserRateThrottle,]
         else:
@@ -379,7 +379,7 @@ class CheckEmailInKeycloakPublic(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [CustomAnonRateThrottle]
 
-    def get_throttles(self):
+    def get_throttle_classes(self):
         """
         Dynamically assign throttles based on user type.
         """
@@ -540,7 +540,7 @@ class CheckUserPublicBase(CheckEmailBase):
         permission_classes = [AllowAny]
         throttle_classes = [CustomAnonRateThrottle]
 
-        def get_throttles(self):
+        def get_throttle_classes(self):
             """
             Dynamically assign throttles based on user type.
             """
