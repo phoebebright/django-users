@@ -572,6 +572,17 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 # keycloak won't allow login if temporary password so have to do it this way for now
+
+                # temporary code to find error in dc
+                try:
+                    assert user.activation_code >= ""
+                    assert settings.USE_KEYCLOAK == True
+                    assert is_temporary_password(user) == False
+                except Exception as e:
+                    logger.error(f"User {user.email} has temporary password {user.activation_code} and keycloak status {is_temporary_password(user)}")
+                    messages.error(request, _('Your password is temporary. Please change your password.'))
+                    return redirect('users:change_password_now')
+
                 if user.activation_code or (settings.USE_KEYCLOAK and is_temporary_password(user)):
                     login(request, user)
 
