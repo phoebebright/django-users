@@ -971,14 +971,20 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Step 1: Check if email exists and save it in session
             email = form.cleaned_data['email']
 
-            if user and not user.is_active:
-                form.add_error('email', _(f'This email does not have an account. Please {settings.REGISTER_TERM}.'))
+            if user and not user.is_active and user.last_login:
+                #TODO: need to differentiate between not is_active because not verified email and was active but is not now.
+                form.add_error('email', _(f'This email does not have an active account.  Please contact the system administrators.'))
+                #TODO: need to provide a link
                 return self.form_invalid(form)
+            elif user and not user.is_active:
+                # user has not yet verified email but this will cover it
+                self.request.session['forgot_email'] = email
+                self.set_step(2)  # Move to Step 2
             elif user:
                 self.request.session['forgot_email'] = email
                 self.set_step(2)  # Move to Step 2
             else:
-                form.add_error('email', _('Email not found.'))
+                form.add_error('email', _('Email not found. Please {settings.REGISTER_TERM}.'))
                 return self.form_invalid(form)
 
         elif step == 2:
