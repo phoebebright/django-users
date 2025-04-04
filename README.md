@@ -14,6 +14,13 @@ This will run without any additional settings but the following settings can be 
     LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
     VERIFICATION_CODE_EXPIRY_MINUTES = 5
 
+Make sure that django model authentication is your first choice, eg.
+
+    AUTHENTICATION_BACKENDS = (
+        "django.contrib.auth.backends.ModelBackend",      # MODELBACKEND must be first
+        'django_keycloak_admin.backends.KeycloakAuthorizationCodeBackend',
+        'django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend',  
+    )
 
 ## Setting up without Keycloak
 

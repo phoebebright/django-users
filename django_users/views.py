@@ -577,6 +577,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             # keycloak won't allow login if temporary password so have to do it this way for now
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
             if (user.activation_code and password==user.activation_code):
+                user.backend = settings.AUTHENTICATION_BACKENDS[0]
                 login(request, user)
 
                 # do this already?
