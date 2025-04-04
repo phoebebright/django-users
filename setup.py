@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-users',
-    version='0.2.22',
+    version='0.2.24',
     packages=find_packages(),
     include_package_data=True,
     license='MIT License',

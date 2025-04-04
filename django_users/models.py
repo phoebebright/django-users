@@ -1636,14 +1636,17 @@ class CustomUserBase(CustomUserBaseBasic):
 
 
     def can_notify(self, when=None):
+        # implement in own application
+        return False
 
-        if not when:
-            when = timezone.now()
-        # notifications may only be valid at an event, at the time of the event
-        # TODO: make sure at event
-        return self.event_notifications_subscribed and \
-            self.event_notifications_subscribed <= when and \
-            (not self.event_notifications_unsubscribed or self.event_notifications_unsubscribed > when)
+        #eg
+        # if not when:
+        #     when = timezone.now()
+        # # notifications may only be valid at an event, at the time of the event
+        # # TODO: make sure at event
+        # return self.event_notifications_subscribed and \
+        #     self.event_notifications_subscribed <= when and \
+        #     (not self.event_notifications_unsubscribed or self.event_notifications_unsubscribed > when)
 
 
     def migrate_channels(self):

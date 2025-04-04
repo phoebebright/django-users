@@ -567,49 +567,32 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         except Exception as e:
             #TODO:  need to identify if error other than invalid email or password
             logger.warning(str(e))
-            messages.error(request, _('Invalid email or password.'))
-            return render(request, self.template, {'email': email})
-        else:
-            if user:
-                # keycloak won't allow login if temporary password so have to do it this way for now
-                if user.activation_code or (settings.USE_KEYCLOAK and is_temporary_password(user)):
-                    login(request, user)
-
-                    # do this already?
-                    user.activation_code = None
-                    user.save(update_fields=['activation_code'])
-
-                    messages.warning(request, _('Your password is temporary. Please change your password.'))
-                    return redirect('users:change_password_now')
-                else:
-                    login(request, user)
-                    if next:
-                        return redirect(next)
-                    else:
-                        return redirect(settings.LOGIN_REDIRECT_URL)
-            else:
-                try:
-                    user = User.objects.get(email=email)
-                except User.DoesNotExist:
-                    messages.error(request, _('Invalid email or password.'))
-                    return render(request, self.template, {'email': email})
-                else:
-                    # if activation code matches than force authentication and reroute to change password
-                    if  user.activation_code and user.activation_code == password:
-                        login(request, user)
-
-                        # do this already?
-                        user.activation_code = None
-                        user.save(update_fields=['activation_code'])
-
-                        messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
-                        return redirect('users:change_password_now')
-
-
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
                 messages.error(request, _('Invalid email or password.'))
-                context = super().get_context_data()
-                context['email'] = email
-                return render(request, self.template, context)
+                return render(request, self.template, {'email': email})
+
+        if user:
+            # keycloak won't allow login if temporary password so have to do it this way for now
+            # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
+            if (user.activation_code and password==user.activation_code):
+                login(request, user)
+
+                # do this already?
+                user.activation_code = None
+                user.save(update_fields=['activation_code'])
+
+                messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
+                return redirect('users:change_password_now')
+
+
+
+
+            messages.error(request, _('Invalid email or password.'))
+            context = super().get_context_data()
+            context['email'] = email
+            return render(request, self.template, context)
 
 
 @method_decorator(never_cache, name='dispatch')

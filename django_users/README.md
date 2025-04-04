@@ -1,5 +1,9 @@
 Do Next
 
+Consider adding authorization header to request to allow API calls to pther skorie system (probably overkill)
+Also consider adding token in browser to allow SSO
+
+
 FISH
 - fix fields in users - remove subscribed, mobile, whatsapp
 - fix fields in person - remove mobile and whatsapp
