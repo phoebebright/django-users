@@ -573,7 +573,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 messages.error(request, _('Invalid email or password.'))
                 return render(request, self.template, {'email': email})
 
-        if user:
+        if user and not user.is_authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
             if (user.activation_code and password==user.activation_code):
@@ -587,9 +587,14 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
                 return redirect('users:change_password_now')
 
+        elif user and user.is_active:
+            login(request, user)
+            if next:
+                return redirect(next)
+            else:
+                return redirect(settings.LOGIN_REDIRECT_URL)
 
-
-
+        else:
             messages.error(request, _('Invalid email or password.'))
             context = super().get_context_data()
             context['email'] = email
