@@ -1665,6 +1665,7 @@ class UserContactBase(models.Model):
     method = models.CharField(max_length=40)
     notes = models.TextField(blank=True, null=True)
     data = models.TextField(blank=True, null=True)  # use for json data, convert to field when avaialble
+    site = models.CharField(max_length=20, default="", help_text=_("Site where contact was made"))
 
     def __str__(self):
         return "%s" % self.user
@@ -1687,11 +1688,13 @@ class UserContactBase(models.Model):
                 )
                 return
 
-        obj = cls.objects.create(user=user, method=method, notes=notes, data=data)
+
+
+        obj = cls.objects.create(user=user, method=method, notes=notes, data=data, site=settings.SITE_URL.replace('https://', ''))
         if data and 'message' in data:
-            msg = f"{user} contacted us via {data['message']}"
+            msg = f"{user} contacted us via {data['message']} from {settings.SITE_URL}"
         else:
-            msg = f"{user} contacted us via {method}"
+            msg = f"{user} contacted us via {method} from {settings.SITE_URL}"
 
         if send_mail:
             mail.send(
