@@ -1673,6 +1673,23 @@ class UserContactBase(models.Model):
     class Meta:
         abstract = True
 
+    def save(self, *args, **kwargs):
+        if self.site:
+            self.site = self.site[0:19]
+
+        super().save(*args, **kwargs)
+
+        # if self.data and type(self.data) == str:
+        #     try:
+        #         self.data = json.loads(self.data)
+        #     except json.JSONDecodeError:
+        #         logger.warning(f"Data is not valid json: {self.data}")
+        #         mail.send(
+        #             subject=f"Contact from {settings.SITE_NAME} unable to decode ",
+        #             message=self.data,
+        #             recipients=[settings.SUPPORT_EMAIL, ]
+        #         )
+
     @classmethod
     def add(cls, user, method, notes=None, data=None, send_mail=True):
 
