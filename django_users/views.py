@@ -578,7 +578,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
             if (user.activation_code and password==user.activation_code):
                 user.backend = settings.AUTHENTICATION_BACKENDS[0]
-                login(request, user)
+                login(request, user,backend='django.contrib.auth.backends.ModelBackend')
 
                 # do this already?
                 user.activation_code = None
@@ -588,7 +588,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 return redirect('users:change_password_now')
 
         elif user and user.is_active:
-            login(request, user)
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             if next:
                 return redirect(next)
             else:

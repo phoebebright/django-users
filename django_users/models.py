@@ -784,7 +784,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         cls.objects.create_user(email=email, password=pw, is_active=True)
 
         user = authenticate(username=email, password=pw)
-        login(request, user)
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
         return user
 
