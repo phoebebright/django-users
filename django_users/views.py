@@ -561,9 +561,11 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         email = request.POST.get('email')
         password = request.POST.get('password')
         next = request.GET.get('next', request.POST.get('next', None))
+        authenticated = False
 
         try:
             user = authenticate(request, username=email, password=password)
+            authenticated = True
         except Exception as e:
             #TODO:  need to identify if error other than invalid email or password
             logger.warning(str(e))
@@ -573,12 +575,12 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 messages.error(request, _('Invalid email or password.'))
                 return render(request, self.template, {'email': email})
 
-        if user and not user.is_authenticated:
+        if user and not authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
             if (user.activation_code and password==user.activation_code):
                 user.backend = settings.AUTHENTICATION_BACKENDS[0]
-                login(request, user,backend='django.contrib.auth.backends.ModelBackend')
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
                 # do this already?
                 user.activation_code = None
