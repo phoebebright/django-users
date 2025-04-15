@@ -312,3 +312,12 @@ class ContactFormBase(Form):
     email = forms.EmailField()
     message = forms.CharField( widget=forms.Textarea(attrs={'cols': 80, 'rows': 20}) )
     passed = forms.CharField(widget=forms.HiddenInput())
+
+
+class PersonFormBase(forms.ModelForm):
+    """Form for creating and updating a Person instance."""
+    country = CountryField().formfield(required=False)
+
+    class Meta:
+        model = Person
+        fields = ['formal_name', 'friendly_name', 'sortable_name']

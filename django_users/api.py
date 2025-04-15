@@ -31,7 +31,7 @@ from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase
+from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
@@ -867,3 +867,7 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
 class RoleViewSetBase(viewsets.ModelViewSet):
     model = None
     serializer = RoleSerializerBase
+
+class PersonViewSetBase(viewsets.ModelViewSet):
+    model = None
+    serializer = PersonSerializerBase

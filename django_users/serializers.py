@@ -178,3 +178,8 @@ class RoleSerializerBase(serializers.ModelSerializer):
     class Meta:
         model = None
         fields = '__all__'
+
+class PersonSerializerBase(serializers.ModelSerializer):
+    class Meta:
+        model = None
+        fields = ['formal_name', 'friendly_name', 'sortable_name']
