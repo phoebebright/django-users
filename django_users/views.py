@@ -37,6 +37,8 @@ from tools.permission_mixins import UserCanAdministerMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
+ModelRoles = import_string(settings.MODEL_ROLES_PATH)
+
 User = get_user_model()
 
 logger = logging.getLogger('django')
@@ -1181,6 +1183,14 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
 
         context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
         context['roles4user'] = context['object'].user_roles()
+
+        # # want to add event roles as well...
+        #
+        # context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
+        #                     ModelRoles.NON_EVENT_CHOICES}
+        #
+        # Role = apps.get_model('users.Role')
+        # context['role_list'] = Role.objects.exclude(role_type__in=[ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
 
         return context
 

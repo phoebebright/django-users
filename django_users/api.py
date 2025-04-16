@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.http import JsonResponse
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -756,16 +756,31 @@ def toggle_role(request):
     '''
 
     me = request.user
-    role = request.data['role']
+    role_type = request.data['role']
     user = User.objects.get(username=request.data['username'])
     active = normalize_boolean(request.data.get('active', True))
 
     Role = apps.get_model('users', 'Role')
 
-    role, created = Role.objects.get_or_create(user=user, role_type=role)
+    if active:
+        role, created = Role.objects.get_or_create(user=user, role_type=role_type)
 
-    role.active = active
-    role.save()
+        role.active = active
+        role.save()
+        logger.info(f"Added role {role.role_type} for {user.username} and pk {user.pk}")
+    else:
+        try:
+            role = Role.objects.get(user=user, role_type=role_type)
+            try:
+                role.delete()
+                logger.info(f"Deleted role {role.role_type} for {user.username} and pk {user.pk}")
+            except IntegrityError:
+                # If deletion fails due to related objects, just deactivate the role
+                role.active = False
+                role.save()
+                logger.info(f"Deactivated role {role.role_type} for {user.username} and pk {user.pk}")
+        except Role.DoesNotExist:
+            pass
 
     response = HTTP_201_CREATED if created else HTTP_200_OK
     return Response(response)
