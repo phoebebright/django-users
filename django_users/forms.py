@@ -316,8 +316,8 @@ class ContactFormBase(Form):
 
 class PersonFormBase(forms.ModelForm):
     """Form for creating and updating a Person instance."""
-    country = CountryField().formfield(required=False)
+
 
     class Meta:
-        model = Person
+        model = None
         fields = ['formal_name', 'friendly_name', 'sortable_name']

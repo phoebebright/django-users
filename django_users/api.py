@@ -865,9 +865,10 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
         return User.objects.none()
 
 class RoleViewSetBase(viewsets.ModelViewSet):
-    model = None
+    queryset = None
     serializer = RoleSerializerBase
 
 class PersonViewSetBase(viewsets.ModelViewSet):
-    model = None
+    queryset = None
+    lookup_field = 'ref'
     serializer = PersonSerializerBase
