@@ -1372,9 +1372,10 @@ class QRLogin(LoginRequiredMixin, TemplateView):
     template_name = "user/qr_login.html"
 
     def get_context_data(self, **kwargs):
+        me = self.request.user
         context = super().get_context_data(**kwargs)
         payload = {
-            'user_id': self.user.keycloak_id,
+            'user_id': me.keycloak_id,
             'ts': timezone.now().timestamp()
         }
         token = signing.dumps(payload)
