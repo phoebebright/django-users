@@ -1369,13 +1369,13 @@ def qr_login_token(request):
     return HttpResponse(buf, content_type='image/png')
 
 class QRLogin(LoginRequiredMixin, TemplateView):
-    template_name = "user/qr_login.html"
+    template_name = "users/qr_login.html"
 
     def get_context_data(self, **kwargs):
         me = self.request.user
         context = super().get_context_data(**kwargs)
         payload = {
-            'user_id': me.keycloak_id,
+            'user_id': str(me.keycloak_id),
             'ts': timezone.now().timestamp()
         }
         token = signing.dumps(payload)
