@@ -1394,7 +1394,7 @@ def qr_login_with_token(request):
     token = request.GET.get("token")
 
     try:
-        payload = signing.loads(token, max_age=300)  # 5 minutes
+        payload = signing.loads(token, max_age=140)  # 2 and a bit minutes
         user_id = payload.get("user_id")
         user = User.objects.get(keycloak_id=user_id)
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
