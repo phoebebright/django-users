@@ -1,3 +1,5 @@
+import base64
+import io
 import json
 import logging
 import random
@@ -6,7 +8,9 @@ import string
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
+import qrcode
 from django.apps import apps
+from django.core import signing
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
@@ -1343,3 +1347,57 @@ class OrganisationListViewBase(ListView):
     model = None
     template_name = "user/organisation_list.html"
     context_object_name = "organisations"
+
+
+@login_required
+def qr_login_token(request):
+    user = request.user
+    payload = {
+        'user_id': user.keycloak_id,
+        'ts': timezone.now().timestamp()
+    }
+    token = signing.dumps(payload)
+
+    login_url = request.build_absolute_uri(f"/qr-login/?token={token}")
+
+    # Create QR code
+    qr = qrcode.make(login_url)
+    buf = io.BytesIO()
+    qr.save(buf, format='PNG')
+    buf.seek(0)
+
+    return HttpResponse(buf, content_type='image/png')
+
+class QRLogin(LoginRequiredMixin, TemplateView):
+    template_name = "user/qr_login.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        payload = {
+            'user_id': self.user.keycloak_id,
+            'ts': timezone.now().timestamp()
+        }
+        token = signing.dumps(payload)
+
+        login_url = f"{settings.SITE_URL}/login/?token={token}"
+
+        # Create QR code
+        qr = qrcode.make(login_url)
+        buf = io.BytesIO()
+        qr.save(buf, format='PNG')
+        context['qr'] = base64.b64encode(buf.getvalue()).decode()
+
+        return context
+
+
+def qr_login_with_token(request):
+    token = request.GET.get("token")
+
+    try:
+        payload = signing.loads(token, max_age=300)  # 5 minutes
+        user_id = payload.get("user_id")
+        user = User.objects.get(keycloak_id=user_id)
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        return redirect('/')  # or return a success response for apps
+    except Exception as e:
+        return HttpResponse("Invalid or expired token", status=400)

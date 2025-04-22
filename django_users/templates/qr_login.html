@@ -1,0 +1,12 @@
+{% extends "users/users_narrow_base.html" %}
+{% load i18n %}
+
+{% block title %}Login{% endblock %}
+
+
+{% block content %}
+
+<p>Use this QR to myself in on another device.  This is timelimited to 2 mins.</p>
+<img src="data:image/png;base64,{{ qr }}" alt="QR Code">
+
+{% endblock %}
