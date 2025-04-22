@@ -1379,7 +1379,7 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         }
         token = signing.dumps(payload)
 
-        login_url = f"{settings.SITE_URL}/login/?token={token}"
+        login_url = f"{settings.SITE_URL}/ql/?token={token}"
 
         # Create QR code
         qr = qrcode.make(login_url)
