@@ -115,6 +115,23 @@ class UserViewsetBase(viewsets.ModelViewSet):
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
 
+    @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
+    def activate(self, request, pk):
+        '''set active = True'''
+        user = self.get_object()
+        user.active = True
+        user.save(user=request.user)
+
+        return Response("OK")
+
+    @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
+    def deactivate(self, request, pk):
+        '''set active = False'''
+        user = self.get_object()
+        user.active = False
+        user.save(user=request.user)
+
+        return Response("OK")
 
 class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
