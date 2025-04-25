@@ -1,6 +1,8 @@
 import logging
 import random
 import string
+import uuid
+
 from django.db.models import Q
 from django.apps import apps
 from django.conf import settings
@@ -11,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction, IntegrityError
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -103,7 +106,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
     # queryset = CustomUser.objects.all().select_related('person','preferred_channel')
     # serializer_class = UserSerializer
     http_method_names = ['get', ]
-    filterset_fields = ('email',)
+    filterset_fields = ('email','keycloak_id')
 
     def get_queryset(self):
         if not hasattr(self, 'queryset') or self.queryset is None:
@@ -115,11 +118,28 @@ class UserViewsetBase(viewsets.ModelViewSet):
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
 
+    def get_object(self):
+        lookup_value = self.kwargs.get(self.lookup_field)
+        model = self.queryset.model
+
+        # Try to determine if the lookup value is a UUID
+        try:
+            uuid_obj = uuid.UUID(str(lookup_value))
+            # If no error, it's a UUID → use keycloak_id
+            return get_object_or_404(model, keycloak_id=uuid_obj)
+        except (ValueError, TypeError):
+            # Not a UUID → treat it as an integer id
+            return get_object_or_404(model, id=lookup_value)
+
     @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
     def activate(self, request, pk):
         '''set active = True'''
         user = self.get_object()
-        user.active = True
+
+        if user.is_active:
+            return Response("User is already activated", status=HTTP_208_ALREADY_REPORTED)
+
+        user.is_active = True
         user.save(user=request.user)
 
         return Response("OK")
@@ -127,8 +147,14 @@ class UserViewsetBase(viewsets.ModelViewSet):
     @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
     def deactivate(self, request, pk):
         '''set active = False'''
+
+
         user = self.get_object()
-        user.active = False
+
+        if not user.is_active:
+            return Response("User is already deactivated", status=HTTP_208_ALREADY_REPORTED)
+
+        user.is_active = False
         user.save(user=request.user)
 
         return Response("OK")

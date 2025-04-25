@@ -369,35 +369,39 @@ function toggleRoles(username, role, active) {
 }
 
 
-            function get_user_roles(email) {
+function get_user_roles(email) {
 
-                // uncheck all
-                $('.role').prop('checked', false);
+    // uncheck all
+    $('.role').prop('checked', false);
 
-                $.ajax({
-                    method: "GET",
-                    url:USERS_API_URL + "members/",
-                    data: {email: email},
-                    cache: false,
+    $.ajax({
+        method: "GET",
+        url:USERS_API_URL + "members/",
+        data: {email: email},
+        cache: false,
 
-                }).done(function (data) {
+    }).done(function (data) {
 
-                    $("#roles").fadeOut();
-                    if (data.length == 1) {
-                        var d = data[0];
+        $("#roles").fadeOut();
+        if (data.length == 1) {
+            var d = data[0];
 
-                        // save ref for this user
-                        $("#username").val(d.username);
+            // save ref for this user
+            $("#username").val(d.username);
 
 
-                        // check roles for this user
-                        d.roles.forEach((function(role) {
-                            $("#role_" + role).prop('checked', 'checked');
+            // check roles for this user
+            d.roles.forEach((function(role) {
+                $("#role_" + role).prop('checked', 'checked');
 
-                        }));
+            }));
 
-                        $("#roles").fadeIn();
-                    }
+            $("#roles").fadeIn();
+        }
 
-                });
-            }
+    });
+}
+
+function user_activate(keycloak_id) {
+    // using keycloak
+}
