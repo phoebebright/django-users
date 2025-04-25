@@ -402,6 +402,24 @@ function get_user_roles(email) {
     });
 }
 
-function user_activate(keycloak_id) {
-    // using keycloak
+function activate_user(userid) {
+    $.ajax({
+        method: "GET",
+        url: USERS_API_URL + "users/" + userid + "/activate/",
+    }).done(function (data) {
+        console.log("done");
+    }).fail(function (jqXHR, textStatus) {
+        console.log('failed to connect to server');
+    });
+}
+
+function deactivate_user(userid) {
+    $.ajax({
+        method: "GET",
+        url: USERS_API_URL + "users/" + userid + "/deactivate/",
+    }).done(function (data) {
+        console.log("done");
+    }).fail(function (jqXHR, textStatus) {
+        console.log('failed to connect to server');
+    });
 }

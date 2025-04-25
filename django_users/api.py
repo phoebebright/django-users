@@ -120,6 +120,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
 
     def get_object(self):
         lookup_value = self.kwargs.get(self.lookup_field)
+        self.queryset = self.get_queryset()
         model = self.queryset.model
 
         # Try to determine if the lookup value is a UUID
@@ -131,7 +132,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
             # Not a UUID → treat it as an integer id
             return get_object_or_404(model, id=lookup_value)
 
-    @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
+    @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def activate(self, request, pk):
         '''set active = True'''
         user = self.get_object()
@@ -140,11 +141,13 @@ class UserViewsetBase(viewsets.ModelViewSet):
             return Response("User is already activated", status=HTTP_208_ALREADY_REPORTED)
 
         user.is_active = True
-        user.save(user=request.user)
+        user.save()
+
+        logger.info(f"Activating user {user} by {request.user}")
 
         return Response("OK")
 
-    @action(methods=['patch'], detail=False, permission_classes=[IsAdministrator])
+    @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def deactivate(self, request, pk):
         '''set active = False'''
 
@@ -154,8 +157,11 @@ class UserViewsetBase(viewsets.ModelViewSet):
         if not user.is_active:
             return Response("User is already deactivated", status=HTTP_208_ALREADY_REPORTED)
 
+
         user.is_active = False
-        user.save(user=request.user)
+        user.save()
+
+        logger.info(f"Deactivating user {user} by {request.user}")
 
         return Response("OK")
 
