@@ -664,7 +664,7 @@ class RegisterViewBase(FormView):
                     return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
                 else:
                     # as they never finished setting up the user, let's update the password so they can continue
-                    update_password(user.keycloak_id, password)
+                    update_password_keycloak(user.keycloak_id, password)
                     logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
             elif user.is_active:
                 messages.warning(self.request,
@@ -1090,7 +1090,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password(user.keycloak_id, new_password)
+            update_password_keycloak(user.keycloak_id, new_password)
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
