@@ -762,6 +762,7 @@ def toggle_role(request):
 
     Role = apps.get_model('users', 'Role')
 
+    created = False
     if active:
         role, created = Role.objects.get_or_create(user=user, role_type=role_type)
 
