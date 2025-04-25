@@ -1804,6 +1804,8 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
             else:
                 self.sortable_name = self.formal_name
 
+        self.sortable_name = self.sortable_name.strip().lower()
+
         super().save(*args, **kwargs)
 
         # causes recursion
