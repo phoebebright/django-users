@@ -594,6 +594,9 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
                 messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
                 return redirect('users:change_password_now')
+            else:
+                messages.error(request, _('Invalid email or password.'))
+                return render(request, self.template, {'email': email})
 
         elif user and user.is_active:
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
