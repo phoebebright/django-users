@@ -1138,8 +1138,10 @@ class SendOTP(UserCanAdministerMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         User = get_user_model()
-        context['user'] = User.objects.get(id=kwargs['pk'])
+        context['recipient'] = User.objects.get(id=kwargs['pk'])
         context['otp'] = ''.join(random.choices(string.digits, k=6))
+        context['recipient'].activation_code = context['otp']
+        context['recipient'].save(update_fields=['activation_code'])
         return context
 
 

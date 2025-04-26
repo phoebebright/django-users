@@ -1405,6 +1405,14 @@ class CustomUserBase(CustomUserBaseBasic):
         verify_user_without_email(self.keycloak_id)
 
     @cached_property
+    def user_pk(self):
+        '''return the user pk - used in keycloak'''
+        if self.keycloak_id:
+            return str(self.keycloak_id)
+        else:
+            return str(self.pk)
+
+    @cached_property
     def is_devteam(self):
         return self.is_superuser or (self.extra_roles and 'devteam' in self.extra_roles)
 
