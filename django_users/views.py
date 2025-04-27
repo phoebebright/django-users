@@ -1174,7 +1174,7 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
 
         return context
 
-
+@method_decorator(never_cache, name='dispatch')
 class ManageUserBase(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/admin_user.html"
@@ -1184,7 +1184,10 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
 
         try:
             if 'pk' in kwargs:
-                context['object'] = User.objects.get(id=kwargs['pk'])
+                try:
+                    context['object'] = User.objects.get(keycloak_id=kwargs['pk'])
+                except:
+                    context['object'] = User.objects.get(id=kwargs['pk'])     # don;t use id
             elif 'email' in kwargs:
                 context['object'] = User.objects.get(email=kwargs['email'])
         except User.DoesNotExist:
