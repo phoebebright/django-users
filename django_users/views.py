@@ -571,7 +571,6 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
         try:
             user = authenticate(request, username=email, password=password)
-            authenticated = True
         except Exception as e:
             #TODO:  need to identify if error other than invalid email or password
             logger.warning(str(e))
@@ -580,6 +579,15 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             except User.DoesNotExist:
                 messages.error(request, _('Invalid email or password.'))
                 return render(request, self.template, {'email': email})
+        else:
+            if user:
+                authenticated = True
+            else:
+                try:
+                    user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    messages.error(request, _('Invalid username or password.'))
+                    return render(request, self.template, {'email': email})
 
         if user and not authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
