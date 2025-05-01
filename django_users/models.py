@@ -383,10 +383,16 @@ class CustomUserManager(BaseUserManager):
 
         # person needs a name
         if not 'formal_name' in extra_fields:
-            if 'first_name' in extra_fields and 'last_name' in extra_fields:
-                extra_fields['formal_name'] = f"{extra_fields['first_name']} {extra_fields['last_name']}"
+            if 'first_name' in user_extras and 'last_name' in user_extras:
+                extra_fields['formal_name'] = f"{user_extras['first_name']} {user_extras['last_name']}"
             else:
                 extra_fields['formal_name'] = email.split("@")[0]
+
+        if not 'friendly_name' in extra_fields and 'first_name' in user_extras:
+            extra_fields['friendly_name'] = user_extras['first_name']
+
+        if not 'sortable_name' in extra_fields and 'first_name' in user_extras:
+            extra_fields['sortable_name'] = f"{user_extras['last_name'].lower()} {user_extras['first_name'].lower()}"
 
         if 'username' in extra_fields:
             extra_fields.pop('username')
