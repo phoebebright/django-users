@@ -44,7 +44,10 @@ def get_next(request, event_ref):
 
     # otherwise got to event page appropriate for this users role/mode
     if not url and event_ref:
-        url = reverse('event-home', args=[event_ref])
+        try:
+            url = reverse('event-home', args=[event_ref])
+        except:
+            url = None
 
 
     return url if url else "/"
@@ -83,9 +86,7 @@ class GoNextMixin():
         context['next'] = get_next(self.request, event_ref )
         return context
 
-        # otherwise got to event page appropriate for this users role/mode
 
-        return reverse_lazy('event-home', args=[self.object.ref])
 
 
 
