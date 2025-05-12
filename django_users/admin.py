@@ -33,12 +33,7 @@ class  UserContactAdminBase(admin.ModelAdmin):
         # Dynamically set the model if needed for further customization
         self.model = model
 
-class UserContactInline(admin.TabularInline):
 
-    def __init__(self, model, admin_site):
-        super().__init__(model, admin_site)
-        # Dynamically set the model if needed for further customization
-        self.model = model
 
 def email_list(self, request, queryset):
     return render('admin/email_list.html', {
@@ -204,7 +199,6 @@ class CustomUserAdminBase(UserAdmin):
     list_filter = ('is_staff', 'is_active', 'status','subscribe_news', 'unsubscribe_news')
     search_fields = (  'email','username')
     ordering = ( 'email',)
-    inlines = [UserContactInline,]
     actions = [email_list, subscribe, unsubscribe, remove, add_to_keycloak, make_event_manager, delete_one]
 
     class Meta:
