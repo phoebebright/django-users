@@ -15,6 +15,8 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
+from django_keycloak_admin.backends import KeycloakAuthorizationCodeBackend
+
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase
 
@@ -25,7 +27,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
-from django.http import HttpResponseRedirect, HttpResponse, Http404
+from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -1418,3 +1420,18 @@ def qr_login_with_token(request):
         return redirect('/')  # or return a success response for apps
     except Exception as e:
         return HttpResponse("Invalid or expired token", status=400)
+
+
+def oidc_callback(request: HttpRequest):
+    code = request.GET.get("code")
+    if not code:
+        return redirect('/')  # Or show error
+
+    backend = KeycloakAuthorizationCodeBackend()
+    user = backend.authenticate(request, code=code, redirect_uri=request.build_absolute_uri())
+
+    if user:
+        login(request, user)
+        return redirect('/')  # Or wherever you want to go next
+    else:
+        return redirect('/login-error/')  # Or show a friendly error
