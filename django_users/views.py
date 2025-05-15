@@ -1409,29 +1409,21 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         return context
 
 
-def qr_login_with_token(request):
+def login_with_token(request):
+    '''handle being sent a token to log a user in (generated with keycloak.generate_login_token or qr token)
+    eg. token = generate_login_token_for_app2(request.user, next_path='/dashboard/')
+        login_url = f"https://app2.example.com/lwt/?token={token}"
+    '''
     token = request.GET.get("token")
 
     try:
         payload = signing.loads(token, max_age=140)  # 2 and a bit minutes
         user_id = payload.get("user_id")
+        next_url = payload.get('next', '/')
+
         user = User.objects.get(keycloak_id=user_id)
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-        return redirect('/')  # or return a success response for apps
+
+        return redirect(next_url)
     except Exception as e:
         return HttpResponse("Invalid or expired token", status=400)
-
-
-def oidc_callback(request: HttpRequest):
-    code = request.GET.get("code")
-    if not code:
-        return redirect('/')  # Or show error
-
-    backend = KeycloakAuthorizationCodeBackend()
-    user = backend.authenticate(request, code=code, redirect_uri=request.build_absolute_uri())
-
-    if user:
-        login(request, user)
-        return redirect('/')  # Or wherever you want to go next
-    else:
-        return redirect('/login-error/')  # Or show a friendly error

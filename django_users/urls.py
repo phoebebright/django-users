@@ -6,7 +6,7 @@ from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
-    Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, qr_login_with_token
+    Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -61,7 +61,7 @@ urlpatterns = [
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
     path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),
     path('qr_login/', QRLogin.as_view(), name='qr-login'),
-    path('ql/', qr_login_with_token, name='qr-login'),
+    path('lwt/', login_with_token, name='qr-login'),
     path('login/', LoginView.as_view(), name='login'),
     path('register/', RegisterView.as_view(), name='register'),
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),

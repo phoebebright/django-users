@@ -1,8 +1,11 @@
 import logging
 from django.conf import settings
-from django.contrib.auth import get_user_model, logout
-from django.http import HttpRequest
+from django.contrib.auth import get_user_model, logout, login
+from django.core import signing
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
+from django.utils import timezone
+
 from keycloak import KeycloakAdmin, KeycloakOpenID
 from keycloak.exceptions import KeycloakAuthenticationError, KeycloakGetError
 
@@ -253,3 +256,12 @@ def update_password_keycloak(keycloak_id, new_password):
         return True
     except Exception as e:
         return False
+
+def generate_login_token(user, next_path='/'):
+    '''used to get a token to login to another system using the same keycloak realm'''
+    payload = {
+        'user_id': str(user.keycloak_id),
+        'ts': timezone.now().timestamp(),
+        'next': next_path,
+    }
+    return signing.dumps(payload)
