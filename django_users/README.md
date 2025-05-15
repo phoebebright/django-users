@@ -1,7 +1,7 @@
 Do Next
 
 Consider adding authorization header to request to allow API calls to pther skorie system (probably overkill)
-Also consider adding token in browser to allow SSO
+
 
 
 FISH
@@ -79,3 +79,16 @@ Can have a preferred channel that is an alternate email
 # Migrating Users
 
 When adding comms channels we use the value in the password field to locate and verify the user to avoid using just the id field or passing email.  When migrating, ensure there is a unique value in password.
+
+## SSO
+
+Limited SSO is implemented - must initiate the login from another app sharing the keycloak realm and running this code.
+
+from app1 generates token: 
+  
+    token = generate_login_token(request.user, next_path='/dashboard/')
+    login_url = f"https://app2.example.com/lwt/?token={token}"
+
+in app2 see:
+
+    login_with_token(request):
