@@ -3,3 +3,5 @@ Django
 twilio
 nanoid
 qrcode
+
+python-jose
