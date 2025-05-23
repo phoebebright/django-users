@@ -1980,7 +1980,7 @@ class RoleBase(CreatedUpdatedMixin):
     May also be used for memberships in future so I have a role as an AIRC Member
     This is the role outside of the event - EventRole is used to say what roles they have at ane event'''
 
-    ref = models.CharField(max_length=7, unique=True, null=True, blank=True)
+    ref = models.CharField(max_length=7, primary_key=True)
 
     role_type = models.CharField(max_length=1, choices=ModelRoles.ROLE_CHOICES, db_index=True)
 

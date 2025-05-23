@@ -1,7 +1,3 @@
-Do Next
-
-Consider adding authorization header to request to allow API calls to pther skorie system (probably overkill)
-
 
 
 FISH
