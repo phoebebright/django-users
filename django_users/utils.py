@@ -4,7 +4,7 @@ from django.utils import timezone
 from post_office import mail
 from django.template.loader import render_to_string
 from django.conf import settings
-# from twilio.rest import Client
+from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 
@@ -33,26 +33,26 @@ def send_email_verification_code(verificationcode):
         html_message=html_message
     )
     return True
-#
-# def send_sms_verification_code(phone_number, code):
-#     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
-#     message = _('Your verification code is: {code}').format(code=code)
-#     client.messages.create(
-#         body=message,
-#         from_=settings.TWILIO_PHONE_NUMBER,
-#         to=str(phone_number)
-#     )
-#     return True
-#
-# def send_whatsapp_verification_code(phone_number, code):
-#     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
-#     message = _('Your verification code is: {code}').format(code=code)
-#     client.messages.create(
-#         body=message,
-#         from_='whatsapp:' + settings.TWILIO_WHATSAPP_NUMBER,
-#         to='whatsapp:' + str(phone_number)
-#     )
-#     return True
+
+def send_sms_verification_code(phone_number, code):
+    client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
+    message = _('Your verification code is: {code}').format(code=code)
+    client.messages.create(
+        body=message,
+        from_=settings.TWILIO_PHONE_NUMBER,
+        to=str(phone_number)
+    )
+    return True
+
+def send_whatsapp_verification_code(phone_number, code):
+    client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
+    message = _('Your verification code is: {code}').format(code=code)
+    client.messages.create(
+        body=message,
+        from_='whatsapp:' + settings.TWILIO_WHATSAPP_NUMBER,
+        to='whatsapp:' + str(phone_number)
+    )
+    return True
 
 
 # not using keycloak and should be elsewhere!
