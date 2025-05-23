@@ -1421,9 +1421,11 @@ def login_with_token(request):
         user_id = payload.get("user_id")
         next_url = payload.get('next', '/')
 
+        print("Logging in with token")
         user = User.objects.get(keycloak_id=user_id)
+        print(f"User found: {user}")
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
         return redirect(next_url)
     except Exception as e:
-        return HttpResponse("Invalid or expired token", status=400)
+        return HttpResponse(f"Invalid or expired token with error {e}", status=400)
