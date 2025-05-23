@@ -263,25 +263,3 @@ def update_password_keycloak(keycloak_id, new_password):
         return True
     except Exception as e:
         return False
-
-# not using keycloak and should be elsewhere!
-def generate_login_token(user, next_path='/'):
-    '''used to get a token to login to another system using the same keycloak realm
-    NOTE: this only works if used within the same django app'''
-    payload = {
-        'user_id': str(user.keycloak_id),
-        'ts': timezone.now().timestamp(),
-        'next': next_path,
-    }
-    return signing.dumps(payload)
-
-# not using keycloak and should be elsewhere!
-def generate_remote_login_token(user, setting_name, next_path='/'):
-    payload = {
-        'user_id': str(user.keycloak_id),
-        'next': next_path,
-    }
-    secret = getattr(settings, setting_name, None)
-    signer = TimestampSigner(secret, salt='cross-app-login')
-    token = signer.sign(json.dumps(payload).encode()).decode()
-    return token
