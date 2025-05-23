@@ -11,11 +11,11 @@ from urllib.parse import urlencode
 import qrcode
 from django.apps import apps
 from django.core import signing
+from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-from django_keycloak_admin.backends import KeycloakAuthorizationCodeBackend
 
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase
@@ -1407,6 +1407,32 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         context['qr'] = base64.b64encode(buf.getvalue()).decode()
 
         return context
+
+
+
+
+def login_with_remote_token(request, setting_name):
+    token = request.GET.get("token")
+    max_age = 120  # seconds (2 minutes)
+    secret = getattr(settings, setting_name, None)
+    signer = TimestampSigner(secret, salt='cross-app-login')
+
+    try:
+        raw = signer.unsign(token, max_age=max_age)
+        payload = json.loads(raw.decode())
+        user_id = payload.get('user_id')
+        next_url = payload.get('next', '/')
+
+        user = User.objects.get(keycloak_id=user_id)
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        return redirect(next_url)
+
+    except SignatureExpired:
+        return HttpResponse("Token expired", status=403)
+    except BadSignature:
+        return HttpResponse("Invalid token signature", status=403)
+    except User.DoesNotExist:
+        return HttpResponse("User not found", status=404)
 
 
 def login_with_token(request):

@@ -1,3 +1,4 @@
+import json
 import logging
 from urllib.parse import urlencode
 
@@ -5,10 +6,11 @@ import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model, logout, login
 from django.core import signing
+from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils import timezone
-from jose import JWTError, jwt
+
 
 from django_users import apps
 from keycloak import KeycloakAdmin, KeycloakOpenID
@@ -262,6 +264,7 @@ def update_password_keycloak(keycloak_id, new_password):
     except Exception as e:
         return False
 
+# not using keycloak and should be elsewhere!
 def generate_login_token(user, next_path='/'):
     '''used to get a token to login to another system using the same keycloak realm
     NOTE: this only works if used within the same django app'''
@@ -272,39 +275,13 @@ def generate_login_token(user, next_path='/'):
     }
     return signing.dumps(payload)
 
-
-    client_id = settings.KEYCLOAK_CLIENTS['USERS']['CLIENT_ID']
-    client_secret = settings.KEYCLOAK_CLIENTS['USERS']['CLIENT_SECRET']
-    keycloak_url = settings.KEYCLOAK_CLIENTS['USERS']['URL']
-    keycloak_realm = settings.KEYCLOAK_CLIENTS['USERS']['REALM']
-
-def get_keycloak_public_key():
-    jwks_url = f"{keycloak_url}/realms/{keycloak_realm}/protocol/openid-connect/certs"
-    resp = requests.get(jwks_url)
-    jwks = resp.json()
-    return jwks  # for jose.jwt.decode
-
-def login_with_token(request):
-    CustomUser = apps.get_model('users', 'CustomUser')
-    token = request.GET.get("token")
-    next_url = request.GET.get("next", "/")
-
-    try:
-        jwks = get_keycloak_public_key()
-        claims = jwt.decode(
-            token,
-            jwks,
-            algorithms=["RS256"],
-            audience=client_id,
-            issuer=f"{keycloak_url}/realms/{keycloak_realm}"
-        )
-
-        user_id = claims.get("sub")
-        user = CustomUser.objects.get(keycloak_id=user_id)
-        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-        return redirect(next_url)
-
-    except JWTError as e:
-        return HttpResponse(f"Invalid token: {e}", status=401)
-    except CustomUserUser.DoesNotExist:
-        return HttpResponse("User not found", status=404)
+# not using keycloak and should be elsewhere!
+def generate_remote_login_token(user, setting_name, next_path='/'):
+    payload = {
+        'user_id': str(user.keycloak_id),
+        'next': next_path,
+    }
+    secret = getattr(settings, setting_name, None)
+    signer = TimestampSigner(secret, salt='cross-app-login')
+    token = signer.sign(json.dumps(payload).encode()).decode()
+    return token
