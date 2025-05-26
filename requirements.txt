@@ -5,3 +5,4 @@ nanoid
 qrcode
 
 python-jose
+zammad_py
