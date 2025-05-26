@@ -148,6 +148,24 @@ class UserViewsetBase(viewsets.ModelViewSet):
         return Response("OK")
 
     @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
+    def activate_both(self, request, pk):
+        '''set active = True and activate in keycloak also'''
+        user = self.get_object()
+
+        if user.is_active:
+            return Response("User is already activated", status=HTTP_208_ALREADY_REPORTED)
+
+        user.is_active = True
+        user.save()
+
+        logger.info(f"Activating user {user} in django by {request.user}")
+
+        verify_user_without_email(user.keycloak_id)
+        logger.info(f"Verify user {user} in keycloak by {request.user}")
+
+        return Response("OK")
+
+    @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def deactivate(self, request, pk):
         '''set active = False'''
 

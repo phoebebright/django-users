@@ -55,13 +55,15 @@ def send_whatsapp_verification_code(phone_number, code):
     return True
 
 
-# not using keycloak and should be elsewhere!
-def generate_login_token(user, next_path='/', key=None):
-    '''used to get a token to login to another system using the same keycloak realm
-    NOTE: this only works if used within the same django app'''
+
+def generate_login_token(user, next='/', key=None):
+    '''create a token to login to same app on another device (no key needed)
+    or on aa related system (key needed that is shared by both apps)
+    '''
+
     payload = {
         'user_id': str(user.keycloak_id),
         'ts': timezone.now().timestamp(),
-        'next': next_path,
+        'next': next,
     }
     return signing.dumps(payload, key=key, salt="login-skorie")

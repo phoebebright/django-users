@@ -129,7 +129,6 @@ def create_keycloak_user(user_details, requester):
             logger.error(f"Failed to create user in Keycloak: {e}")
             return None, 500
 
-
 def verify_user_without_email(user_id):
     '''allow user to be enabled and verified in keycloak without clicking the link in the email process'''
     payload = {

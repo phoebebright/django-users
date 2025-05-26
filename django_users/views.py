@@ -1437,7 +1437,7 @@ def login_with_remote_token(request, setting_name):
 
 def login_with_token(request):
     '''handle being sent a token to log a user in (generated with keycloak.generate_login_token or qr token)
-    eg. token = generate_login_token_for_app2(request.user, next_path='/dashboard/')
+    eg. token = generate_login_token(request.user, next='/dashboard/')
         login_url = f"https://app2.example.com/lwt/?token={token}"
     '''
     token = request.GET.get("token")
