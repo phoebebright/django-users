@@ -1,30 +1,35 @@
+from django.http import HttpResponse
 from zammad_py import ZammadAPI
 from django.conf import settings
 
-# Initialize the client with the URL, username, and password
-# Note the Host URL should be in this format: 'https://zammad.example.org/api/v1/'
-client = ZammadAPI(url=settings.ZAMMED['host'], username=settings.ZAMMED['username'], password=settings.ZAMMED['pw'])
+'''
+settings example:
+ZAMMED = {
+    'url': 'https://skorie.zammad.com/api/v1',
+    'host': 'https://skorie.zammad.com',
+    'http_token': 'token',
+}
+'''
+zammad = ZammadAPI(url=settings.ZAMMED['url'], http_token=settings.ZAMMED['http_token'])
 
-#
-# # Example: Access all users
-# this_page = client.user.all()
-# for user in this_page:
-#     print(user)
-#
-# # Example: Get information about the current user
-# print(client.user.me())
-
-def add_ticket(request):
-   # Example: Create a ticket
-   params = {
-      "title": "Help me!",
-      "group": "2nd Level",
-      "customer": "david@example.com",
-      "article": {
-         "subject": "My subject",
-         "body": "I am a message!",
-         "type": "note",
-         "internal": False
+def add_ticket(request, payload):
+   ''' payload example:
+   {
+      'title': 'some new title',
+      'state': 'new',
+      'priority': '2 normal',
+      'owner': '-',
+      'customer': 'nicole.braun@zammad.org',
+      'group': 'Users',
+      'article': {
+         'sender': 'Customer',
+         'type': 'note',
+         'subject': 'some subject',
+         'content_type': 'text/plain',
+         'body': "some body\nnext line",
       }
-   }
-   new_ticket = client.ticket.create(params=params)
+   '''
+   new_ticket = zammad.ticket.create(payload)
+
+
+   return HttpResponse(f"Ticket created with ID: {new_ticket['id']} and Title: {new_ticket['title']}")
