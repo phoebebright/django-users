@@ -59,7 +59,7 @@ if settings.USE_KEYCLOAK:
         get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password_keycloak, \
         is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
 else:
-    from no_keycloak import verify_login
+    from .no_keycloak import verify_login
 
 from .keycloak_models import UserEntity
 
