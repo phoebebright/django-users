@@ -1103,7 +1103,11 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         # Update the password in Keycloak
         try:
-            update_password_keycloak(user.keycloak_id, new_password)
+            if settings.USE_KEYCLOAK:
+                update_password_keycloak(user.keycloak_id, new_password)
+            else:
+                update_password_django(user, new_password)
+
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
         except Exception as e:
