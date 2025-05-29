@@ -1434,8 +1434,7 @@ def login_with_remote_token(request, setting_name):
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)
 
-
-def login_with_token(request):
+def login_with_token(request, key=None):
     '''handle being sent a token to log a user in (generated with keycloak.generate_login_token or qr token)
     eg. token = generate_login_token(request.user, next='/dashboard/')
         login_url = f"https://app2.example.com/lwt/?token={token}"
@@ -1443,7 +1442,7 @@ def login_with_token(request):
     token = request.GET.get("token")
 
     try:
-        payload = signing.loads(token, max_age=140)  # 2 and a bit minutes
+        payload = signing.loads(token, key=key, max_age=140)  # 2 and a bit minutes
         user_id = payload.get("user_id")
         next_url = payload.get('next', '/')
 
