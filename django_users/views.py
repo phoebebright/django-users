@@ -1415,7 +1415,7 @@ def login_with_remote_token(request, setting_name):
     token = request.GET.get("token")
     max_age = 120  # seconds (2 minutes)
     secret = getattr(settings, setting_name, None)
-    signer = TimestampSigner(secret, salt='cross-app-login')
+    signer = TimestampSigner(secret)
 
     try:
         raw = signer.unsign(token, max_age=max_age)

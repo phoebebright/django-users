@@ -66,4 +66,4 @@ def generate_login_token(user, next='/', key=None):
         'ts': timezone.now().timestamp(),
         'next': next,
     }
-    return signing.dumps(payload, key=key, salt="login-skorie")
+    return signing.dumps(payload, key=key)
