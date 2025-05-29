@@ -3,4 +3,4 @@
 def verify_login(username, password):
     '''Verify a user's login credentials'''
 
-    return
+    return True
