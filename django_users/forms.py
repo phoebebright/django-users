@@ -323,9 +323,9 @@ class PersonFormBase(forms.ModelForm):
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 
-class SupportTicketForm(forms.ModelForm):
+class SupportTicketFormBase(forms.ModelForm):
     class Meta:
-        model = ZammadTicketContact
+        model = None
         fields = ['title', 'notes', 'priority', 'site']
         widgets = {
             'title': forms.TextInput(attrs={
