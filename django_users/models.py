@@ -1761,7 +1761,7 @@ class ZammadTicketContactBase(UserContactBase):
     ]
 
     # Zammad specific fields
-    zammad_ticket_id = models.IntegerField(unique=True, null=True, blank=True)
+    zammad_ticket_id = models.IntegerField(null=True, blank=True)
     zammad_ticket_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     title = models.CharField(max_length=255)
     priority = models.CharField(max_length=1, choices=PRIORITY_CHOICES, default='2')
@@ -1801,16 +1801,16 @@ class ZammadTicketContactBase(UserContactBase):
     def get_zammad_url(self):
         """Get the direct URL to the ticket in Zammad"""
         if self.zammad_ticket_id:
-            zammad_config = getattr(settings, 'ZAMMED', {})
+            zammad_config = getattr(settings, 'ZAMMAD', {})
             base_url = zammad_config.get('host', '').rstrip('/')
             if base_url:
                 return f"{base_url}/#ticket/zoom/{self.zammad_ticket_id}"
         return None
 
 
-class EntryTicketLink(models.Model):
+class EntryTicketLinkBase(models.Model):
     """Model to link tickets to entry objects in your Django app"""
-    ticket = models.ForeignKey(ZammadTicketContact, on_delete=models.CASCADE, related_name='entry_links')
+    ticket = models.ForeignKey(ZammadTicketContactBase, on_delete=models.CASCADE, related_name='entry_links')
     entry_id = models.IntegerField()
     entry_type = models.CharField(max_length=100)  # Model name or type identifier
     created_at = models.DateTimeField(default=timezone.now)
@@ -1818,6 +1818,7 @@ class EntryTicketLink(models.Model):
     notes = models.TextField(blank=True, help_text="Notes about this link")
 
     class Meta:
+        abstract = True
         unique_together = ['ticket', 'entry_id', 'entry_type']
         indexes = [
             models.Index(fields=['entry_type', 'entry_id']),

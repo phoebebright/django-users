@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 class ZammadService:
     def __init__(self):
-        zammad_config = getattr(settings, 'ZAMMED', {})
+        zammad_config = getattr(settings, 'ZAMMAD', {})
 
         self.zammad_url = zammad_config.get('url', '')
         self.zammad_host = zammad_config.get('host', '')
         self.api_token = zammad_config.get('http_token', '')
 
         if not self.zammad_url or not self.api_token:
-            raise ValueError("ZAMMED settings must include 'url' and 'http_token'")
+            raise ValueError("ZAMMAD settings must include 'url' and 'http_token'")
 
         # Extract base URL for zammad_py (it expects the base URL, not the API endpoint)
         base_url = self.zammad_host or self.zammad_url.replace('/api/v1', '')

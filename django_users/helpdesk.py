@@ -11,7 +11,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, DetailView, ListView
 from django.urls import reverse_lazy, reverse
-from .models import ZammadTicketContact, EntryTicketLink
+
 from .forms import SupportTicketForm
 from .tools.permission_mixins import UserCanAdministerMixin
 from .zammad_service import ZammadService
@@ -22,7 +22,7 @@ User = get_user_model()
 
 class CreateTicketView(LoginRequiredMixin, CreateView):
     """View for users to create support tickets"""
-    model = ZammadTicketContact
+    model = None
     form_class = SupportTicketForm
     template_name = 'support/create_ticket.html'
 
