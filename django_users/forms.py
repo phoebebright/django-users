@@ -321,3 +321,41 @@ class PersonFormBase(forms.ModelForm):
     class Meta:
         model = None
         fields = ['formal_name', 'friendly_name', 'sortable_name']
+
+
+class SupportTicketForm(forms.ModelForm):
+    class Meta:
+        model = ZammadTicketContact
+        fields = ['title', 'notes', 'priority', 'site']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Brief description of your issue',
+                'required': True
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 6,
+                'placeholder': 'Please provide detailed information about your issue...',
+                'required': True
+            }),
+            'priority': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'site': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Site or location (optional)'
+            })
+        }
+
+    def clean_title(self):
+        title = self.cleaned_data.get('title', '').strip()
+        if len(title) < 5:
+            raise forms.ValidationError("Title must be at least 5 characters long.")
+        return title
+
+    def clean_notes(self):
+        notes = self.cleaned_data.get('notes', '').strip()
+        if len(notes) < 20:
+            raise forms.ValidationError("Please provide more detailed information (at least 20 characters).")
+        return notes

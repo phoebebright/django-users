@@ -39,7 +39,7 @@ from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 
-from tools.permission_mixins import UserCanAdministerMixin
+from .tools.permission_mixins import UserCanAdministerMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 

@@ -858,18 +858,19 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     def is_organiser(self):
         return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_ORGANISER).exists()
 
-    @cached_property
-    def is_scorer(self):
-        # for now return either scorer pro or basic
-        return self.Role.objects.active().filter(user=self, role_type__in=[self.ModelRoles.ROLE_SCORER, self.ModelRoles.ROLE_SCORER_BASIC]).exists()
-
-    @cached_property
-    def is_scorer_basic(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER_BASIC).exists()
-
-    @cached_property
-    def is_scorer_pro(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER).exists()
+    # move to application code
+    # @cached_property
+    # def is_scorer(self):
+    #     # for now return either scorer pro or basic
+    #     return self.Role.objects.active().filter(user=self, role_type__in=[self.ModelRoles.ROLE_SCORER, self.ModelRoles.ROLE_SCORER_BASIC]).exists()
+    #
+    # @cached_property
+    # def is_scorer_basic(self):
+    #     return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER_BASIC).exists()
+    #
+    # @cached_property
+    # def is_scorer_pro(self):
+    #     return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_SCORER).exists()
 
 
     @property
@@ -1738,7 +1739,92 @@ class UserContactBase(models.Model):
             )
 
         return obj
-#------------------  MODELS CUSTOMISED FOR THIS APPLICATION -----------------------
+
+
+class ZammadTicketContactBase(UserContactBase):
+    """Extended contact model for Zammad ticket interactions"""
+
+    PRIORITY_CHOICES = [
+        ('1', 'Low'),
+        ('2', 'Normal'),
+        ('3', 'High'),
+        ('4', 'Urgent'),
+    ]
+
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('open', 'Open'),
+        ('pending_reminder', 'Pending Reminder'),
+        ('pending_close', 'Pending Close'),
+        ('closed', 'Closed'),
+        ('merged', 'Merged'),
+    ]
+
+    # Zammad specific fields
+    zammad_ticket_id = models.IntegerField(unique=True, null=True, blank=True)
+    zammad_ticket_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    title = models.CharField(max_length=255)
+    priority = models.CharField(max_length=1, choices=PRIORITY_CHOICES, default='2')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+    group_name = models.CharField(max_length=100, default='Support')
+
+    # Tracking fields
+    zammad_created_at = models.DateTimeField(null=True, blank=True)
+    zammad_updated_at = models.DateTimeField(null=True, blank=True)
+    last_synced = models.DateTimeField(null=True, blank=True)
+    sync_status = models.CharField(max_length=20, default='pending')  # pending, synced, failed
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set method to 'zammad_ticket' by default
+        if not self.method:
+            self.method = 'zammad_ticket'
+
+    class Meta:
+        abstract = True
+        ordering = ['-contact_date']
+        indexes = [
+            models.Index(fields=['zammad_ticket_id']),
+            models.Index(fields=['status']),
+            models.Index(fields=['user', '-contact_date']),
+        ]
+
+    def __str__(self):
+        if self.zammad_ticket_number:
+            return f"Ticket #{self.zammad_ticket_number}: {self.title}"
+        return f"Ticket (Draft): {self.title}"
+
+    @property
+    def is_synced(self):
+        return self.zammad_ticket_id is not None and self.sync_status == 'synced'
+
+    def get_zammad_url(self):
+        """Get the direct URL to the ticket in Zammad"""
+        if self.zammad_ticket_id:
+            zammad_config = getattr(settings, 'ZAMMED', {})
+            base_url = zammad_config.get('host', '').rstrip('/')
+            if base_url:
+                return f"{base_url}/#ticket/zoom/{self.zammad_ticket_id}"
+        return None
+
+
+class EntryTicketLink(models.Model):
+    """Model to link tickets to entry objects in your Django app"""
+    ticket = models.ForeignKey(ZammadTicketContact, on_delete=models.CASCADE, related_name='entry_links')
+    entry_id = models.IntegerField()
+    entry_type = models.CharField(max_length=100)  # Model name or type identifier
+    created_at = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    notes = models.TextField(blank=True, help_text="Notes about this link")
+
+    class Meta:
+        unique_together = ['ticket', 'entry_id', 'entry_type']
+        indexes = [
+            models.Index(fields=['entry_type', 'entry_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.ticket} -> {self.entry_type}:{self.entry_id}"
 
 
 class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
