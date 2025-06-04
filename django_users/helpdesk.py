@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, DetailView, ListView
 from django.urls import reverse_lazy, reverse
 
-from .forms import SupportTicketForm
+from .forms import SupportTicketFormBase
 from .tools.permission_mixins import UserCanAdministerMixin
 from .zammad_service import ZammadService
 
@@ -23,55 +23,78 @@ User = get_user_model()
 class CreateTicketView(LoginRequiredMixin, CreateView):
     """View for users to create support tickets"""
     model = None
-    form_class = SupportTicketForm
-    template_name = 'support/create_ticket.html'
+    form_class = SupportTicketFormBase
+    template_name = 'users/helpdesk/create_ticket_user.html'
 
     def form_valid(self, form):
         # Set user and method before saving
         form.instance.user = self.request.user
         form.instance.method = 'zammad_ticket'
+        form.instance.sync_status = 'pending'
 
-        # Save the ticket contact record
+        # Save the ticket contact record immediately
         self.object = form.save()
 
-        # Try to create in Zammad
-        try:
-            zammad_service = ZammadService()
-            success = zammad_service.create_ticket(self.object)
+        # Store attachments for background processing
+        attachments = self.request.FILES.getlist('attachments')
+        if attachments:
+            # Store attachment info in attributes for processing
+            attachment_info = []
+            for attachment in attachments:
+                attachment_info.append({
+                    'name': attachment.name,
+                    'size': attachment.size,
+                    'content_type': attachment.content_type
+                })
 
-            if success:
-                messages.success(
+            if not self.object.attributes:
+                self.object.attributes = {}
+            self.object.attributes['pending_attachments'] = attachment_info
+            self.object.attributes['attachment_count'] = len(attachments)
+            self.object.save()
+
+            # Store files temporarily (you might want to use Django's file storage)
+            # For now, we'll process them immediately in the background
+
+        # Show immediate success message
+            messages.success(
                     self.request,
-                    f'Your support ticket #{self.object.zammad_ticket_number} has been created successfully.'
-                )
-            else:
-                messages.warning(
-                    self.request,
-                    'Your ticket has been saved locally but could not be synchronized with our support system. '
-                    'Our team will review it shortly.'
-                )
-        except Exception as e:
-            logger.error(f"Error creating Zammad ticket: {e}")
-            messages.warning(
-                self.request,
-                'Your ticket has been saved but there was an issue with our support system sync.'
+            f'Your support ticket #{self.object.id} has been created and saved. '
+            f'We are now creating it in our support system. Refresh this page in a few moments to see the Zammad link.'
             )
+
+        # Start background processing of Zammad ticket creation
+        try:
+            create_zammad_ticket_immediately(self.object.id, attachments)
+            logger.info(f"Started background Zammad processing for ticket {self.object.id}")
+        except Exception as e:
+            logger.error(f"Failed to start background processing for ticket {self.object.id}: {e}")
+            # Update sync status to failed
+            self.object.sync_status = 'failed'
+            self.object.save()
 
         return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse('ticket_detail', kwargs={'pk': self.object.pk})
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Create Support Ticket'
+        context['max_file_size'] = '10MB'
+        context['allowed_file_types'] = 'Images, PDFs, Documents, Text files'
+        return context
 
-class TicketDetailView(LoginRequiredMixin, DetailView):
+
+class TicketDetailViewBase(LoginRequiredMixin, DetailView):
     """View ticket details"""
-    model = ZammadTicketContact
+    model = None
     template_name = 'support/ticket_detail.html'
     context_object_name = 'ticket'
 
     def get_queryset(self):
         # Only allow users to view their own tickets
-        return ZammadTicketContact.objects.filter(user=self.request.user)
+        return self.model.objects.filter(user=self.request.user)
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
@@ -93,15 +116,15 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class MyTicketsView(LoginRequiredMixin, ListView):
+class MyTicketsViewBase(LoginRequiredMixin, ListView):
     """List all tickets for the current user"""
-    model = ZammadTicketContact
+    model = None
     template_name = 'support/my_tickets.html'
     context_object_name = 'tickets'
     paginate_by = 10
 
     def get_queryset(self):
-        queryset = ZammadTicketContact.objects.filter(user=self.request.user)
+        queryset = self.model.objects.filter(user=self.request.user)
 
         # Optional: Add filtering
         status_filter = self.request.GET.get('status')
@@ -114,7 +137,7 @@ class MyTicketsView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
 
         # Get available statuses for filter
-        context['available_statuses'] = ZammadTicketContact.objects.filter(
+        context['available_statuses'] = self.model.objects.filter(
             user=self.request.user
         ).values_list('status', flat=True).distinct()
 
@@ -153,7 +176,7 @@ class AdminUserTicketsView(UserCanAdministerMixin, DetailView):
         context = super().get_context_data(**kwargs)
 
         # Get all tickets for this user
-        context['tickets'] = ZammadTicketContact.objects.filter(
+        context['tickets'] = self.model.objects.filter(
             user=self.object
         ).order_by('-contact_date')
 
@@ -182,7 +205,7 @@ class LinkTicketToEntryView(UserCanAdministerMixin, View):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
 
         try:
-            ticket = ZammadTicketContact.objects.get(id=ticket_id)
+            ticket = self.model.objects.get(id=ticket_id)
 
             link, created = EntryTicketLink.objects.get_or_create(
                 ticket=ticket,
@@ -201,7 +224,7 @@ class LinkTicketToEntryView(UserCanAdministerMixin, View):
                 'message': 'Link created successfully' if created else 'Link already exists'
             })
 
-        except ZammadTicketContact.DoesNotExist:
+        except self.model.DoesNotExist:
             return JsonResponse({'error': 'Ticket not found'}, status=404)
         except ValueError:
             return JsonResponse({'error': 'Invalid entry_id'}, status=400)
@@ -214,7 +237,7 @@ class AdminSyncTicketView(UserCanAdministerMixin, View):
     """Admin endpoint to manually sync a specific ticket"""
 
     def get(self, request, ticket_id, *args, **kwargs):
-        ticket = get_object_or_404(ZammadTicketContact, id=ticket_id)
+        ticket = get_object_or_404(self.model, id=ticket_id)
 
         try:
             zammad_service = ZammadService()
@@ -234,13 +257,13 @@ class AdminSyncTicketView(UserCanAdministerMixin, View):
 
 class AdminTicketListView(UserCanAdministerMixin, ListView):
     """Admin view to list all tickets with filtering options"""
-    model = ZammadTicketContact
+    model = None
     template_name = 'admin/ticket_list.html'
     context_object_name = 'tickets'
     paginate_by = 20
 
     def get_queryset(self):
-        queryset = ZammadTicketContact.objects.select_related('user').order_by('-contact_date')
+        queryset = self.model.objects.select_related('user').order_by('-contact_date')
 
         # Add filters
         status_filter = self.request.GET.get('status')
@@ -270,8 +293,8 @@ class AdminTicketListView(UserCanAdministerMixin, ListView):
         context = super().get_context_data(**kwargs)
 
         # Add filter options to context
-        context['available_statuses'] = ZammadTicketContact.STATUS_CHOICES
-        context['available_priorities'] = ZammadTicketContact.PRIORITY_CHOICES
+        context['available_statuses'] = self.model.STATUS_CHOICES
+        context['available_priorities'] = self.model.PRIORITY_CHOICES
         context['sync_statuses'] = [
             ('pending', 'Pending'),
             ('synced', 'Synced'),
@@ -327,3 +350,85 @@ class BulkSyncTicketsView(UserCanAdministerMixin, View):
             messages.error(request, f'Bulk sync failed: {str(e)}')
 
         return redirect('admin_ticket_list')
+
+
+
+def process_zammad_ticket_creation(ticket_model, ticket_id, attachment_files=None):
+    """
+    Background task to create ticket in Zammad
+    Can be called immediately or via Celery/RQ for true background processing
+    """
+    try:
+        ticket = ticket_model.objects.get(id=ticket_id)
+        logger.info(f"Processing Zammad creation for ticket {ticket_id}")
+
+        # Create Zammad service
+        zammad_service = ZammadService()
+
+        # Process attachments if any
+        attachments = []
+        if attachment_files:
+            for file_data in attachment_files:
+                # Create file-like object from stored data
+                attachments.append(file_data)
+
+        # Create ticket in Zammad
+        success = zammad_service.create_ticket(ticket, attachments=attachments)
+
+        if success:
+            logger.info(f"Successfully created Zammad ticket for {ticket_id}: #{ticket.zammad_ticket_number}")
+            return True
+        else:
+            logger.error(f"Failed to create Zammad ticket for {ticket_id}")
+            return False
+
+    except ticket_model.DoesNotExist:
+        logger.error(f"Ticket {ticket_id} not found")
+        return False
+    except Exception as e:
+        logger.error(f"Error processing Zammad ticket creation for {ticket_id}: {e}")
+        # Update ticket status to failed
+        try:
+            ticket = ticket_model.objects.get(id=ticket_id)
+            ticket.sync_status = 'failed'
+            ticket.save()
+        except:
+            pass
+        return False
+
+
+def create_zammad_ticket_immediately(ticket_id, request_files=None):
+    """
+    Process Zammad ticket creation immediately (synchronously)
+    Use this if you don't have Celery/RQ set up
+    """
+    import threading
+
+    def background_task():
+        try:
+            # Process files
+            attachment_files = []
+            if request_files:
+                for file in request_files:
+                    # Read file content
+                    file_content = file.read()
+                    file.seek(0)  # Reset for potential reuse
+
+                    # Create a file-like object
+                    attachment_files.append({
+                        'name': file.name,
+                        'content': file_content,
+                        'content_type': file.content_type,
+                        'size': file.size
+                    })
+
+            # Process the ticket creation
+            process_zammad_ticket_creation(ticket_id, attachment_files)
+
+        except Exception as e:
+            logger.error(f"Background task error for ticket {ticket_id}: {e}")
+
+    # Start background thread
+    thread = threading.Thread(target=background_task)
+    thread.daemon = True
+    thread.start()

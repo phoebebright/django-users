@@ -324,6 +324,8 @@ class PersonFormBase(forms.ModelForm):
 
 
 class SupportTicketFormBase(forms.ModelForm):
+
+
     class Meta:
         model = None
         fields = ['title', 'notes', 'priority', 'site']

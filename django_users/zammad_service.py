@@ -59,7 +59,7 @@ class ZammadService:
             logger.error(f"Error creating/getting Zammad user for {django_user.email}: {e}")
             return None
 
-    def create_ticket(self, ticket_contact: 'ZammadTicketContact') -> bool:
+    def create_ticket(self, ticket_contact: 'ZammadTicketContact', attachments=None) -> bool:
         """Create ticket in Zammad and update the local object"""
         try:
             # Ensure user exists in Zammad
@@ -68,6 +68,28 @@ class ZammadService:
                 ticket_contact.sync_status = 'failed'
                 ticket_contact.save()
                 return False
+
+            # Prepare attachments if provided
+            attachment_list = []
+            if attachments:
+                for file in attachments:
+                    try:
+                        # Read file content and encode to base64
+                        file_content = file.read()
+                        encoded_content = base64.b64encode(file_content).decode('utf-8')
+
+                        attachment_list.append({
+                            'filename': file.name,
+                            'data': encoded_content,
+                            'mime-type': file.content_type or 'application/octet-stream'
+                        })
+
+                        # Reset file pointer for potential future use
+                        file.seek(0)
+
+                    except Exception as e:
+                        logger.error(f"Error processing attachment {file.name}: {e}")
+                        continue
 
             # Prepare ticket data
             ticket_data = {
@@ -82,8 +104,13 @@ class ZammadService:
                     'type': 'web',
                     'sender': 'Customer',
                     'internal': False,
+                    'content_type': 'text/html'
                 }
             }
+
+            # Add attachments to article if available
+            if attachment_list:
+                ticket_data['article']['attachments'] = attachment_list
 
             # Add custom attributes to ticket
             if ticket_contact.attributes:
@@ -112,11 +139,12 @@ class ZammadService:
                 'zammad_state_id': zammad_ticket.get('state_id'),
                 'zammad_group_id': zammad_ticket.get('group_id'),
                 'zammad_owner_id': zammad_ticket.get('owner_id'),
+                'attachment_count': len(attachment_list) if attachment_list else 0,
             })
 
             ticket_contact.save()
 
-            logger.info(f"Created Zammad ticket {zammad_ticket['id']} for contact {ticket_contact.id}")
+            logger.info(f"Created Zammad ticket {zammad_ticket['id']} for contact {ticket_contact.id} with {len(attachment_list)} attachments")
             return True
 
         except Exception as e:
