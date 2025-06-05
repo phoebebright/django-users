@@ -12,9 +12,13 @@ import qrcode
 from django.apps import apps
 from django.core import signing
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+from django.db import models
+from django.db.models import Count
+from django.db.models.functions import Extract, Concat
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
+
 
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
@@ -1467,11 +1471,12 @@ class UserContactAnalyticsView(TemplateView):
     template_name = 'users/admin/user_contact_analytics.html'
 
     def get_context_data(self, **kwargs):
+        from users.models import UserContact
         context = super().get_context_data(**kwargs)
 
         # Get date range - default to last 12 weeks
         end_date = timezone.now()
-        start_date = end_date - timedelta(weeks=12)
+        start_date = end_date - timedelta(weeks=500)
 
         # Allow filtering by date range via GET parameters
         if self.request.GET.get('start_date'):
@@ -1493,7 +1498,7 @@ class UserContactAnalyticsView(TemplateView):
                 pass
 
         # Query to get contact counts by week, method, and site
-        contacts_query = UserContactBase.objects.filter(
+        contacts_query = UserContact.objects.filter(
             contact_date__gte=start_date,
             contact_date__lte=end_date
         ).annotate(
