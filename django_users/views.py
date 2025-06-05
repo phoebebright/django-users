@@ -1151,8 +1151,9 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         return context
 
 
-class SendOTP(UserCanAdministerMixin, TemplateView):
+class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
     template_name = 'users/admin/send_otp.html'
+    docserve_page = 'admin/users/user_otp.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1460,3 +1461,109 @@ def login_with_token(request, key=None):
         return redirect(next_url)
     except Exception as e:
         return HttpResponse(f"Invalid or expired token with error {e}", status=400)
+
+
+class UserContactAnalyticsView(TemplateView):
+    template_name = 'admin/users/user_contact_analytics.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get date range - default to last 12 weeks
+        end_date = timezone.now()
+        start_date = end_date - timedelta(weeks=12)
+
+        # Allow filtering by date range via GET parameters
+        if self.request.GET.get('start_date'):
+            try:
+                start_date = datetime.strptime(
+                    self.request.GET.get('start_date'),
+                    '%Y-%m-%d'
+                ).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+
+        if self.request.GET.get('end_date'):
+            try:
+                end_date = datetime.strptime(
+                    self.request.GET.get('end_date'),
+                    '%Y-%m-%d'
+                ).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+
+        # Query to get contact counts by week, method, and site
+        contacts_query = UserContactBase.objects.filter(
+            contact_date__gte=start_date,
+            contact_date__lte=end_date
+        ).annotate(
+            year=Extract('contact_date', 'year'),
+            week=Extract('contact_date', 'week')
+        ).annotate(
+            week_label=Concat(
+                'year',
+                models.Value('-W'),
+                'week',
+                output_field=models.CharField()
+            )
+        )
+
+        # Get the main data grouped by week, method, and site
+        contact_data = list(
+            contacts_query.values('week_label', 'method', 'site')
+            .annotate(count=Count('id'))
+            .order_by('year', 'week', 'method', 'site')
+        )
+
+        # Get summary statistics
+        total_contacts = contacts_query.count()
+
+        # Get method breakdown
+        method_stats = list(
+            contacts_query.values('method')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        # Get site breakdown
+        site_stats = list(
+            contacts_query.values('site')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        # Get weekly totals for trend analysis
+        weekly_totals = list(
+            contacts_query.values('week_label', 'year', 'week')
+            .annotate(count=Count('id'))
+            .order_by('year', 'week')
+        )
+
+        # Calculate week-over-week growth
+        if len(weekly_totals) >= 2:
+            current_week = weekly_totals[-1]['count']
+            previous_week = weekly_totals[-2]['count']
+            week_over_week_change = ((current_week - previous_week) / previous_week * 100) if previous_week > 0 else 0
+        else:
+            week_over_week_change = 0
+
+        # Get top performers (most active methods and sites)
+        top_method = method_stats[0]['method'] if method_stats else 'N/A'
+        top_site = site_stats[0]['site'] if site_stats else 'N/A'
+
+        # Add context data
+        context.update({
+            'contact_data': json.dumps(contact_data),
+            'total_contacts': total_contacts,
+            'method_stats': json.dumps(method_stats),
+            'site_stats': json.dumps(site_stats),
+            'weekly_totals': json.dumps(weekly_totals),
+            'week_over_week_change': round(week_over_week_change, 1),
+            'top_method': top_method,
+            'top_site': top_site,
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
+            'date_range_weeks': (end_date - start_date).days // 7,
+        })
+
+        return context
