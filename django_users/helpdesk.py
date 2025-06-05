@@ -76,7 +76,7 @@ class CreateTicketView(LoginRequiredMixin, CreateView):
         return redirect(self.get_success_url())
 
     def get_success_url(self):
-        return reverse('ticket_detail', kwargs={'pk': self.object.pk})
+        return reverse('users:ticket-detail', kwargs={'pk': self.object.pk})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -89,7 +89,7 @@ class CreateTicketView(LoginRequiredMixin, CreateView):
 class TicketDetailViewBase(LoginRequiredMixin, DetailView):
     """View ticket details"""
     model = None
-    template_name = 'support/ticket_detail.html'
+    template_name = 'users/helpdesk/ticket_detail.html'
     context_object_name = 'ticket'
 
     def get_queryset(self):

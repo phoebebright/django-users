@@ -1,3 +1,5 @@
+import base64
+
 from zammad_py import ZammadAPI
 from django.conf import settings
 from django.utils import timezone
@@ -19,21 +21,28 @@ class ZammadService:
         if not self.zammad_url or not self.api_token:
             raise ValueError("ZAMMAD settings must include 'url' and 'http_token'")
 
-        # Extract base URL for zammad_py (it expects the base URL, not the API endpoint)
-        base_url = self.zammad_host or self.zammad_url.replace('/api/v1', '')
 
         self.client = ZammadAPI(
-            url=base_url,
+            url=self.zammad_url,
             http_token=self.api_token,
         )
 
+        # get system user to use to add tickets etc.
+        email = zammad_config.get('system_user_email', 'system')
+        users = self.client.user.search(search_string=f'email:{email}')
+        if users:
+            self.system_user._items[0]
+
     def create_or_get_user(self, django_user) -> Optional[Dict[str, Any]]:
         """Create or get user in Zammad"""
+        # this_page = self.client.user.all()
+        # for user in this_page:
+        #     print(user)
         try:
             # First, try to find existing user by email
-            users = self.client.user.search(query=f'email:{django_user.email}')
+            users = self.client.user.search(search_string=f'email:{django_user.email}')
             if users:
-                return users[0]
+                return users._items[0]
 
             # If not found, create new user
             user_data = {
@@ -41,7 +50,7 @@ class ZammadService:
                 'firstname': django_user.first_name or 'Unknown',
                 'lastname': django_user.last_name or 'User',
                 'active': True,
-                'note': f'Created from Django app for user ID: {django_user.id}',
+                'note': f'Created from Django app for user ID: {django_user.pk}',
             }
 
             # Add optional fields if they exist on your user model
@@ -113,7 +122,7 @@ class ZammadService:
                 ticket_data['article']['attachments'] = attachment_list
 
             # Add custom attributes to ticket
-            if ticket_contact.attributes:
+            if hasattr(ticket_contact, 'attributes') and ticket_contact.attributes:
                 ticket_data.update(ticket_contact.attributes)
 
             # Add site information if provided
@@ -187,7 +196,7 @@ class ZammadService:
     def get_user_tickets(self, django_user) -> List[Dict[str, Any]]:
         """Get all tickets for a user from Zammad"""
         try:
-            tickets = self.client.ticket.search(query=f'customer.email:{django_user.email}')
+            tickets = self.client.ticket.search(search_string=f'customer.email:{django_user.email}')
             return tickets or []
         except Exception as e:
             logger.error(f"Error fetching tickets for user {django_user.email}: {e}")
@@ -203,7 +212,7 @@ class ZammadService:
 
             # Check if we already have this ticket locally
             try:
-                contact = ZammadTicketContact.objects.get(zammad_ticket_id=ticket_id)
+                contact = self.model.objects.get(zammad_ticket_id=ticket_id)
                 # Update existing
                 contact.status = ticket_data.get('state', {}).get('name', 'unknown').lower()
                 contact.zammad_updated_at = self._parse_zammad_datetime(ticket_data.get('updated_at'))
@@ -211,9 +220,9 @@ class ZammadService:
                 contact.sync_status = 'synced'
                 contact.save()
 
-            except ZammadTicketContact.DoesNotExist:
+            except self.model.DoesNotExist:
                 # Create new contact record
-                contact = ZammadTicketContact.objects.create(
+                contact = self.model.objects.create(
                     user=django_user,
                     method='zammad_ticket',
                     title=ticket_data.get('title', 'Imported Ticket'),

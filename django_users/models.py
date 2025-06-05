@@ -51,6 +51,7 @@ if settings.USE_KEYCLOAK:
 
 from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
 
+
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
@@ -2088,7 +2089,7 @@ class RoleBase(CreatedUpdatedMixin):
 
     country = CountryField(blank=True, null=True,
                            help_text=_("Optional"))
-
+    # this should be optional
     discipline = models.CharField(choices=Disciplines.DISCIPLINE_CHOICES, max_length=2,
                                   default=Disciplines.DEFAULT_DISCIPLINE)
 

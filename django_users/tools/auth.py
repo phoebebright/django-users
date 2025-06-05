@@ -1,7 +1,7 @@
 from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
 
-from tb_devices.models import Device
+
 
 from rest_framework import authentication
 from rest_framework import exceptions
@@ -41,7 +41,7 @@ class DeviceKeyAuthentication(TokenAuthentication):
         '''
 
     def authenticate(self, request):
-
+        from tb_devices.models import Device
         keyword = "Device"
 
         auth = authentication.get_authorization_header(request).split()
