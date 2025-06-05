@@ -78,8 +78,7 @@ urlpatterns = [
 
     path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
     path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
-    path(
-        'contact_viz/',UserContactAnalyticsView.as_view(),name='user_contact_analytics'),
+    path('contact_viz/',UserContactAnalyticsView.as_view(),name='user_contact_analytics'),
 ]
 
 '''API urls

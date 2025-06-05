@@ -16,7 +16,7 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-
+from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase
 
@@ -1464,7 +1464,7 @@ def login_with_token(request, key=None):
 
 
 class UserContactAnalyticsView(TemplateView):
-    template_name = 'admin/users/user_contact_analytics.html'
+    template_name = 'users/admin/user_contact_analytics.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

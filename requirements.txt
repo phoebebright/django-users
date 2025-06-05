@@ -5,3 +5,4 @@ nanoid
 qrcode
 
 python-jose
+git+https://github.com/phoebebright/django-docserve
