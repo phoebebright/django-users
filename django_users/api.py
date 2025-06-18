@@ -21,6 +21,7 @@ from rest_framework import status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED
@@ -34,7 +35,9 @@ from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase
+from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase, \
+    SubscriptionStatusSerializer, SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, \
+    SubscriptionHistorySerializer
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
@@ -955,3 +958,55 @@ class PersonViewSetBase(viewsets.ModelViewSet):
     queryset = None
     lookup_field = 'ref'
     serializer = PersonSerializerBase
+
+
+class SubscriptionStatusAPIView(APIView):
+    """Get current subscription status"""
+
+    def get(self, request):
+        serializer = SubscriptionStatusSerializer(request.user)
+        return Response(serializer.data)
+
+
+class SubscriptionUpdateAPIView(APIView):
+    """Quick subscription update API"""
+
+    def post(self, request):
+        serializer = SubscriptionUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            subscription_type = serializer.validated_data['subscription_type']
+            action = serializer.validated_data['action']
+
+            if action == 'subscribe':
+                request.user.subscribe_to(subscription_type)
+                message = f'Successfully subscribed to {subscription_type}'
+            else:
+                request.user.unsubscribe_from(subscription_type)
+                message = f'Successfully unsubscribed from {subscription_type}'
+
+            return Response({
+                'success': True,
+                'message': message,
+                'current_level': request.user.communication_preference_level,
+                'is_subscribed': getattr(request.user, f'is_subscribed_{subscription_type}')
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SubscriptionPreferencesAPIView(RetrieveUpdateAPIView):
+    """Manage all subscription preferences via API"""
+
+    serializer_class = SubscriptionPreferencesSerializer
+
+    def get_object(self):
+        return self.request.user
+
+
+class SubscriptionHistoryAPIView(APIView):
+    """Get subscription history"""
+
+    def get(self, request):
+        history = request.user.get_subscription_history()
+        serializer = SubscriptionHistorySerializer(history, many=True)
+        return Response(serializer.data)

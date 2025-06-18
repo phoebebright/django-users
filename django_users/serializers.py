@@ -183,3 +183,88 @@ class PersonSerializerBase(serializers.ModelSerializer):
     class Meta:
         model = None
         fields = ['formal_name', 'friendly_name', 'sortable_name']
+
+
+class SubscriptionStatusSerializer(serializers.ModelSerializer):
+    """Serializer for current subscription status"""
+    is_subscribed_news = serializers.ReadOnlyField()
+    is_subscribed_events = serializers.ReadOnlyField()
+    is_subscribed_myevents = serializers.ReadOnlyField()
+    communication_preference_level = serializers.ReadOnlyField()
+
+    class Meta:
+        model = User
+        fields = [
+            'is_subscribed_news',
+            'is_subscribed_events',
+            'is_subscribed_myevents',
+            'communication_preference_level'
+        ]
+
+
+class SubscriptionUpdateSerializer(serializers.Serializer):
+    """Serializer for updating subscription preferences"""
+    subscription_type = serializers.ChoiceField(
+        choices=['news', 'events', 'myevents'],
+        required=True
+    )
+    action = serializers.ChoiceField(
+        choices=['subscribe', 'unsubscribe'],
+        required=True
+    )
+
+
+class SubscriptionPreferencesSerializer(serializers.ModelSerializer):
+    """Serializer for managing all subscription preferences at once"""
+    subscribe_to_news = serializers.BooleanField(source='is_subscribed_news', read_only=True)
+    subscribe_to_events = serializers.BooleanField(source='is_subscribed_events', read_only=True)
+    subscribe_to_myevents = serializers.BooleanField(source='is_subscribed_myevents', read_only=True)
+
+    # Write fields
+    news = serializers.BooleanField(write_only=True, required=False)
+    events = serializers.BooleanField(write_only=True, required=False)
+    myevents = serializers.BooleanField(write_only=True, required=False)
+
+    class Meta:
+        model = User
+        fields = [
+            'subscribe_to_news',
+            'subscribe_to_events',
+            'subscribe_to_myevents',
+            'news',
+            'events',
+            'myevents'
+        ]
+
+    def update(self, instance, validated_data):
+        # Handle subscription changes
+        if 'news' in validated_data:
+            if validated_data['news'] != instance.is_subscribed_news:
+                if validated_data['news']:
+                    instance.subscribe_to('news')
+                else:
+                    instance.unsubscribe_from('news')
+
+        if 'events' in validated_data:
+            if validated_data['events'] != instance.is_subscribed_events:
+                if validated_data['events']:
+                    instance.subscribe_to('events')
+                else:
+                    instance.unsubscribe_from('events')
+
+        if 'myevents' in validated_data:
+            if validated_data['myevents'] != instance.is_subscribed_myevents:
+                if validated_data['myevents']:
+                    instance.subscribe_to('myevents')
+                else:
+                    instance.unsubscribe_from('myevents')
+
+        return instance
+
+
+class SubscriptionHistorySerializer(serializers.Serializer):
+    """Serializer for subscription history"""
+    type = serializers.CharField()
+    action = serializers.CharField()
+    datetime = serializers.DateTimeField()
+    is_active = serializers.BooleanField()

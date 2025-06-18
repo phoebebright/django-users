@@ -3,5 +3,6 @@ Django
 twilio
 nanoid
 qrcode
-
+djangorestframework
+djangorestframework-api-key
 python-jose

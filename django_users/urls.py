@@ -6,7 +6,8 @@ from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
-    Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token
+    Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
+    UnsubscribeTokenView, SubscriptionPreferencesView
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -78,8 +79,12 @@ urlpatterns = [
 
     path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
     path('send_opt/<int:pk>/', SendOTP.as_view(), name='send_opt'),
+    path('contact_viz/',UserContactAnalyticsView.as_view(),name='user_contact_analytics'),
+    path('preferences/', SubscriptionPreferencesView.as_view(), name='subscription_preferences'),
+    path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
 
-]
+
+    ]
 
 '''API urls
     path('api/v2/toggle_role/', toggle_role, name="toggle_role"),

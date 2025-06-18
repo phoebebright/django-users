@@ -12,13 +12,16 @@ import qrcode
 from django.apps import apps
 from django.core import signing
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+from django.db import models
+from django.db.models import Count, Case, When, CharField, Q
+from django.db.models.functions import Extract, Concat, Cast, LPad
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
-
+from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
-    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase
+    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase, SubscriptionPreferencesForm
 
 import requests
 
@@ -39,7 +42,7 @@ from post_office import mail
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 
-from tools.permission_mixins import UserCanAdministerMixin
+from .tools.permission_mixins import UserCanAdministerMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 
@@ -212,7 +215,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
         notify = getattr(settings, "NOTIFY_NEW_USER_EMAILS", False)
         if notify:
             UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
-                        data=form.cleaned_data, send_mail=notify)
+                            data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)
 
@@ -596,7 +599,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         if user and not authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
-            if (user.activation_code and password==user.activation_code):
+            if (user.activation_code and password == user.activation_code):
                 user.backend = settings.AUTHENTICATION_BACKENDS[0]
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
@@ -604,7 +607,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 user.activation_code = None
                 user.save(update_fields=['activation_code'])
 
-                messages.warning(request, _('Your temporary password cannot be used again. Please change your password.'))
+                messages.warning(request,
+                                 _('Your temporary password cannot be used again. Please change your password.'))
                 return redirect('users:change_password_now')
             else:
                 messages.error(request, _('Invalid email or password.'))
@@ -984,9 +988,10 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             email = form.cleaned_data['email']
 
             if user and not user.is_active and user.last_login:
-                #TODO: need to differentiate between not is_active because not verified email and was active but is not now.
-                form.add_error('email', _(f'This email does not have an active account.  Please contact the system administrators.'))
-                #TODO: need to provide a link
+                # TODO: need to differentiate between not is_active because not verified email and was active but is not now.
+                form.add_error('email',
+                               _(f'This email does not have an active account.  Please contact the system administrators.'))
+                # TODO: need to provide a link
                 return self.form_invalid(form)
             elif user and not user.is_active:
                 # user has not yet verified email but this will cover it
@@ -1151,8 +1156,9 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
         return context
 
 
-class SendOTP(UserCanAdministerMixin, TemplateView):
+class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
     template_name = 'users/admin/send_otp.html'
+    docserve_page = 'admin/users/user_otp.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1190,6 +1196,7 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
 
         return context
 
+
 @method_decorator(never_cache, name='dispatch')
 class ManageUserBase(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
@@ -1203,7 +1210,7 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
                 try:
                     context['object'] = User.objects.get(keycloak_id=kwargs['pk'])
                 except:
-                    context['object'] = User.objects.get(id=kwargs['pk'])     # don;t use id
+                    context['object'] = User.objects.get(id=kwargs['pk'])  # don;t use id
             elif 'email' in kwargs:
                 context['object'] = User.objects.get(email=kwargs['email'])
         except User.DoesNotExist:
@@ -1329,11 +1336,9 @@ def update_password_django(user, password):
 
 
 class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
-
     form_class = OrganisationFormBase
     template_name = 'users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
-
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1391,6 +1396,7 @@ def qr_login_token(request):
     buf.seek(0)
 
     return HttpResponse(buf, content_type='image/png')
+
 
 class QRLogin(LoginRequiredMixin, TemplateView):
     template_name = "users/qr_login.html"
@@ -1460,3 +1466,166 @@ def login_with_token(request, key=None):
         return redirect(next_url)
     except Exception as e:
         return HttpResponse(f"Invalid or expired token with error {e}", status=400)
+
+
+class UserContactAnalyticsView(TemplateView):
+    template_name = 'users/admin/user_contact_analytics.html'
+
+    def get_context_data(self, **kwargs):
+        from users.models import UserContact
+        context = super().get_context_data(**kwargs)
+
+        # Get date range - default to last 12 weeks
+        end_date = timezone.now()
+        start_date = end_date - timedelta(weeks=500)
+
+        # Allow filtering by date range via GET parameters
+        if self.request.GET.get('start_date'):
+            try:
+                start_date = datetime.strptime(
+                    self.request.GET.get('start_date'),
+                    '%Y-%m-%d'
+                ).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+
+        if self.request.GET.get('end_date'):
+            try:
+                end_date = datetime.strptime(
+                    self.request.GET.get('end_date'),
+                    '%Y-%m-%d'
+                ).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+
+        # Query to get contact counts by week, method, and site
+        contacts_query = UserContact.objects.filter(
+            contact_date__gte=start_date,
+            contact_date__lte=end_date
+        ).annotate(
+            year=Extract('contact_date', 'year'),
+            week=Extract('contact_date', 'week')
+        ).annotate(
+            # Pad week numbers with zeros for proper sorting
+            week_str=Cast('week', CharField()),
+            week_label=Concat(
+                Cast('year', CharField()),
+                models.Value('-W'),
+                LPad(Cast('week', CharField()), 2, models.Value('0')),
+                output_field=CharField()
+            )
+        )
+
+        # Get the main data grouped by week, method, and site
+        contact_data = list(
+            contacts_query.values('week_label', 'method', 'site', 'year', 'week')
+            .annotate(count=Count('id'))
+            .order_by('year', 'week', 'method', 'site')
+        )
+
+        # Get summary statistics
+        total_contacts = contacts_query.count()
+
+        # Get method breakdown
+        method_stats = list(
+            contacts_query.values('method')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        # Get site breakdown
+        site_stats = list(
+            contacts_query.values('site')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        # Get weekly totals for trend analysis
+        weekly_totals = list(
+            contacts_query.values('week_label', 'year', 'week')
+            .annotate(count=Count('id'))
+            .order_by('year', 'week')
+        )
+
+        # Calculate week-over-week growth
+        if len(weekly_totals) >= 2:
+            current_week = weekly_totals[-1]['count']
+            previous_week = weekly_totals[-2]['count']
+            week_over_week_change = ((current_week - previous_week) / previous_week * 100) if previous_week > 0 else 0
+        else:
+            week_over_week_change = 0
+
+        # Get top performers (most active methods and sites)
+        top_method = method_stats[0]['method'] if method_stats else 'N/A'
+        top_site = site_stats[0]['site'] if site_stats else 'N/A'
+
+        # Add context data
+        context.update({
+            'contact_data': json.dumps(contact_data),
+            'total_contacts': total_contacts,
+            'method_stats': json.dumps(method_stats),
+            'site_stats': json.dumps(site_stats),
+            'weekly_totals': json.dumps(weekly_totals),
+            'week_over_week_change': round(week_over_week_change, 1),
+            'top_method': top_method,
+            'top_site': top_site,
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
+            'date_range_weeks': (end_date - start_date).days // 7,
+        })
+
+        return context
+
+
+class SubscriptionPreferencesView(LoginRequiredMixin, UpdateView):
+    """View for managing subscription preferences"""
+    model = get_user_model()
+    form_class = SubscriptionPreferencesForm
+    template_name = 'accounts/subscription_preferences.html'
+    success_url = reverse_lazy('subscription_preferences')
+
+    def get_object(self):
+        return self.request.user
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['subscription_history'] = self.request.user.get_subscription_history()[:10]
+        context['current_level'] = self.request.user.communication_preference_level
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Your subscription preferences have been updated.')
+        return super().form_valid(form)
+
+
+class UnsubscribeTokenView(TemplateView):
+    """Handle unsubscribe via email token"""
+    template_name = 'accounts/unsubscribe_confirm.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        token = kwargs.get('token')
+
+        try:
+            # You'll need to implement token generation/validation
+            user_id, subscription_type = self.decode_unsubscribe_token(token)
+            user = get_user_model().objects.get(id=user_id)
+            user.unsubscribe_from(subscription_type)
+
+            context.update({
+                'success': True,
+                'subscription_type': subscription_type,
+                'user': user
+            })
+        except Exception as e:
+            context.update({
+                'success': False,
+                'error': str(e)
+            })
+
+        return context
+
+    def decode_unsubscribe_token(self, token):
+        # Implement your token decoding logic here
+        # Return (user_id, subscription_type)
+        pass

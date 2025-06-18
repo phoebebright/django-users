@@ -321,3 +321,108 @@ class PersonFormBase(forms.ModelForm):
     class Meta:
         model = None
         fields = ['formal_name', 'friendly_name', 'sortable_name']
+
+
+class SupportTicketFormBase(forms.ModelForm):
+
+
+    class Meta:
+        model = None
+        fields = ['title', 'notes', 'priority', 'site']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Brief description of your issue',
+                'required': True
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 6,
+                'placeholder': 'Please provide detailed information about your issue...',
+                'required': True
+            }),
+            'priority': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'site': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Site or location (optional)'
+            })
+        }
+
+    def clean_title(self):
+        title = self.cleaned_data.get('title', '').strip()
+        if len(title) < 5:
+            raise forms.ValidationError("Title must be at least 5 characters long.")
+        return title
+
+    def clean_notes(self):
+        notes = self.cleaned_data.get('notes', '').strip()
+        if len(notes) < 20:
+            raise forms.ValidationError("Please provide more detailed information (at least 20 characters).")
+        return notes
+
+
+class SubscriptionPreferencesForm(forms.ModelForm):
+    """Form for managing user subscription preferences"""
+
+    # Custom boolean fields for easier UI management
+    subscribe_to_news = forms.BooleanField(
+        required=False,
+        label="General News & Updates",
+        help_text="Receive news about the platform, new features, and general announcements",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    subscribe_to_events = forms.BooleanField(
+        required=False,
+        label="All Event Updates",
+        help_text="Receive updates about all events - openings, deadlines, results",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    subscribe_to_myevents = forms.BooleanField(
+        required=False,
+        label="My Events Only",
+        help_text="Only receive updates for events you've entered",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    class Meta:
+        model = get_user_model()
+        fields = []  # We'll handle the subscription fields manually
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance:
+            # Set initial values based on current subscription status
+            self.fields['subscribe_to_news'].initial = self.instance.is_subscribed_news
+            self.fields['subscribe_to_events'].initial = self.instance.is_subscribed_events
+            self.fields['subscribe_to_myevents'].initial = self.instance.is_subscribed_myevents
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+
+        # Handle subscription changes
+        if self.cleaned_data['subscribe_to_news'] != user.is_subscribed_news:
+            if self.cleaned_data['subscribe_to_news']:
+                user.subscribe_to('news')
+            else:
+                user.unsubscribe_from('news')
+
+        if self.cleaned_data['subscribe_to_events'] != user.is_subscribed_events:
+            if self.cleaned_data['subscribe_to_events']:
+                user.subscribe_to('events')
+            else:
+                user.unsubscribe_from('events')
+
+        if self.cleaned_data['subscribe_to_myevents'] != user.is_subscribed_myevents:
+            if self.cleaned_data['subscribe_to_myevents']:
+                user.subscribe_to('myevents')
+            else:
+                user.unsubscribe_from('myevents')
+
+        if commit:
+            user.save()
+
+        return user

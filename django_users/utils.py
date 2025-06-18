@@ -1,5 +1,9 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
 from django.core import signing
 from django.core.mail import send_mail
+from django.db.models import Q, F
 from django.utils import timezone
 from post_office import mail
 from django.template.loader import render_to_string
@@ -7,6 +11,8 @@ from django.conf import settings
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
+
+User = get_user_model()
 
 def send_otp(channel, code):
     subject = _('Your One Time Password')
@@ -67,3 +73,120 @@ def generate_login_token(user, next='/', key=None):
         'next': next,
     }
     return signing.dumps(payload, key=key)
+
+
+def get_eligible_users_for_communication(communication_type, event=None):
+    """
+    Get users eligible for a specific communication type
+    This integrates with your existing CommsLog system
+    """
+
+    now = timezone.now()
+
+    if communication_type in ['signup_welcome', 'general_news']:
+        # General communications - users subscribed to news
+        return User.objects.filter(
+            subscribe_news__isnull=False,
+            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
+        )
+
+    elif communication_type in ['event_opening', 'entries_closing_soon', 'results_announced', 'event_news']:
+        # Event-related communications
+        eligible_users = User.objects.none()
+
+        # Users subscribed to all news
+        news_users = User.objects.filter(
+            subscribe_news__isnull=False,
+            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
+        )
+        eligible_users = eligible_users.union(news_users)
+
+        # Users subscribed to events
+        event_users = User.objects.filter(
+            subscribe_events__isnull=False,
+            Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
+        )
+        eligible_users = eligible_users.union(event_users)
+
+        # Users subscribed to their events only (if they've entered this event)
+        if event:
+            myevent_users = User.objects.filter(
+                subscribe_myevents__isnull=False,
+                Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents')),
+                # Add your event entry relationship here
+                # entries__event=event  # Adjust based on your Entry model
+            )
+            eligible_users = eligible_users.union(myevent_users)
+
+        return eligible_users
+
+    elif communication_type in ['event_entry_confirmation', 'payment_confirmation']:
+        # Personal event communications - only for users entered in the event
+        if event:
+            return User.objects.filter(
+                Q(
+                    subscribe_news__isnull=False,
+                    Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
+                ) |
+                Q(
+                    subscribe_events__isnull=False,
+                    Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
+                ) |
+                Q(
+                    subscribe_myevents__isnull=False,
+                    Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents'))
+                ),
+                # entries__event=event  # Adjust based on your Entry model
+            )
+
+    return User.objects.none()
+
+
+def get_subscription_analytics():
+    """
+    Get subscription analytics for agency reporting
+    """
+
+    total_users = User.objects.count()
+
+    # Current subscriptions
+    news_subscribers = User.objects.filter(
+        subscribe_news__isnull=False,
+        Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
+    ).count()
+
+    event_subscribers = User.objects.filter(
+        subscribe_events__isnull=False,
+        Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
+    ).count()
+
+    myevent_subscribers = User.objects.filter(
+        subscribe_myevents__isnull=False,
+        Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents'))
+    ).count()
+
+    # Recent activity (last 30 days)
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    recent_subscriptions = User.objects.filter(
+        Q(subscribe_news__gte=thirty_days_ago) |
+        Q(subscribe_events__gte=thirty_days_ago) |
+        Q(subscribe_myevents__gte=thirty_days_ago)
+    ).count()
+
+    recent_unsubscriptions = User.objects.filter(
+        Q(unsubscribe_news__gte=thirty_days_ago) |
+        Q(unsubscribe_events__gte=thirty_days_ago) |
+        Q(unsubscribe_myevents__gte=thirty_days_ago)
+    ).count()
+
+    return {
+        'total_users': total_users,
+        'news_subscribers': news_subscribers,
+        'event_subscribers': event_subscribers,
+        'myevent_subscribers': myevent_subscribers,
+        'recent_subscriptions': recent_subscriptions,
+        'recent_unsubscriptions': recent_unsubscriptions,
+        'news_rate': round((news_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
+        'event_rate': round((event_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
+        'myevent_rate': round((myevent_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
+    }
