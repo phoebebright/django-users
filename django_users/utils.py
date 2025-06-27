@@ -89,7 +89,6 @@ def get_eligible_users_for_communication(communication_type, event=None):
 
             Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news')),
             subscribe_news__isnull=False,
-            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
         )
 
     elif communication_type in ['event_opening', 'entries_closing_soon', 'results_announced', 'event_news']:
