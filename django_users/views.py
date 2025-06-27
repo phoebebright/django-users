@@ -56,6 +56,7 @@ USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need to change this
+VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE', True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
@@ -680,7 +681,7 @@ class RegisterViewBase(FormView):
                 keycloak_details = get_user_by_id(user.keycloak_id)
                 if keycloak_details['emailVerified']:
 
-                    if settings.VERIFY_ONCE:
+                    if VERIFY_ONCE:
                         user.is_active = True
                         user.save()
                     messages.warning(self.request,
