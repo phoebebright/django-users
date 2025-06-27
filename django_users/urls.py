@@ -84,7 +84,7 @@ urlpatterns = [
     path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
 
 
-    ]
+]
 
 '''API urls
     path('api/v2/toggle_role/', toggle_role, name="toggle_role"),

@@ -95,10 +95,6 @@ You will need these in requirements (should not have all these dependancies!)
     django-timezone-field
     # original library - not being updated
     git+https://github.com/phoebebright/django-yamlfield
-    djangorestframework-api-key
-    qrcode
-
-    "django-phonenumber-field[phonenumberslite]"
 
 Currently need roles and disciplines.  Create a file (see default_roles_and_disciplines.py) and add settings to point to it:
 
