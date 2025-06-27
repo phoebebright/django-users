@@ -86,6 +86,8 @@ def get_eligible_users_for_communication(communication_type, event=None):
     if communication_type in ['signup_welcome', 'general_news']:
         # General communications - users subscribed to news
         return User.objects.filter(
+
+            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news')),
             subscribe_news__isnull=False,
             Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
         )
@@ -96,23 +98,26 @@ def get_eligible_users_for_communication(communication_type, event=None):
 
         # Users subscribed to all news
         news_users = User.objects.filter(
+
+            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news')),
             subscribe_news__isnull=False,
-            Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
         )
         eligible_users = eligible_users.union(news_users)
 
         # Users subscribed to events
         event_users = User.objects.filter(
+
+            Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events')),
             subscribe_events__isnull=False,
-            Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
         )
         eligible_users = eligible_users.union(event_users)
 
         # Users subscribed to their events only (if they've entered this event)
         if event:
             myevent_users = User.objects.filter(
-                subscribe_myevents__isnull=False,
+
                 Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents')),
+                subscribe_myevents__isnull=False,
                 # Add your event entry relationship here
                 # entries__event=event  # Adjust based on your Entry model
             )
@@ -125,16 +130,19 @@ def get_eligible_users_for_communication(communication_type, event=None):
         if event:
             return User.objects.filter(
                 Q(
+
+                    Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news')),
                     subscribe_news__isnull=False,
-                    Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
                 ) |
                 Q(
+
+                    Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events')),
                     subscribe_events__isnull=False,
-                    Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
                 ) |
                 Q(
+
+                    Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents')),
                     subscribe_myevents__isnull=False,
-                    Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents'))
                 ),
                 # entries__event=event  # Adjust based on your Entry model
             )
@@ -151,18 +159,21 @@ def get_subscription_analytics():
 
     # Current subscriptions
     news_subscribers = User.objects.filter(
+
+        Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news')),
         subscribe_news__isnull=False,
-        Q(unsubscribe_news__isnull=True) | Q(subscribe_news__gt=F('unsubscribe_news'))
     ).count()
 
     event_subscribers = User.objects.filter(
+
+        Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events')),
         subscribe_events__isnull=False,
-        Q(unsubscribe_events__isnull=True) | Q(subscribe_events__gt=F('unsubscribe_events'))
     ).count()
 
     myevent_subscribers = User.objects.filter(
+
+        Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents')),
         subscribe_myevents__isnull=False,
-        Q(unsubscribe_myevents__isnull=True) | Q(subscribe_myevents__gt=F('unsubscribe_myevents'))
     ).count()
 
     # Recent activity (last 30 days)

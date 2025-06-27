@@ -676,8 +676,13 @@ class RegisterViewBase(FormView):
                 raise
         else:
             if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
+                #TODO: handle VERIFY_ONCE = False - need to resend verification email and notify user
                 keycloak_details = get_user_by_id(user.keycloak_id)
                 if keycloak_details['emailVerified']:
+
+                    if settings.VERIFY_ONCE:
+                        user.is_active = True
+                        user.save()
                     messages.warning(self.request,
                                      _('An account with this email already exists on Skorie. Please log in with the original password.'))
                     return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")

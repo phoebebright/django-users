@@ -30,7 +30,7 @@
                             <button  class="btn btn-secondary resend_verify_code mt-1" data-channel_pk="{{ item.pk }}">{% trans "Resend Verification Code to" %} {{ item.get_channel_type_display }}  {{ item.value }}</button>
                         {% endfor %}
 
-                                            <a class="btn btn-secondary w-100 mt-3" href="{% url "users:add_channel" %}?email={{ user2verify.email }}"><i class="bi bi-plus"></i>{% trans "Try Another Contact Method" %}</a>
+                                            <a class="btn btn-secondary w-100 mt-3" href="{% url "users:add_channel" %}?email={{ user2verify.email|urlencode }}"><i class="bi bi-plus"></i>{% trans "Try Another Contact Method" %}</a>
 
                     </div>
                 </div>

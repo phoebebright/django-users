@@ -1,6 +1,6 @@
 Django-users shares the common functionality used in particular by skorie but potentially other projects as well.
 
-Currently assumes there is a keycloak realm but this will decoupled in future.
+Can be run with or without keycloak
 
 
 
@@ -13,6 +13,7 @@ This will run without any additional settings but the following settings can be 
     LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
     LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
     VERIFICATION_CODE_EXPIRY_MINUTES = 5
+    VERIFY_ONCE = True    # if user is verified in one system sharing a realm  then will be auto everified on a second - if you want each client to verify their users then set to False
 
 Make sure that django model authentication is your first choice, eg.
 
