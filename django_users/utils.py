@@ -12,7 +12,7 @@ from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 
-User = get_user_model()
+
 
 def send_otp(channel, code):
     subject = _('Your One Time Password')
@@ -80,7 +80,7 @@ def get_eligible_users_for_communication(communication_type, event=None):
     Get users eligible for a specific communication type
     This integrates with your existing CommsLog system
     """
-
+    User = get_user_model()
     now = timezone.now()
 
     if communication_type in ['signup_welcome', 'general_news']:
@@ -153,7 +153,7 @@ def get_subscription_analytics():
     """
     Get subscription analytics for agency reporting
     """
-
+    User = get_user_model()
     total_users = User.objects.count()
 
     # Current subscriptions
