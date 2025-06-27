@@ -6,7 +6,7 @@ import random
 import string
 
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 
 import qrcode
 from django.apps import apps
@@ -686,7 +686,7 @@ class RegisterViewBase(FormView):
                         user.save()
                     messages.warning(self.request,
                                      _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                    return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
+                    return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
                 else:
                     # as they never finished setting up the user, let's update the password so they can continue
                     update_password_keycloak(user.keycloak_id, password)
@@ -694,7 +694,7 @@ class RegisterViewBase(FormView):
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
-                return HttpResponseRedirect(reverse(LOGIN_REGISTER) + f"?email={email}")
+                return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
 
         set_current_user(self.request, user.id, "REGISTER")
 
