@@ -389,7 +389,7 @@ class SubscriptionPreferencesForm(forms.ModelForm):
     )
 
     class Meta:
-        model = get_user_model()
+        model = None
         fields = []  # We'll handle the subscription fields manually
 
     def __init__(self, *args, **kwargs):
