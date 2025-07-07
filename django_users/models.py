@@ -1698,6 +1698,9 @@ class UserContactBase(models.Model):
         if self.site:
             self.site = self.site[0:19]
 
+        # data can be passed in as a dict - needs to be text
+        if self.data and type(self.data) != str:
+            self.data = json.dumps(self.data, ensure_ascii=False)
 
         super().save(*args, **kwargs)
 
