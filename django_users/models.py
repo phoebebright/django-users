@@ -1690,8 +1690,14 @@ class UserContactBase(models.Model):
         abstract = True
 
     def save(self, *args, **kwargs):
+
+        if not self.site:
+            logger.warning(f"No site set when adding to UserContact - possible attack {self.user} {self.method} {self.notes} {self.data}")
+            self.site = settings.SITE_URL.replace('https://', '')
+
         if self.site:
             self.site = self.site[0:19]
+
 
         super().save(*args, **kwargs)
 
