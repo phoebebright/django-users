@@ -1718,18 +1718,24 @@ class UserContactBase(models.Model):
     @classmethod
     def add(cls, user, method, notes=None, data=None, send_mail=True):
 
+        # data is still str for now
+        # if type(data) == str:
+        #     try:
+        #         data = json.loads(data)
+        #     except json.JSONDecodeError:
+        #         logger.warning(f"Data is not valid json: {data}")
+        #         mail.send(
+        #             subject=f"Contact from {settings.SITE_NAME} unable to decode ",
+        #             message=data,
+        #             recipients=[settings.SUPPORT_EMAIL, ]
+        #         )
+        #         return
         if type(data) == str:
             try:
                 data = json.loads(data)
             except json.JSONDecodeError:
-                logger.warning(f"Data is not valid json: {data}")
-                mail.send(
-                    subject=f"Contact from {settings.SITE_NAME} unable to decode ",
-                    message=data,
-                    recipients=[settings.SUPPORT_EMAIL, ]
-                )
-                return
-
+                logger.warning(f"Data is not valid json - saving to UserContact: {data}")
+                data = None
 
 
         obj = cls.objects.create(user=user, method=method, notes=notes, data=data, site=settings.SITE_URL.replace('https://', ''))
