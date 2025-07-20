@@ -220,19 +220,19 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
         return super().form_valid(form)
 
-
+@never_cache
 def unsubscribe_only(request):
     if request.user.is_authenticated:
         request.user.update_subscribed(False)
 
-    return HttpResponseRedirect()
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
 
-
+@never_cache
 def subscribe_only(request):
     if request.user.is_authenticated:
         request.user.update_subscribed(True)
 
-    return HttpResponseRedirect()
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
 
 @login_required()
 def send_test_email(request):

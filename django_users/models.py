@@ -739,15 +739,16 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             return "Unknown"
 
     @property
-    def is_subscribe(self):
+    def is_subscribed(self):
         return (self.subscribed and not self.unsubscribed)
 
 
-    def update_subscribed(self, subscribe):
+    def update_subscribed(self, subscribe:bool):
         '''call with true or false to update'''
         if subscribe and not self.is_subscribed:
             self.subscribed = timezone.now()
-        if not subscribe and self.is_subscribed:
+            self.unsubscribed = None
+        elif not subscribe and self.is_subscribed:
             self.unsubscribed = timezone.now()
 
         # by subscribing (or not) status is at least confirmed
