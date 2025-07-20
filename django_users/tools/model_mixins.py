@@ -717,99 +717,99 @@ class HelpdeskEntryMixin(models.Model):
 
     class Meta:
         abstract = True
-
-class UserSubscribeMixin(models.Model):
-    '''use where want different levels of subscribe and are using events'''
-    # Subscription tracking with audit trail
-    subscribe_news = models.DateTimeField(blank=True, null=True, help_text="When user subscribed to general news")
-    unsubscribe_news = models.DateTimeField(blank=True, null=True, help_text="When user unsubscribed from general news")
-    subscribe_events = models.DateTimeField(blank=True, null=True, help_text="When user subscribed to event updates")
-    unsubscribe_events = models.DateTimeField(blank=True, null=True,
-                                              help_text="When user unsubscribed from event updates")
-    subscribe_myevents = models.DateTimeField(blank=True, null=True,
-                                              help_text="When user subscribed to events they are entered in")
-    unsubscribe_myevents = models.DateTimeField(blank=True, null=True,
-                                                help_text="When user unsubscribed from evenets they have entered in")
-
-    @property
-    def is_subscribed_news(self):
-        """Check if user is currently subscribed to news"""
-        return (self.subscribe_news and
-                (not self.unsubscribe_news or self.subscribe_news > self.unsubscribe_news))
-
-    @property
-    def is_subscribed_events(self):
-        """Check if user is currently subscribed to events"""
-        return (self.subscribe_events and
-                (not self.unsubscribe_events or self.subscribe_events > self.unsubscribe_events))
-
-    @property
-    def is_subscribed_myevents(self):
-        """Check if user is currently subscribed to their events only"""
-        return (self.subscribe_myevents and
-                (not self.unsubscribe_myevents or self.subscribe_myevents > self.unsubscribe_myevents))
-
-    @property
-    def communication_preference_level(self):
-        """Determine user's communication preference level"""
-        if self.is_subscribed_news:
-            return 'all'
-        elif self.is_subscribed_events:
-            return 'events_only'
-        elif self.is_subscribed_myevents:
-            return 'my_events_only'
-        else:
-            return 'none'
-
-    def subscribe_to(self, subscription_type):
-        """Subscribe user to a communication type"""
-        now = timezone.now()
-        if subscription_type == 'news':
-            self.subscribe_news = now
-            self.unsubscribe_news = None
-        elif subscription_type == 'events':
-            self.subscribe_events = now
-            self.unsubscribe_events = None
-        elif subscription_type == 'myevents':
-            self.subscribe_myevents = now
-            self.unsubscribe_myevents = None
-        self.save()
-
-    def unsubscribe_from(self, subscription_type):
-        """Unsubscribe user from a communication type"""
-        now = timezone.now()
-        if subscription_type == 'news':
-            self.unsubscribe_news = now
-        elif subscription_type == 'events':
-            self.unsubscribe_events = now
-        elif subscription_type == 'myevents':
-            self.unsubscribe_myevents = now
-        self.save()
-
-    def get_subscription_history(self):
-        """Get complete subscription history for analytics"""
-        history = []
-
-        subscriptions = [
-            ('news', self.subscribe_news, self.unsubscribe_news),
-            ('events', self.subscribe_events, self.unsubscribe_events),
-            ('myevents', self.subscribe_myevents, self.unsubscribe_myevents),
-        ]
-
-        for sub_type, sub_date, unsub_date in subscriptions:
-            if sub_date:
-                history.append({
-                    'type': sub_type,
-                    'action': 'subscribe',
-                    'datetime': sub_date,
-                    'is_active': not unsub_date or sub_date > unsub_date
-                })
-            if unsub_date:
-                history.append({
-                    'type': sub_type,
-                    'action': 'unsubscribe',
-                    'datetime': unsub_date,
-                    'is_active': False
-                })
-
-        return sorted(history, key=lambda x: x['datetime'], reverse=True)
+#
+# class UserSubscribeMixin(models.Model):
+#     '''use where want different levels of subscribe and are using events'''
+#     # Subscription tracking with audit trail
+#     subscribe_news = models.DateTimeField(blank=True, null=True, help_text="When user subscribed to general news")
+#     unsubscribe_news = models.DateTimeField(blank=True, null=True, help_text="When user unsubscribed from general news")
+#     subscribe_events = models.DateTimeField(blank=True, null=True, help_text="When user subscribed to event updates")
+#     unsubscribe_events = models.DateTimeField(blank=True, null=True,
+#                                               help_text="When user unsubscribed from event updates")
+#     subscribe_myevents = models.DateTimeField(blank=True, null=True,
+#                                               help_text="When user subscribed to events they are entered in")
+#     unsubscribe_myevents = models.DateTimeField(blank=True, null=True,
+#                                                 help_text="When user unsubscribed from evenets they have entered in")
+#
+#     @property
+#     def is_subscribed_news(self):
+#         """Check if user is currently subscribed to news"""
+#         return (self.subscribe_news and
+#                 (not self.unsubscribe_news or self.subscribe_news > self.unsubscribe_news))
+#
+#     @property
+#     def is_subscribed_events(self):
+#         """Check if user is currently subscribed to events"""
+#         return (self.subscribe_events and
+#                 (not self.unsubscribe_events or self.subscribe_events > self.unsubscribe_events))
+#
+#     @property
+#     def is_subscribed_myevents(self):
+#         """Check if user is currently subscribed to their events only"""
+#         return (self.subscribe_myevents and
+#                 (not self.unsubscribe_myevents or self.subscribe_myevents > self.unsubscribe_myevents))
+#
+#     @property
+#     def communication_preference_level(self):
+#         """Determine user's communication preference level"""
+#         if self.is_subscribed_news:
+#             return 'all'
+#         elif self.is_subscribed_events:
+#             return 'events_only'
+#         elif self.is_subscribed_myevents:
+#             return 'my_events_only'
+#         else:
+#             return 'none'
+#
+#     def subscribe_to(self, subscription_type):
+#         """Subscribe user to a communication type"""
+#         now = timezone.now()
+#         if subscription_type == 'news':
+#             self.subscribe_news = now
+#             self.unsubscribe_news = None
+#         elif subscription_type == 'events':
+#             self.subscribe_events = now
+#             self.unsubscribe_events = None
+#         elif subscription_type == 'myevents':
+#             self.subscribe_myevents = now
+#             self.unsubscribe_myevents = None
+#         self.save()
+#
+#     def unsubscribe_from(self, subscription_type):
+#         """Unsubscribe user from a communication type"""
+#         now = timezone.now()
+#         if subscription_type == 'news':
+#             self.unsubscribe_news = now
+#         elif subscription_type == 'events':
+#             self.unsubscribe_events = now
+#         elif subscription_type == 'myevents':
+#             self.unsubscribe_myevents = now
+#         self.save()
+#
+#     def get_subscription_history(self):
+#         """Get complete subscription history for analytics"""
+#         history = []
+#
+#         subscriptions = [
+#             ('news', self.subscribe_news, self.unsubscribe_news),
+#             ('events', self.subscribe_events, self.unsubscribe_events),
+#             ('myevents', self.subscribe_myevents, self.unsubscribe_myevents),
+#         ]
+#
+#         for sub_type, sub_date, unsub_date in subscriptions:
+#             if sub_date:
+#                 history.append({
+#                     'type': sub_type,
+#                     'action': 'subscribe',
+#                     'datetime': sub_date,
+#                     'is_active': not unsub_date or sub_date > unsub_date
+#                 })
+#             if unsub_date:
+#                 history.append({
+#                     'type': sub_type,
+#                     'action': 'unsubscribe',
+#                     'datetime': unsub_date,
+#                     'is_active': False
+#                 })
+#
+#         return sorted(history, key=lambda x: x['datetime'], reverse=True)
