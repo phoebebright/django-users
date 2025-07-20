@@ -228,6 +228,12 @@ def unsubscribe_only(request):
     return HttpResponseRedirect()
 
 
+def subscribe_only(request):
+    if request.user.is_authenticated:
+        request.user.update_subscribed(True)
+
+    return HttpResponseRedirect()
+
 @login_required()
 def send_test_email(request):
     CommsChannel = apps.get_model('users.CommsChannel')
@@ -291,7 +297,7 @@ def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
     if request.user.status < User.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
-        url = reverse("users:subscribe_only")
+        url = reverse("users:tell_us_about")
     else:
         url = "/"
 

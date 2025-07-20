@@ -7,7 +7,7 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
-    UnsubscribeTokenView, SubscriptionPreferencesView
+    UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -47,7 +47,7 @@ urlpatterns = [
     path('manage_users/', user_passes_test(has_role_administrator)(ManageUsers.as_view()), name="manage_users"),
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
-    path('subscribe_only/', SubscribeView.as_view(), name="subscribe_only"),
+    path('tell_us_about/', SubscribeView.as_view(), name="tell_us_about"),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
 
     path('problem_register/', ProblemSignup.as_view(), name="problem_register"),
@@ -82,6 +82,9 @@ urlpatterns = [
     path('contact_viz/',UserContactAnalyticsView.as_view(),name='user_contact_analytics'),
     path('preferences/', SubscriptionPreferencesView.as_view(), name='subscription_preferences'),
     path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
+    path('subscribe_only/', subscribe_only.as_view(), name="subscribe_only"),
+    path('unsubscribe_only/', unsubscribe_only.as_view(), name="unsubscribe_only"),
+
 
 
 ]
