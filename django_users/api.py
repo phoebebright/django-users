@@ -783,12 +783,15 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
     '''When filtering on country we include Organisations that have no country (ie. worldwide)'''
 
     # serializer_class = OrganisationSerializer
-    filterset_fields = ('default_authority',)
+    # removing filterset and doing all queries in t get_queryset
+    filterset_fields = None
+
 
     def get_serializer_class(self):
         if not hasattr(self, 'serializer_class') or self.serializer_class is None:
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
+
 
     def get_queryset(self):
         Organisation = apps.get_model('users', 'Organisation')
@@ -801,9 +804,9 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
         query_params = self.request.query_params.copy()
 
         # Ignore default_authority=0
-        if query_params.get('default_authority') == '0':
-            # Remove the 'default_authority' parameter from the mutable copy
-            query_params.pop('default_authority')
+        default_authority_id = int(query_params.get('default_authority', 0))
+        if default_authority_id > 0:
+            queryset = queryset.filter(default_authority=default_authority_id)
 
         # Filter by country if provided
         country = query_params.get('country', None)

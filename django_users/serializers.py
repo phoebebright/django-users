@@ -3,6 +3,7 @@ import copy
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.http import QueryDict
+from django_countries.serializer_fields import CountryField
 from django_countries.serializers import CountryFieldMixin
 from rest_framework import serializers
 
@@ -156,7 +157,8 @@ class UserSyncSerializerBase(DynamicModelSerializer):
         else:
             return False
 
-class OrganisationSerializerBase(DynamicModelSerializer):
+class OrganisationSerializerBase(CountryFieldMixin, DynamicModelSerializer):
+
     class Meta:
         model = None
         fields = '__all__'
