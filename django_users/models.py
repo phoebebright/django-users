@@ -2116,7 +2116,7 @@ class RoleBase(CreatedUpdatedMixin):
     objects = RoleQuerySet().as_manager()
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_role_type_display})"
 
     class Meta:
         abstract = True

@@ -8,6 +8,7 @@ import string
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, quote_plus
 
+import difflib
 import qrcode
 from django.apps import apps
 from django.core import signing
@@ -1641,3 +1642,51 @@ class UnsubscribeTokenView(TemplateView):
         # Implement your token decoding logic here
         # Return (user_id, subscription_type)
         pass
+
+def dedupe_role(request, role_ref):
+    '''make role_ref the master for this role type and user and delete all others
+    NOTE - ignores organisation
+    '''
+    Role = apps.get_model('users.Role')
+    EventRole = apps.get_model('web.EventRole')
+    Competitor = apps.get_model('web.Competitor')
+
+    role = Role.objects.get(ref=role_ref)
+    qs = Role.objects.filter(user=role.user, role_type=role.role_type).exclude(ref=role_ref)
+    print(f"deduping {qs.count()} roles of type {role.role_type} for user {role.user.email} to {role.name}")
+    for item in qs:
+
+        similarity = difflib.SequenceMatcher(None, role.name.lower(), item.name.lower()).ratio()
+        if similarity >= 0.8:
+
+            for ev in EventRole.objects.filter(role=item):
+                ev.role = role
+                ev.role_ref = role.ref
+                ev.updated = timezone.now()
+                ev.save()
+                print(f"updating event role {ev.id} to {role.name} of type {role.role_type}/{ev.role_type}")
+
+        else:
+            print(f"**ignoring {item.name} as not similar enough to {role.name} - similarity {similarity}")
+
+        if role.role_type == ModelRoles.ROLE_COMPETITOR:
+
+            for competitor in Competitor.objects.filter(role=item):
+
+                similarity = difflib.SequenceMatcher(None, role.name.lower(), item.name.lower()).ratio()
+                if similarity >= 0.8:
+
+
+                        competitor.role = role
+                        competitor.updated = timezone.now()
+                        competitor.save()
+                        print(f"updating competitor {competitor.id} to {role.name} of type {role.role_type}")
+
+                else:
+                    print(f"**ignoring {competitor.name} as not similar enough to {role.name} - similarity {similarity}")
+
+        print(f"deactivating role {item.name} of type {item.role_type} for user {item.user.email}")
+        item.active=False
+        item.updated = timezone.now()
+        item.save()
+    return HttpResponse("Done")
