@@ -804,7 +804,13 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
         query_params = self.request.query_params.copy()
 
         # Ignore default_authority=0
-        default_authority_id = int(query_params.get('default_authority', 0))
+        default_authority = query_params.get('default_authority', None)
+        if default_authority:
+            try:
+                default_authority_id = int(default_authority)
+            except ValueError:
+                default_authority = None
+
         if default_authority_id > 0:
             queryset = queryset.filter(default_authority=default_authority_id)
 
