@@ -102,3 +102,16 @@ Currently need roles and disciplines.  Create a file (see default_roles_and_disc
 MODEL_ROLES_PATH = 'config.roles_and_disciplines.ModelRoles'
 DISCIPLINES_PATH = 'config.roles_and_disciplines.Disciplines'
 ```
+
+
+## Migrating from keycloak to no keycloak
+
+We need the password.  Best approach is to have a migration period to get most of the users across automatically, saving the password in django as we go.  
+
+in settings: KEYCLOAK_MIGRATING = True
+This will save the password in the django database (encrypted) on successful login
+
+Benefits of keeping keycloak:
+- MFA (not currently used)
+- SSO (if multiple apps share same users)
+- Social Signon - can also be implemented in django

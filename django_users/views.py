@@ -584,10 +584,12 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         next = request.GET.get('next', request.POST.get('next', None))
         authenticated = False
 
+        migrating = settings.getattr('KEYCLOAK_MIGRATING', False)
+
         try:
             user = authenticate(request, username=email, password=password)
         except Exception as e:
-            #TODO:  need to identify if error other than invalid email or password
+            # TODO:  need to identify if error other than invalid email or password
             logger.warning(str(e))
             try:
                 user = User.objects.get(email=email)
@@ -597,12 +599,18 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 authenticated = True
+                if migrating:
+                    user.set_password(password)
+                    user.save()
             else:
                 try:
                     user = User.objects.get(email=email)
                 except User.DoesNotExist:
                     messages.error(request, _('Invalid username or password.'))
                     return render(request, self.template, {'email': email})
+                else:
+                    if migrating:
+                        user.set_password(password)
 
         if user and not authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
