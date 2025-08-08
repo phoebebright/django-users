@@ -584,7 +584,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         next = request.GET.get('next', request.POST.get('next', None))
         authenticated = False
 
-        migrating = settings.getattr('KEYCLOAK_MIGRATING', False)
+        migrating = getattr(settings, 'KEYCLOAK_MIGRATING', False)
 
         try:
             user = authenticate(request, username=email, password=password)
