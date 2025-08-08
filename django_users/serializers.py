@@ -62,6 +62,8 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
             ret['friendly_name'] = instance.name
             ret['formal_name'] = instance.name
             ret['sortable_name'] = instance.last_name + instance.first_name
+
+        ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
         return ret
 
 class UserSerializerBase(UserShortSerializerBase):
