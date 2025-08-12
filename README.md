@@ -115,3 +115,13 @@ Benefits of keeping keycloak:
 - MFA (not currently used)
 - SSO (if multiple apps share same users)
 - Social Signon - can also be implemented in django
+
+
+## Status Updates
+
+By default users are USER_STATUS_UNCONFIRMED (3) and then they become USER_STATUS_CONFIRMED (4) when they do something like fill in the profile.  By default this is done when update_subscribed is called but  decide how you want this to work and ensure it is in the save code of your user model.  You can call self.confirm()
+
+```python
+       # confirm once profile complete (ie. country is set)
+        if self.country and self.status == self.USER_STATUS_UNCONFIRMED:
+            self.confirm()

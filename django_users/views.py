@@ -215,8 +215,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
         # add contact note
         notify = getattr(settings, "NOTIFY_NEW_USER_EMAILS", False)
-        if notify:
-            UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
+        UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
                             data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)

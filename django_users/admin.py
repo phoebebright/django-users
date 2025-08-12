@@ -207,7 +207,7 @@ class CustomUserAdminBase(UserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal info'), {'fields': ('username', 'person')}),
-        (_('Subscribed to News'), {'fields': ('subscribe_news', 'unsubscribed_news','status','free_account')}),
+        (_('Subscribed to News'), {'fields': ('subscribe_news', 'unsubscribe_news','status','free_account')}),
         (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser','extra_roles',
                                        'groups', 'user_permissions')}),
         (_('Important dates'), {'fields': ('last_login', 'date_joined', 'removed_date')}),
