@@ -77,19 +77,6 @@ def delete_one(self, request, queryset):
 
 delete_one.short_description = "If Delete fails try this"
 
-def subscribe(self, request, queryset):
-    for item in queryset:
-        item.subscribe_news = timezone.now()
-        item.save()
-
-subscribe.short_description = "Subscribe"
-
-def unsubscribe(self, request, queryset):
-    for item in queryset:
-        item.subscribe_news = None
-        item.save()
-
-unsubscribe.short_description = "Unsubscribe"
 
 
 
@@ -195,8 +182,8 @@ class UserChangeForm(forms.ModelForm):
 
 class CustomUserAdminBase(UserAdmin):
 
-    list_display = ('email', 'person','username','is_active','last_login','date_joined', 'subscribe_news', 'unsubscribe_news')
-    list_filter = ('is_staff', 'is_active', 'status','subscribe_news', 'unsubscribe_news')
+    list_display = ('email', 'person','username','is_active','last_login','date_joined')
+    list_filter = ('is_staff', 'is_active', 'status')
     search_fields = (  'email','username')
     ordering = ( 'email',)
     actions = [email_list, subscribe, unsubscribe, remove, add_to_keycloak, make_event_manager, delete_one]
@@ -207,7 +194,7 @@ class CustomUserAdminBase(UserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal info'), {'fields': ('username', 'person')}),
-        (_('Subscribed to News'), {'fields': ('subscribe_news', 'unsubscribe_news','status','free_account')}),
+        (_('Subscribed to News'), {'fields': ('status','free_account')}),
         (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser','extra_roles',
                                        'groups', 'user_permissions')}),
         (_('Important dates'), {'fields': ('last_login', 'date_joined', 'removed_date')}),

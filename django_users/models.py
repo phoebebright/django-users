@@ -565,9 +565,9 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
     removed_date = models.DateTimeField(blank=True, null=True)
 
-    # notifications settings
-    subscribe_news = models.DateTimeField(blank=True, null=True)
-    unsubscribe_news = models.DateTimeField(blank=True, null=True)
+    # # notifications settings
+    # subscribe_news = models.DateTimeField(blank=True, null=True)
+    # unsubscribe_news = models.DateTimeField(blank=True, null=True)
 
 
     status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=DEFAULT_USER_STATUS, db_index=True)
@@ -1630,14 +1630,6 @@ class CustomUserBase(CustomUserBaseBasic):
 
 
 
-    def update_event_subscribed(self, subscribe):
-        '''call with true or false to update'''
-        if subscribe and not self.event_notifications_subscribed:
-            self.event_notifications_subscribed = timezone.now()
-        if not subscribe and self.event_notifications_subscribed:
-            self.subscribe_news = None
-            self.event_notifications_unsubscribed = timezone.now()
-        self.save()
 
 
     @property

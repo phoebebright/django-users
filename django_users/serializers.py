@@ -36,6 +36,7 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
         ret['is_active'] = instance.is_active
         #ret['user_type'] = instance.user_type
         ret['date_joined'] = instance.date_joined
+        ret['not_registered'] = False
 
         # if instance.competitor:
         #     ret['competitor_name'] = instance.competitor.name
