@@ -73,7 +73,10 @@ def logout_user_from_keycloak_and_django(request, user=None, should_redirect=Tru
     if user.is_authenticated:
         try:
             # End the user session in Keycloak
-            keycloak_admin.user_logout(user.keycloak_id)
+            try:
+                keycloak_admin.user_logout(user.keycloak_id)
+            except Exception as e:
+                logger.error(f"Failed to logout user {user.pk} from keycloak: {e} ")
 
             # Log out the user from Django
             logout(request)
