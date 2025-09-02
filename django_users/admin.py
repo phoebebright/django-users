@@ -186,7 +186,7 @@ class CustomUserAdminBase(UserAdmin):
     list_filter = ('is_staff', 'is_active', 'status')
     search_fields = (  'email','username')
     ordering = ( 'email',)
-    actions = [email_list, subscribe, unsubscribe, remove, add_to_keycloak, make_event_manager, delete_one]
+    actions = [email_list, remove, add_to_keycloak, make_event_manager, delete_one]
 
     class Meta:
         model = None

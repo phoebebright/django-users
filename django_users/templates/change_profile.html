@@ -135,26 +135,26 @@
                         </li>
                     </ul>
 
-                         <h4 class="mt-3">Keep me Updated</h4>
-                    <ul id="profile-page-about-details" class="list-group z-depth-1">
-                        <li class="list-group-item">
-                            <div class="row">
-                                <div class="col">
-                                    <i class="bi bi-newspaper"></i> {% if user.subscribed %}{% blocktrans %}You are subscribed to occassional emails{% endblocktrans %}{% else %}{% blocktrans %}You are NOT currently subscribed to our updates{% endblocktrans %}{% endif %}
-                                </div>
+<!--                         <h4 class="mt-3">Keep me Updated</h4>-->
+<!--                    <ul id="profile-page-about-details" class="list-group z-depth-1">-->
+<!--                        <li class="list-group-item">-->
+<!--                            <div class="row">-->
+<!--                                <div class="col">-->
+<!--                                    <i class="bi bi-newspaper"></i> {% if user.subscribed %}{% blocktrans %}You are subscribed to occassional emails{% endblocktrans %}{% else %}{% blocktrans %}You are NOT currently subscribed to our updates{% endblocktrans %}{% endif %}-->
+<!--                                </div>-->
 
-                                <div class="d-grid gap-2 col-6 mx-auto">
-                                    {% if user.subscribed %}
+<!--                                <div class="d-grid gap-2 col-6 mx-auto">-->
+<!--                                    {% if user.subscribed %}-->
 
-                                        <a class="btn btn-primary" href="{% url "unsubscribe" user.email  %}" >{% trans "Click to Unsubscribe" %}</a>
+<!--                                        <a class="btn btn-primary" href="{% url "unsubscribe" user.email  %}" >{% trans "Click to Unsubscribe" %}</a>-->
 
-                                    {% else %}
-                                        <a class="btn btn-primary" href="{% url "subscribe" user.email  %}">{% trans "Click to Subscribe" %}</a>
-                                    {% endif %}
-                                </div>
+<!--                                    {% else %}-->
+<!--                                        <a class="btn btn-primary" href="{% url "subscribe" user.email  %}">{% trans "Click to Subscribe" %}</a>-->
+<!--                                    {% endif %}-->
+<!--                                </div>-->
 
-                            </div>
-                        </li>
+<!--                            </div>-->
+<!--                        </li>-->
                         <li class="list-group-item">
                             <div class="row">
                                 <div class="col">

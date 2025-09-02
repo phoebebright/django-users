@@ -978,7 +978,7 @@ class SubscriptionStatusAPIView(APIView):
 
 
 class SubscriptionUpdateAPIView(APIView):
-    """Quick subscription update API"""
+    """Quick subscription update API - deprecated, use newsletter app"""
 
     def post(self, request):
         serializer = SubscriptionUpdateSerializer(data=request.data)
