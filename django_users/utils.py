@@ -34,7 +34,7 @@ def send_email_verification_code(verificationcode):
     # hack as channel not being setup correctly
     email = verificationcode.channel.value if verificationcode.channel.value else verificationcode.user.email
     mail.send(
-        verificationcode.channel.value,
+        email,
         settings.DEFAULT_FROM_EMAIL,
         subject=subject,
         message=message,
