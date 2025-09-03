@@ -31,6 +31,8 @@ def send_email_verification_code(verificationcode):
     subject = _('Your Verification Code')
     message = render_to_string('registration/email_verification_code.txt', {'code': verificationcode.code})
     html_message = render_to_string('registration/email_verification_code.html', {'code': verificationcode.code})
+    # hack as channel not being setup correctly
+    email = verificationcode.channel.value if verificationcode.channel.value else verificationcode.user.email
     mail.send(
         verificationcode.channel.value,
         settings.DEFAULT_FROM_EMAIL,
