@@ -153,7 +153,8 @@ class AddUserBase(generic.CreateView):
 
         if keycloak_id:
             # now create the django instance
-            user = form.save(commit=False)
+            userform = form.save(commit=False)
+            user = userform.instance
             user.keycloak_id = keycloak_id
             user.attributes = {'temporary_password': form.cleaned_data[
                 'password']}  # lets use activation code (or verification code) to store the temporary password
@@ -1098,7 +1099,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         self.request.session.pop('forgot_email', None)
                         self.request.session.pop('forgot_channel', None)
                         self.request.session.pop('verification_code', None)
-                        return redirect('users:login')
+                        return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
                     else:
                         form.add_error('confirm_password',
                                        _('Unable to reset password.  Please try a different password.'))
@@ -1225,6 +1226,7 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
         try:
             if 'pk' in kwargs:
                 try:

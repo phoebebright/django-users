@@ -42,7 +42,8 @@ urlpatterns = [
     path('add_user/', user_passes_test(has_role_administrator)(AddUser.as_view()), name='add-user'),
     path('manage_user_profile/', user_passes_test(has_role_administrator)(ManagerUserProfile.as_view()),
          name='manage-user-profile'),
-    path('subscribers/', user_passes_test(has_role_administrator)(subscribers_list), name='subscriber_list'),
+    # path('subscribers/', user_passes_test(has_role_administrator)(subscribers_list), name='subscriber_list'),
+    # create ManageRoles, Users and User using Base views in django-users
     path('manage_roles/', user_passes_test(has_role_administrator)(ManageRoles.as_view()), name="manage_roles"),
     path('manage_users/', user_passes_test(has_role_administrator)(ManageUsers.as_view()), name="manage_users"),
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),

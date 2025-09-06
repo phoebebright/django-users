@@ -2207,3 +2207,205 @@ class OrganisationBase(CreatedUpdatedMixin):
     @property
     def is_test(self):
         return self.test
+#
+#
+# class CommsTemplateBase(EventMixin, CreatedUpdatedMixin):
+#     '''list of templates available for event organisers - links to post_office templates'''
+#
+#     _CommsLog = None
+#
+#     @property
+#     def CommsLog(self):
+#         if not self._CommsLog:
+#             self._CommsLog = apps.get_model('web', 'CommsLog')
+#         return self._CommsLog
+#
+#     name = models.CharField(max_length=60, unique=True)
+#
+#     organisation = models.ForeignKey("users.Organisation", blank=True, null=True, on_delete=models.CASCADE)
+#     comm_group = models.CharField(max_length=12, default="competitor")
+#
+#     subject = models.CharField(max_length=200)
+#     preview_text = models.CharField(
+#         max_length=255,
+#         blank=True,
+#         help_text="Optional short preview/subtitle (shows under subject in some clients)."
+#     )
+#
+#     # Bodies – either can be used at send time
+#     body_html = models.TextField(
+#         blank=True,
+#         help_text="HTML allowed. Supports Django template syntax."
+#     )
+#     body_text = models.TextField(
+#         blank=True,
+#         help_text="Plain text fallback. Supports Django template syntax."
+#     )
+#
+#     is_active = models.BooleanField(default=True)
+#
+#     class Meta:
+#         ordering = ["-created"]
+#
+#     def __str__(self):
+#         return self.name
+#
+#     # -------- Rendering helpers --------
+#     def render_subject(self, context: dict) -> str:
+#         return Template(self.subject).render(Context(context))
+#
+#     def render_preview(self, context: dict) -> str:
+#         return Template(self.preview_text or "").render(Context(context))
+#
+#     def render_html(self, context: dict) -> str:
+#         return Template(self.body_html or "").render(Context(context))
+#
+#     def render_text(self, context: dict) -> str:
+#         return Template(self.body_text or "").render(Context(context))
+#
+#     class Meta:
+#         abstract = True
+#
+#     def preview(self):
+#         return f"Subject: {self.template.subject}<br />{self.template.html_content}"
+#
+#     def send(self, event, recipients):
+#         # hack for now - need to build way of sending in bulk
+#         for r in recipients:
+#             self.CommsLog.send(comms_template=self, group=self.comm_group, event=event, competitor=r)
+#
+#
+# class CommsLogBase(models.Model):
+#     '''
+#     List of  communications - emails etc. with event team and competitors
+#     Mostly for events
+#     '''
+#
+#     _Event = None
+#
+#     @property
+#     def Event(self):
+#         if not self._Event:
+#             self._Event = apps.get_model('web', 'Event')
+#         return self._Event
+#
+#     _CommsLog = None
+#
+#     @property
+#     def CommsLog(self):
+#         if not self._CommsLog:
+#             self._CommsLog = apps.get_model('web', 'CommsLog')
+#         return self._CommsLog
+#
+#     _Entry = None
+#
+#     @property
+#     def Entry(self):
+#         if not self._Entry:
+#             self._Entry = apps.get_model('web', 'Entry')
+#         return self._Entry
+#
+#     _CommsTemplate = None
+#
+#     @property
+#     def CommsTemplate(self):
+#         if not self._CommsTemplate:
+#             self._CommsTemplate = apps.get_model('web', 'CommsTemplate')
+#         return self._CommsTemplate
+#
+#     event = models.ForeignKey('web.Event',  blank=True, null=True, on_delete=models.CASCADE)
+#     event_ref = models.CharField(max_length=5, db_index=True, blank=True, null=True)
+#
+#     email = models.EmailField(blank=True, null=True)
+#     user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.CASCADE)
+#     comms_template = models.ForeignKey("CommsTemplate", blank=True, null=True, on_delete=models.CASCADE)
+#     eventrole = models.ForeignKey("web.EventRole", blank=True, null=True, on_delete=models.CASCADE)
+#     competitor = models.ForeignKey("web.Competitor", blank=True, null=True, on_delete=models.CASCADE)
+#     entries = models.ManyToManyField("Entry")
+#     comm_group = models.CharField(max_length=12, default="competitor")  # group sent to
+#     comm_type = models.CharField(max_length=30)  # type of communication
+#     comm_media = models.CharField(max_length=12, default="email")
+#     sent_time = models.DateTimeField(auto_now_add=True)
+#     sent_status = models.CharField(max_length=12)
+#     summary = models.CharField(max_length=128)
+#     content = models.TextField()
+#
+#     def __str__(self):
+#         return self.pk
+#
+#     class Meta:
+#         abstract = True
+#
+#     @classmethod
+#     def send(cls, template=None, group=None, context={}, email=None, user=None, eventrole=None,
+#              competitor=None, media="email", event=None, entry=None, entries=None):
+#         '''must pass email or user or eventrole
+#         Needs tidying!
+#         Supply either template (an EmailTemplate instance or a name of an EMailTemplate) OR comms_template instance'''
+#
+#         # do we have an email?
+#         if not email and user:
+#             email = user.email
+#         if not email and competitor:
+#             email = competitor.email
+#         if not email and eventrole:
+#             email = eventrole.email
+#         if not email:
+#             return False
+#
+#         context['email'] = email
+#         context['SITE_URL'] = settings.SITE_URL
+#         if user:
+#             context['user'] = user
+#         if competitor:
+#             context['competitor'] = competitor
+#             context['user'] = competitor.user
+#
+#         if entry:
+#             context['entries'] = [entry]  # entry is derecated
+#         elif competitor:
+#             context['entries'] = cls.Entry.objects.filter(competitor=competitor)
+#
+#         if entries:
+#             context['entries'] = entries
+#
+#         if event:
+#             if type(event) == type("duck"):
+#                 event = cls.Event.objects.get(ref=event)
+#             context['event'] = event
+#
+#         context['signature'] = f"{event.name} Event Team"
+#
+#         clog = cls.CommsLog.objects.create(
+#             event=event,
+#             user=user,
+#             eventrole=eventrole,
+#             comm_type=template.name,
+#             competitor=competitor,
+#             comms_template=template,
+#             comm_group=group,
+#             comm_media=media,
+#             email=email,
+#         )
+#         for item in context['entries']:
+#             clog.entries.add(item)
+#
+#         # send email
+#         if settings.NOTIFICATIONS:
+#             email = mail.send(
+#                 template=template,
+#                 context=context,
+#                 recipients=[email, ],
+#                 sender=settings.DEFAULT_FROM_EMAIL,
+#                 priority='now',
+#             )
+#
+#             clog.summary = email.subject
+#             clog.content = email.message
+#             clog.sent_status = email.status
+#         else:
+#             clog.sent_status = "NOTIF OFF"
+#
+#         clog.save()
+#
+#         return True
