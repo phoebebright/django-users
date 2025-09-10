@@ -186,6 +186,18 @@ class UserViewsetBase(viewsets.ModelViewSet):
 
         return Response("OK")
 
+    @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
+    def verify(self, request, pk):
+        '''set active = True'''
+        user = self.get_object()
+
+        user.verify()
+
+
+        logger.info(f"Verify user {user} by {request.user}")
+
+        return Response("OK")
+
 class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
