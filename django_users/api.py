@@ -200,7 +200,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
             elif status_code != 201:
                 messages.error(self.request, _('Failed to create user account.'))
             else:
-                messages.info(f"Created User account - new password is {password}")
+                messages.info(self.request, f"Created User account - new password is {password}")
 
         logger.info(f"Verify user {user} by {request.user}")
 
