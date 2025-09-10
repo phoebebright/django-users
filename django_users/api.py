@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction, IntegrityError
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -188,11 +188,19 @@ class UserViewsetBase(viewsets.ModelViewSet):
 
     @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def verify(self, request, pk):
-        '''set active = True'''
+        '''a quick catch all of checks - should be better review for automated check and fix'''
         user = self.get_object()
 
-        user.verify()
-
+        # create keycloak user if none exists
+        if settings.USE_KEYCLOAK and not user.keycloak_id:
+            password = hash(str(uuid.uuid4()))
+            status_code = user.create_keycloak_user_from_user(password, self.request.user)
+            if status_code == 409:
+                messages.error(self.request, _('User already has an account.'))
+            elif status_code != 201:
+                messages.error(self.request, _('Failed to create user account.'))
+            else:
+                messages.info(f"Created User account - new password is {password}")
 
         logger.info(f"Verify user {user} by {request.user}")
 
