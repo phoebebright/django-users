@@ -16,6 +16,8 @@ from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.db import models
 from django.db.models import Count, Case, When, CharField, Q
 from django.db.models.functions import Extract, Concat, Cast, LPad
+from django.template import TemplateDoesNotExist
+from django.template.loader import get_template
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
@@ -96,7 +98,18 @@ class AddUserBase(generic.CreateView):
     '''
     new_user = None
 
-    template_name = 'users/admin/add_user.html'
+    template_name = 'admin/users/add_user.html'
+
+    # temporary code until all system transitioned to new naming
+    def get_template_names(self):
+        '''standardise on admin templates in admin.users/...'''
+        # check if self.template_name file exists in the file system
+        try:
+            template = get_template(self.template_name)
+        except TemplateDoesNotExist:
+            template = 'users/admin/add_user.html'
+        return [template,]
+
 
     def get_success_url(self):
         return reverse('users:admin_user', kwargs={'pk': self.object.id})
@@ -153,8 +166,8 @@ class AddUserBase(generic.CreateView):
 
         if keycloak_id:
             # now create the django instance
-            userform = form.save(commit=False)
-            user = userform.instance
+            user = form.save(commit=False)
+            # user = userform.instance
             user.keycloak_id = keycloak_id
             user.attributes = {'temporary_password': form.cleaned_data[
                 'password']}  # lets use activation code (or verification code) to store the temporary password
@@ -178,6 +191,8 @@ class ManageUserProfileBase(LoginRequiredMixin, generic.CreateView):
         if not hasattr(self, 'form_class') or self.form_class is None:
             raise NotImplementedError("Define `form_class` in the child class.")
         return self.form_class
+
+
 
     def form_valid(self, form):
         # This method is called when valid form data has been POSTed.
@@ -429,14 +444,15 @@ class ProblemLogin(ProblemSignup):
 
     def get_template_names(self):
         if self.request.user.is_authenticated and self.request.user.is_administrator:
-            return "users/users/problem_login_admin.html"
+            #return "users/users/problem_login_admin.html"
+            return 'admin/users/problem_login_admin.html'
         else:
             return "users/problem_login.html"
 
 
 @method_decorator(never_cache, name='dispatch')
 class NewUsers(UserCanAdministerMixin, TemplateView):
-    template_name = "admin/new_users.html"
+    template_name = "admin/users/new_users.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1178,7 +1194,7 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
 
 
 class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
-    template_name = 'users/admin/send_otp.html'
+    template_name = 'admin/users/send_otp.html'
     docserve_page = 'admin/users/user_otp.html'
 
     def get_context_data(self, **kwargs):
@@ -1193,7 +1209,7 @@ class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
 
 class ManageRolesBase(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/manage_roles.html"
+    template_name = "admin/users/manage_roles.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1208,7 +1224,7 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
 
 class ManageUsersBase(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/manage_users.html"
+    template_name = "admin/users/manage_users.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1221,7 +1237,7 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
 @method_decorator(never_cache, name='dispatch')
 class ManageUserBase(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/admin_user.html"
+    template_name = "admin/users/admin_user.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1359,7 +1375,7 @@ def update_password_django(user, password):
 
 class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
     form_class = OrganisationFormBase
-    template_name = 'users/organisation_detail.html'
+    template_name = 'admin/users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
 
     def get_context_data(self, **kwargs):
@@ -1396,7 +1412,7 @@ class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
 
 class OrganisationListViewBase(ListView):
     model = None
-    template_name = "user/organisation_list.html"
+    template_name = "admin/user/organisation_list.html"
     context_object_name = "organisations"
 
 
@@ -1491,7 +1507,7 @@ def login_with_token(request, key=None):
 
 
 class UserContactAnalyticsView(TemplateView):
-    template_name = 'users/admin/user_contact_analytics.html'
+    template_name = 'admin/user/user_contact_analytics.html'
 
     def get_context_data(self, **kwargs):
         from users.models import UserContact

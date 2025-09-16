@@ -194,12 +194,13 @@ class UserViewsetBase(viewsets.ModelViewSet):
         # create keycloak user if none exists
         if settings.USE_KEYCLOAK and not user.keycloak_id:
             password = hash(str(uuid.uuid4()))
-            status_code = user.create_keycloak_user_from_user(password, self.request.user)
+            keycloak_id, status_code = user.create_keycloak_user_from_user(password, self.request.user)
             if status_code == 409:
                 messages.error(self.request, _('User already has an account.'))
             elif status_code != 201:
                 messages.error(self.request, _('Failed to create user account.'))
             else:
+                verify_user_without_email(keycloak_id)
                 messages.info(self.request, f"Created User account - new password is {password}")
 
         logger.info(f"Verify user {user} by {request.user}")
