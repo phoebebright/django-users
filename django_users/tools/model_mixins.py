@@ -814,33 +814,33 @@ class HelpdeskEntryMixin(models.Model):
 #
 #         return sorted(history, key=lambda x: x['datetime'], reverse=True)
 
-class NewsletterUserMixin(models.Model):
-    '''add to user to help manage newsletter subscriptions'''
-
-    class Meta:
-        abstract = True
-
-    def link_subscriptions_to_user(self) -> int:
-        """
-        Attach any subscriptions for the user's email to this user.
-        Creates a SubscriptionEvent(kind='linked_user') for each link.
-        Returns the number of subscriptions linked.
-        """
-
-        # Lock matching subs that are not yet linked to *any* user
-        subs = (Subscription.objects
-                .select_for_update()
-                .filter(user__isnull=True, email__iexact=self.email))
-
-        count = 0
-        for sub in subs:
-            sub.user = self
-            sub.save(update_fields=["user", "updated_at"])
-            SubscriptionEvent.objects.create(
-                subscription=sub,
-                event = SubscriptionEvent.Event.UPDATE_PREFS,
-                meta={"reason": "user created and linked to existing subscription"},
-            )
-            count += 1
-
-        return count
+# class NewsletterUserMixin(models.Model):
+#     '''add to user to help manage newsletter subscriptions'''
+#
+#     class Meta:
+#         abstract = True
+#
+#     def link_subscriptions_to_user(self) -> int:
+#         """
+#         Attach any subscriptions for the user's email to this user.
+#         Creates a SubscriptionEvent(kind='linked_user') for each link.
+#         Returns the number of subscriptions linked.
+#         """
+#
+#         # Lock matching subs that are not yet linked to *any* user
+#         subs = (Subscription.objects
+#                 .select_for_update()
+#                 .filter(user__isnull=True, email__iexact=self.email))
+#
+#         count = 0
+#         for sub in subs:
+#             sub.user = self
+#             sub.save(update_fields=["user", "updated_at"])
+#             SubscriptionEvent.objects.create(
+#                 subscription=sub,
+#                 event = SubscriptionEvent.Event.UPDATE_PREFS,
+#                 meta={"reason": "user created and linked to existing subscription"},
+#             )
+#             count += 1
+#
+#         return count

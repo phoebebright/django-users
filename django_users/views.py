@@ -324,6 +324,8 @@ def after_login_redirect(request):
 class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
     # form_class = ProfileForm
     # model = CustomUser
+    user = None
+
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -334,14 +336,9 @@ class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
 
         return "users/change_profile.html"
 
-    def get_object(self, queryset=None):
-        # can only see your own profile
-
-        return self.request.user
-
     def get_initial(self):
         initial = super().get_initial()
-        user = self.request.user
+        user = self.user
         if user.is_authenticated:
             initial['country'] = user.country
             initial['county'] = user.profile['county'] if 'county' in user.profile else ''
@@ -352,6 +349,7 @@ class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
         return initial
 
     def get_context_data(self, **kwargs):
+        self.user = self.request.user if self.request.user.is_authenticated else None
         context = super().get_context_data(**kwargs)
         context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
         context['now'] = timezone.now()
@@ -363,7 +361,7 @@ class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
 
         form = self.get_form()
         if form.is_valid():
-            user = request.user
+            user = self.user
             # user.country = form.cleaned_data['country']
             user.profile['county'] = form.cleaned_data['county']
             user.profile['level'] = form.cleaned_data['level']
