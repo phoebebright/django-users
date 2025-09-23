@@ -1115,15 +1115,16 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         update_password_django(user, new_password)
                         user.save()
 
-                        # if user changing own password here, then need to stop them being logged out
-                        if user == self.request.user:
-                            update_session_auth_hash(self.request, user)
-
                         success = True
 
                     # TODO: if channel was not verified set it to verified now
                     if success:
-                        messages.success(self.request, _('Your password has been reset successfully.'))
+
+                        # if user changing own password here, then need to stop them being logged out
+                        if user == self.request.user:
+                            update_session_auth_hash(self.request, user)
+
+                        messages.success(self.request, _('Your password has been reset. You can now login with your new password.'))
                         # Clear session data after success
                         self.request.session.pop('forgot_email', None)
                         self.request.session.pop('forgot_channel', None)
