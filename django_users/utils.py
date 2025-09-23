@@ -5,7 +5,7 @@ from django.core import signing
 from django.core.mail import send_mail
 from django.db.models import Q, F
 from django.utils import timezone
-from post_office import mail
+from django.apps import apps
 from django.template.loader import render_to_string
 from django.conf import settings
 from twilio.rest import Client
@@ -18,13 +18,15 @@ def send_otp(channel, code):
     subject = _('Your One Time Password')
     message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME}.  You will be asked to enter a new password when you log in.  Login link {settings.SITE_URL}{reverse(settings.LOGIN_URL)}'
     html_message = message
-    mail.send(
-        channel.value,
-        settings.DEFAULT_FROM_EMAIL,
-        subject=subject,
-        message=message,
-        html_message=html_message
-    )
+    # mail.send(
+    #     channel.value,
+    #     settings.DEFAULT_FROM_EMAIL,
+    #     subject=subject,
+    #     message=message,
+    #     html_message=html_message
+    # )
+    DirectEmail = apps.get_model('news', 'DirectEmail')
+    DirectEmail.send_simple_email(subject, message, html=html_message,to_email=channel.value)
     return True
 
 def send_email_verification_code(verificationcode):
@@ -33,13 +35,16 @@ def send_email_verification_code(verificationcode):
     html_message = render_to_string('registration/email_verification_code.html', {'code': verificationcode.code})
     # hack as channel not being setup correctly
     email = verificationcode.channel.value if verificationcode.channel.value else verificationcode.user.email
-    mail.send(
-        email,
-        settings.DEFAULT_FROM_EMAIL,
-        subject=subject,
-        message=message,
-        html_message=html_message
-    )
+    # mail.send(
+    #     email,
+    #     settings.DEFAULT_FROM_EMAIL,
+    #     subject=subject,
+    #     message=message,
+    #     html_message=html_message
+    # )
+    DirectEmail = apps.get_model('news', 'DirectEmail')
+    DirectEmail.send_simple_email(subject, message, html=html_message, user=verificationcode.user,  to_email=email)
+
     return True
 
 def send_sms_verification_code(phone_number, code):
