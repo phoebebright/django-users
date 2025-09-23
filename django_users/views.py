@@ -70,6 +70,8 @@ else:
 
 from .keycloak_models import UserEntity
 
+KEYCLOAK_MIGRATING = getattr(settings, 'KEYCLOAK_MIGRATING', False)
+
 
 def get_legitimate_redirect(request):
     nextpage = request.GET.get('next', '/')
@@ -598,8 +600,6 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         next = request.GET.get('next', request.POST.get('next', None))
         authenticated = False
 
-        migrating = getattr(settings, 'KEYCLOAK_MIGRATING', False)
-
         try:
             user = authenticate(request, username=email, password=password)
         except Exception as e:
@@ -613,7 +613,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 authenticated = True
-                if migrating:
+                if KEYCLOAK_MIGRATING:
                     user.set_password(password)
                     user.save()
             else:
@@ -623,7 +623,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                     messages.error(request, _('Invalid username or password.'))
                     return render(request, self.template, {'email': email})
                 else:
-                    if migrating:
+                    if KEYCLOAK_MIGRATING:
                         user.set_password(password)
 
         if user and not authenticated:
@@ -934,6 +934,10 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
                 form.add_error(None, f"Failed to update password: {e}")
                 return self.form_invalid(form)
 
+            if KEYCLOAK_MIGRATING:
+                update_password_django(self.request.user, new_password)
+
+
         else:
             # Update the password in Django
             update_password_django(self.request.user, new_password)
@@ -1096,6 +1100,9 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                             return self.form_invalid(form)
 
                         success = update_password_keycloak(user.keycloak_id, new_password)
+
+                        if KEYCLOAK_MIGRATING:
+                            update_password_django(self.request.user, new_password)
                     else:
                         update_password_django(user, new_password)
                         user.save()
@@ -1147,6 +1154,8 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         try:
             if settings.USE_KEYCLOAK:
                 update_password_keycloak(user.keycloak_id, new_password)
+                if KEYCLOAK_MIGRATING:
+                    update_password_django(self.request.user, new_password)
             else:
                 update_password_django(user, new_password)
 
