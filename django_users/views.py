@@ -312,7 +312,7 @@ def signup_redirect(request):
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
-    if request.user.status < User.USER_STATUS_CONFIRMED and not "@skor.ie" in request.user.email:
+    if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")
     else:
         url = "/"
