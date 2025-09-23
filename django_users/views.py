@@ -911,6 +911,13 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
     template_name = "users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
 
+
+    def get(self, request, *args, **kwargs):
+        #only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
+        if not request.user.is_authenticated:
+            return redirect(reverse('users:forgot_password'))
+        return super().get(request, *args, **kwargs)
+
     def get_success_url(self):
         return "/"
 
@@ -929,7 +936,7 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
             try:
                 update_password_keycloak(user_id, new_password)
                 messages.success(self.request, "Password updated successfully.")
-                return super().form_valid(form)
+
             except Exception as e:
                 form.add_error(None, f"Failed to update password: {e}")
                 return self.form_invalid(form)
@@ -944,7 +951,8 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
 
             messages.success(self.request, "Password updated successfully.")
             update_session_auth_hash(self.request, self.request.user)
-            return super().form_valid(form)
+
+        return super().form_valid(form)
 
 @method_decorator(never_cache, name='dispatch')
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
