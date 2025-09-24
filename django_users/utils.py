@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.core.mail import send_mail
+
 from django.db.models import Q, F
 from django.utils import timezone
 from django.apps import apps
@@ -11,20 +11,30 @@ from django.conf import settings
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
+from django.utils.module_loading import import_string
 
 
+def get_mail_class():
+    """
+    Load the configured mail class from settings.APP_MAIL_CLASS.
+    Defaults to django.core.mail if not set.
+    """
+    dotted = getattr(settings, "EMAIL_WRAPPER", "django.core.mail")
+    return import_string(dotted)
 
 def send_otp(channel, code):
     subject = _('Your One Time Password')
     message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME}.  You will be asked to enter a new password when you log in.  Login link {settings.SITE_URL}{reverse(settings.LOGIN_URL)}'
     html_message = message
-    # mail.send(
-    #     channel.value,
-    #     settings.DEFAULT_FROM_EMAIL,
-    #     subject=subject,
-    #     message=message,
-    #     html_message=html_message
-    # )
+
+    mail = get_mail_class()
+    mail.send(
+        channel.value,
+        settings.DEFAULT_FROM_EMAIL,
+        subject=subject,
+        message=message,
+        html_message=html_message
+    )
     DirectEmail = apps.get_model('news', 'DirectEmail')
     DirectEmail.send_simple_email(subject, message, html=html_message,to_email=channel.value)
     return True
