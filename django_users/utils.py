@@ -13,7 +13,6 @@ from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 from django.utils.module_loading import import_string
 
-
 def get_mail_class():
     """
     Load the configured mail class from settings.APP_MAIL_CLASS.
@@ -23,38 +22,30 @@ def get_mail_class():
     return import_string(dotted)
 
 def send_otp(channel, code):
-    subject = _('Your One Time Password')
-    message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME}.  You will be asked to enter a new password when you log in.  Login link {settings.SITE_URL}{reverse(settings.LOGIN_URL)}'
-    html_message = message
+    context={'verification_code': code,
+             'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL)}
+    template = 'send_otp',
 
     mail = get_mail_class()
     mail.send(
         channel.value,
         settings.DEFAULT_FROM_EMAIL,
-        subject=subject,
-        message=message,
-        html_message=html_message
+        template=template,
+        context=context,
     )
-    DirectEmail = apps.get_model('news', 'DirectEmail')
-    DirectEmail.send_simple_email(subject, message, html=html_message,to_email=channel.value)
+
     return True
 
 def send_email_verification_code(verificationcode):
-    subject = _('Your Verification Code')
-    message = render_to_string('registration/email_verification_code.txt', {'code': verificationcode.code})
-    html_message = render_to_string('registration/email_verification_code.html', {'code': verificationcode.code})
-    # hack as channel not being setup correctly
-    email = verificationcode.channel.value if verificationcode.channel.value else verificationcode.user.email
-    # mail.send(
-    #     email,
-    #     settings.DEFAULT_FROM_EMAIL,
-    #     subject=subject,
-    #     message=message,
-    #     html_message=html_message
-    # )
-    DirectEmail = apps.get_model('news', 'DirectEmail')
-    DirectEmail.send_simple_email(subject, message, html=html_message, user=verificationcode.user,  to_email=email)
-
+    template = 'email_verification_code',
+    context =  {'code': verificationcode.code},
+    mail = get_mail_class()
+    mail.send(
+        verificationcode.channel.value,
+        settings.DEFAULT_FROM_EMAIL,
+        template=template,
+        context=context,
+    )
     return True
 
 def send_sms_verification_code(phone_number, code):
