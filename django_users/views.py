@@ -1048,7 +1048,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 self.request.session['forgot_email'] = email
                 self.set_step(2)  # Move to Step 2
             else:
-                form.add_error('email', _('Email not found. Please {settings.REGISTER_TERM}.'))
+                form.add_error('email', _(f'Email not found. Please {settings.REGISTER_TERM}.'))
                 return self.form_invalid(form)
 
         elif step == 2:
@@ -1164,7 +1164,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
             if settings.USE_KEYCLOAK:
                 update_password_keycloak(user.keycloak_id, new_password)
                 if KEYCLOAK_MIGRATING:
-                    update_password_django(self.request.user, new_password)
+                    update_password_django(user, new_password)
             else:
                 update_password_django(user, new_password)
 
