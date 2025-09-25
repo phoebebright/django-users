@@ -32,19 +32,21 @@ def send_otp(channel, code):
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
+        receiver=channel.user,
     )
 
     return True
 
 def send_email_verification_code(verificationcode):
-    template = 'email_verification_code',
-    context =  {'code': verificationcode.code},
+    template = 'email_verification_code'
+    context =  {'code': verificationcode.code}
     mail = get_mail_class()
     mail.send(
         verificationcode.channel.value,
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
+        receiver=verificationcode.user,
     )
     return True
 
