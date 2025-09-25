@@ -28,7 +28,7 @@ def get_mail_class():
 def send_otp(channel, code):
     context = {'verification_code': code,
                'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL)}
-    template = 'send_otp',
+    template = 'send_otp'
     # we have not fully transitioned to using channels, so fallback to user.email
     if channel.value < ' ':
         to_email = channel.user.email
