@@ -1110,7 +1110,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         success = update_password_keycloak(user.keycloak_id, new_password)
 
                         if KEYCLOAK_MIGRATING:
-                            update_password_django(self.request.user, new_password)
+                            update_password_django(user, new_password)
                     else:
                         update_password_django(user, new_password)
                         user.save()
