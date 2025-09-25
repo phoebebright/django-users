@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -13,6 +14,8 @@ from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 from django.utils.module_loading import import_string
 
+logger = logging.getLogger('django')
+
 def get_mail_class():
     """
     Load the configured mail class from settings.APP_MAIL_CLASS.
@@ -21,14 +24,21 @@ def get_mail_class():
     dotted = getattr(settings, "EMAIL_WRAPPER", "django.core.mail")
     return import_string(dotted)
 
+
 def send_otp(channel, code):
-    context={'verification_code': code,
-             'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL)}
+    context = {'verification_code': code,
+               'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL)}
     template = 'send_otp',
+    # we have not fully transitioned to using channels, so fallback to user.email
+    if channel.value < ' ':
+        to_email = channel.user.email
+        logger.error(f"Channel id has no value {channel.id} ")
+    else:
+        to_email = channel.value
 
     mail = get_mail_class()
     mail.send(
-        channel.value,
+        to_email,
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
@@ -37,18 +47,28 @@ def send_otp(channel, code):
 
     return True
 
+
 def send_email_verification_code(verificationcode):
     template = 'email_verification_code'
-    context =  {'code': verificationcode.code}
+    context = {'code': verificationcode.code}
+
+    # we have not fully transitioned to using channels, so fallback to user.email
+    if verificationcode.channel.value <= ' ':
+        to_email = verificationcode.channel.user.email
+        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
+    else:
+        to_email = verificationcode.channel.value
+
     mail = get_mail_class()
     mail.send(
-        verificationcode.channel.value,
+        to_email,
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
         receiver=verificationcode.user,
     )
     return True
+
 
 def send_sms_verification_code(phone_number, code):
     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
@@ -60,6 +80,7 @@ def send_sms_verification_code(phone_number, code):
     )
     return True
 
+
 def send_whatsapp_verification_code(phone_number, code):
     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
     message = _('Your verification code is: {code}').format(code=code)
@@ -69,7 +90,6 @@ def send_whatsapp_verification_code(phone_number, code):
         to='whatsapp:' + str(phone_number)
     )
     return True
-
 
 
 def generate_login_token(user, next='/', key=None):
