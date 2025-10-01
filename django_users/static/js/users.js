@@ -52,7 +52,7 @@ function problem_login(email){
     <div class="alert alert-success" role="alert">
         Your account is verified and ready to use. Have you forgotten your password? 
         <a href="${forgot_pw_url}?email=${encodeURIComponent(email)}" class="text-primary">Yes</a><br />
-        Try <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
+        or Try to <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
             ${LOGIN_TERM}
         </a>
  

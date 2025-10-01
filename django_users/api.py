@@ -44,23 +44,28 @@ from rest_framework.throttling import SimpleRateThrottle
 
 if settings.USE_KEYCLOAK:
     from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
-    verify_user_without_email, create_keycloak_user
+        verify_user_without_email, create_keycloak_user
 
 logger = logging.getLogger('django')
 
 User = get_user_model()
 
+
 class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
+
 
 class CustomOrdinaryUserRateThrottle(UserRateThrottle):
     rate = '10/minute'
 
+
 class AdminUserRateThrottle(UserRateThrottle):
     rate = '20/minute'
 
+
 def is_administrator(user):
     return user.is_administrator
+
 
 def normalize_boolean(value):
     """
@@ -73,12 +78,12 @@ def normalize_boolean(value):
     return bool(value)
 
 
-
 class CommsChannelRateThrottle(SimpleRateThrottle):
     scope = 'comms_channel'
     THROTTLE_RATES = {
         'comms_channel': '5/hour',  # Default rate: 5 requests per hour
     }
+
     def get_cache_key(self, request, view):
         # Use user ID for authenticated requests, or IP address for anonymous
         if request.user.is_authenticated:
@@ -109,7 +114,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
     # queryset = CustomUser.objects.all().select_related('person','preferred_channel')
     # serializer_class = UserSerializer
     http_method_names = ['get', ]
-    filterset_fields = ('email','keycloak_id')
+    filterset_fields = ('email', 'keycloak_id')
 
     def get_queryset(self):
         if not hasattr(self, 'queryset') or self.queryset is None:
@@ -172,12 +177,10 @@ class UserViewsetBase(viewsets.ModelViewSet):
     def deactivate(self, request, pk):
         '''set active = False'''
 
-
         user = self.get_object()
 
         if not user.is_active:
             return Response("User is already deactivated", status=HTTP_208_ALREADY_REPORTED)
-
 
         user.is_active = False
         user.save()
@@ -207,6 +210,7 @@ class UserViewsetBase(viewsets.ModelViewSet):
 
         return Response("OK")
 
+
 class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
@@ -227,6 +231,7 @@ class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
 
+
 class SendOTP2User(UserCanAdministerMixin, APIView):
 
     def post(self, request):
@@ -235,6 +240,7 @@ class SendOTP2User(UserCanAdministerMixin, APIView):
 
         channel_send_otp(channel, otp)
         return Response(status=status.HTTP_200_OK)
+
 
 class ChangePassword(APIView):
     """
@@ -356,7 +362,6 @@ class UserProfileUpdateBase(APIView):
         User = get_user_model()
         user = User.objects.get(username=username)
 
-
         # can only edit your own
         if user != request.user:
             raise PermissionDenied()
@@ -371,18 +376,17 @@ class UserProfileUpdateBase(APIView):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class CheckEmailInKeycloak(APIView):
     '''
     check if an email has already been registered in the keycloak
     '''
-    throttle_classes = [CustomOrdinaryUserRateThrottle,]
+    throttle_classes = [CustomOrdinaryUserRateThrottle, ]
 
     def get_throttle_classes(self):
         if self.request.user.is_administrator:
-            return [AdminUserRateThrottle,]
+            return [AdminUserRateThrottle, ]
         else:
-            return [CustomOrdinaryUserRateThrottle,]
+            return [CustomOrdinaryUserRateThrottle, ]
 
     def post(self, request, *args, **kwargs):
         email = request.POST.get('email', None)
@@ -445,6 +449,33 @@ class SendVerificationCode(APIView):
     permission_classes = []
     throttle_classes = [CustomAnonRateThrottle]
 
+    def get(self, request, *args, **kwargs):
+        '''can call with an email to send a new verification code'''
+        User = get_user_model()
+        VerificationCode = apps.get_model('users', 'VerificationCode')
+        email = request.query_params.get('email', None)
+        if email:
+            user = User.objects.get(email=email)
+
+            if not user.is_active:
+                user.migrate_channels()  # make sure email moved across
+                channel = user.comms_channels.filter(
+                    channel_type='email').first()  # can't remember how to get email channel - in a hurry!
+                set_current_user(user.id, "PROBLEM")  # put user in session so can pick up in channels/verify
+                vc = VerificationCode.create_verification_code(user, channel)
+                success = vc.send_verification_code()
+
+                if success:
+                    return Response({'status': 'success', 'redirect_url': '/channels/verify/' + str(channel.id) + '/'},
+                                    status=200)
+                else:
+                    return Response({'status': 'error'}, status=500)
+            else:
+
+                return Response({'status': 'already verified'}, status=200)
+
+        return Response({'status': 'error - no email supplied'}, status=500)
+
     def post(self, request, *args, **kwargs):
         User = get_user_model()
         VerificationCode = apps.get_model('users', 'VerificationCode')
@@ -482,13 +513,11 @@ class CheckEmailInKeycloakPublic(APIView):
         else:
             return [CustomAnonRateThrottle()]
 
-
     def post(self, request, *args, **kwargs):
         User = get_user_model()
         create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
         email = request.POST.get('email', None)
         updated_keycloak_id = False
-
 
         if email:
             email = email.lower()
@@ -510,7 +539,8 @@ class CheckEmailInKeycloakPublic(APIView):
 
                 for item in django_user.comms_channels.all():
                     channels.append(
-                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,'verified': item.is_verified})
+                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
+                         'verified': item.is_verified})
 
                 # django_user = django_user.keycloak_id
 
@@ -528,15 +558,16 @@ class CheckEmailInKeycloakPublic(APIView):
                 with transaction.atomic():
                     # create user in django
                     django_user = User.objects.create_user(email=email, username=email,
-                                                                 first_name=keycloak_user['firstName'],
-                                                                 last_name=keycloak_user['lastName'],
-                                                                 )
+                                                           first_name=keycloak_user['firstName'],
+                                                           last_name=keycloak_user['lastName'],
+                                                           )
                     django_user.keycloak_id = keycloak_user['id']
                     django_user.save(update_fields=['keycloak_id', ])
 
                     for item in django_user.comms_channels.all():
                         channels.append(
-                            {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value, 'verified': item.is_verified})
+                            {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
+                             'verified': item.is_verified})
 
                 set_current_user(request, django_user.id, "REGISTER")
 
@@ -544,18 +575,18 @@ class CheckEmailInKeycloakPublic(APIView):
                 if request.user.is_authenticated and request.user.is_organiser:
                     data = {
                         'updated_keycloak_id': updated_keycloak_id,
-                    "keycloak_user_id": keycloak_user['id'],
-                    "keycloak_created": keycloak_user['createdTimestamp'],
-                    "keycloak_enabled": keycloak_user['enabled'],
-                    "keycloak_actions": keycloak_user['requiredActions'],
-                    "keycloak_verified": keycloak_user['emailVerified'],
-                    "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
-                    "django_user_id": django_user.pk if django_user else 0,
-                    "django_is_active": django_user.is_active,
+                        "keycloak_user_id": keycloak_user['id'],
+                        "keycloak_created": keycloak_user['createdTimestamp'],
+                        "keycloak_enabled": keycloak_user['enabled'],
+                        "keycloak_actions": keycloak_user['requiredActions'],
+                        "keycloak_verified": keycloak_user['emailVerified'],
+                        "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                        "django_user_id": django_user.pk if django_user else 0,
+                        "django_is_active": django_user.is_active,
                         "formal_name": django_user.person.formal_name,
                         "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
-                    "channels": channels,
-                }
+                        "channels": channels,
+                    }
                 else:
                     data = {
                         'updated_keycloak_id': updated_keycloak_id,
@@ -625,64 +656,61 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
         return self.list(request, *args, **kwargs)
 
+
 class CheckUserPublicBase(CheckEmailBase):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomAnonRateThrottle]
 
-        authentication_classes = []
-        permission_classes = [AllowAny]
-        throttle_classes = [CustomAnonRateThrottle]
-
-        def get_throttle_classes(self):
-            """
-            Dynamically assign throttles based on user type.
-            """
-            if self.request.user.is_authenticated:
-                if self.request.user.is_administrator:
-                    return [AdminUserRateThrottle()]
-                else:
-                    return [CustomOrdinaryUserRateThrottle()]
+    def get_throttle_classes(self):
+        """
+        Dynamically assign throttles based on user type.
+        """
+        if self.request.user.is_authenticated:
+            if self.request.user.is_administrator:
+                return [AdminUserRateThrottle()]
             else:
-                return [CustomAnonRateThrottle()]
+                return [CustomOrdinaryUserRateThrottle()]
+        else:
+            return [CustomAnonRateThrottle()]
 
+    def post(self, request, *args, **kwargs):
+        User = get_user_model()
+        email = request.POST.get('email', None)
 
-        def post(self, request, *args, **kwargs):
-            User = get_user_model()
-            email = request.POST.get('email', None)
+        if email:
+            email = email.lower()
 
+            channels = []
 
-            if email:
-                email = email.lower()
-
+            # get user in django
+            try:
+                # username will be set by keycloak so use email as key
+                django_user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            else:
+                set_current_user(request, django_user.id, "PROBLEM")
                 channels = []
 
-                # get user in django
-                try:
-                    # username will be set by keycloak so use email as key
-                    django_user = User.objects.get(email=email)
-                except User.DoesNotExist:
-                    return Response(status=status.HTTP_404_NOT_FOUND)
-                else:
-                    set_current_user(request, django_user.id, "PROBLEM")
-                    channels = []
+                # migrate existing channels
+                django_user.migrate_channels()
 
-                    # migrate existing channels
-                    django_user.migrate_channels()
+                for item in django_user.comms_channels.all():
+                    channels.append(
+                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'email': item.obfuscated_email,
+                         'mobile': item.obfuscated_mobile, 'verified': item.is_verified})
 
-                    for item in django_user.comms_channels.all():
-                        channels.append(
-                            {'channel_id': item.pk, 'channel_type': item.channel_type, 'email': item.obfuscated_email,
-                             'mobile': item.obfuscated_mobile, 'verified': item.is_verified})
+                # django_user = django_user.keycloak_id
 
-                    # django_user = django_user.keycloak_id
+                return JsonResponse({
 
-
-                    return JsonResponse({
-
-                        "django_user_id": django_user.pk if django_user else 0,
-                        "django_is_active": django_user.is_active,
-                        "formal_name": django_user.person.formal_name,
-                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
-                        "channels": channels,
-                    })
+                    "django_user_id": django_user.pk if django_user else 0,
+                    "django_is_active": django_user.is_active,
+                    "formal_name": django_user.person.formal_name,
+                    "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
+                    "channels": channels,
+                })
 
 
 class SetTemporaryPassword(APIView):
@@ -751,8 +779,8 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         '''create a new comms channel for the user'''
-        #TODO: at the moment we can arrive here with no user object created - need to fix this
-        CommsChannel = apps.get_model('users','CommsChannel')
+        # TODO: at the moment we can arrive here with no user object created - need to fix this
+        CommsChannel = apps.get_model('users', 'CommsChannel')
         username_code = request.POST.get('username_code', None)
         if username_code:
             User = get_user_model()
@@ -769,7 +797,6 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
         # check we don't already have this one
         channel_type = serializer.validated_data['channel_type']
         value = serializer.validated_data['value']
-
 
         created = False
         channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type, value=value)
@@ -807,12 +834,10 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
     # removing filterset and doing all queries in t get_queryset
     filterset_fields = None
 
-
     def get_serializer_class(self):
         if not hasattr(self, 'serializer_class') or self.serializer_class is None:
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
-
 
     def get_queryset(self):
         Organisation = apps.get_model('users', 'Organisation')
@@ -888,83 +913,82 @@ def toggle_role(request):
 
 
 class CreateUser(APIView):
-
     throttle_classes = [CustomOrdinaryUserRateThrottle]
 
     def post(self, request, *args, **kwargs):
 
-            '''at the moment we are creating the keycloak user then the django user to make it easier to
-            ensure the django user points to the keycloak user.  In future we might want to think about creating just
-            the django user at this point and then creating the keycloak user when the user signs in'''
+        '''at the moment we are creating the keycloak user then the django user to make it easier to
+        ensure the django user points to the keycloak user.  In future we might want to think about creating just
+        the django user at this point and then creating the keycloak user when the user signs in'''
 
-            data = request.data
-            requester = request.user
+        data = request.data
+        requester = request.user
 
-            payload = {
-                "email": data['email'],
-                "username": data['email'],
-                "firstName": data['first_name'],
-                "lastName": data['last_name'],
-                "emailVerified": True,
-                "enabled": True,
-                "attributes": {
-                    "django_created": "true",
-                },
-                "credentials": [{
-                    "type": "password",
-                    "value": data['password'].replace(" ", ""),  # remove spaces
-                    "temporary": False,  # to allow login via keycloak before password is changed
-                }],
-                "requiredActions": [],
+        payload = {
+            "email": data['email'],
+            "username": data['email'],
+            "firstName": data['first_name'],
+            "lastName": data['last_name'],
+            "emailVerified": True,
+            "enabled": True,
+            "attributes": {
+                "django_created": "true",
+            },
+            "credentials": [{
+                "type": "password",
+                "value": data['password'].replace(" ", ""),  # remove spaces
+                "temporary": False,  # to allow login via keycloak before password is changed
+            }],
+            "requiredActions": [],
 
-            }
+        }
 
-            keycloak_id, status_code = create_keycloak_user(payload, requester)
+        keycloak_id, status_code = create_keycloak_user(payload, requester)
 
-            if keycloak_id:
+        if keycloak_id:
 
+            try:
+                user = User.objects.get(keycloak_id=keycloak_id)
+            except User.DoesNotExist:
                 try:
-                    user = User.objects.get(keycloak_id = keycloak_id)
-                except User.DoesNotExist:
-                    try:
-                        user = User.objects.get(email = data['email'])
-                        logger.warning(f"User {user.pk} already exists with email but no keycloak id so attaching id {keycloak_id}")
-                        user.keycloak_id = keycloak_id
-                        user.save()
-                        serializer = UserSerializer(user)
-                        return Response(serializer.data, status=status.HTTP_200_OK)
-                    except User.DoesNotExist:
-
-
-                        # now create the django instance
-                        user = User.objects.create_user(email=data['email'], username=data['email'], first_name=data['first_name'],
-                                                        last_name=data['last_name'], keycloak_id=keycloak_id, creator=requester,
-                                                        activation_code=data['password'])
-                        # reconsider use of activation_code as temporary password.  Currently removed when user logs in.  Be better if this was all in keycloak
-                        serializer = UserSerializer(user)
-                        return Response(serializer.data, status=status.HTTP_201_CREATED)
-                else:
-                    # user already exists
+                    user = User.objects.get(email=data['email'])
+                    logger.warning(
+                        f"User {user.pk} already exists with email but no keycloak id so attaching id {keycloak_id}")
+                    user.keycloak_id = keycloak_id
+                    user.save()
                     serializer = UserSerializer(user)
-                    return Response(serializer.data, status=status.HTTP_208_ALREADY_REPORTED)
+                    return Response(serializer.data, status=status.HTTP_200_OK)
+                except User.DoesNotExist:
 
+                    # now create the django instance
+                    user = User.objects.create_user(email=data['email'], username=data['email'],
+                                                    first_name=data['first_name'],
+                                                    last_name=data['last_name'], keycloak_id=keycloak_id,
+                                                    creator=requester,
+                                                    activation_code=data['password'])
+                    # reconsider use of activation_code as temporary password.  Currently removed when user logs in.  Be better if this was all in keycloak
+                    serializer = UserSerializer(user)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
             else:
-                logger.error(f"Failed to create keycloak user for {data['email']}")
-                return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
+                # user already exists
+                serializer = UserSerializer(user)
+                return Response(serializer.data, status=status.HTTP_208_ALREADY_REPORTED)
+
+        else:
+            logger.error(f"Failed to create keycloak user for {data['email']}")
+            return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
 
 
 class MemberViewSet(viewsets.ReadOnlyModelViewSet):
-
     queryset = User.objects.none()
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        #TODO: can only access people if you are an organiser (?) and they have been on a team for an event organised
+        # TODO: can only access people if you are an organiser (?) and they have been on a team for an event organised
         # by your organisation
         # THIS API should only return a list of emails to match a query OR a single entry to match a full email
         queryset = User.objects.icansee(self.request.user).select_related('person')
         q = self.request.query_params.get('q', None)
-
 
         if q is not None:
             return queryset.filter(
@@ -980,9 +1004,11 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
 
         return User.objects.none()
 
+
 class RoleViewSetBase(viewsets.ModelViewSet):
     queryset = None
     serializer = RoleSerializerBase
+
 
 class PersonViewSetBase(viewsets.ModelViewSet):
     queryset = None

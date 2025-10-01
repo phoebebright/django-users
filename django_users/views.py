@@ -107,9 +107,11 @@ class AddUserBase(generic.CreateView):
         '''standardise on admin templates in admin.users/...'''
         # check if self.template_name file exists in the file system
         try:
-            template = get_template(self.template_name)
+            get_template(self.template_name)
         except TemplateDoesNotExist:
             template = 'users/admin/add_user.html'
+        else:
+            template = self.template_name
         return [template,]
 
 
@@ -809,8 +811,9 @@ class AddCommsChannelViewBase(FormView):
 
 
 def set_current_user(request, user_id=None, user_login_mode=None):
-    '''call with no parameters to clear'''
-
+    '''call with no parameters to clear
+    # user_login_mode - "REGISTER", "PROBLEM", "LOGGEDIN"
+    '''
     if not user_id:
         request.session.pop('user_id', None)
         request.session.pop('user_login_mode', None)

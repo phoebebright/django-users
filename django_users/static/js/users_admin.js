@@ -1,6 +1,6 @@
 /*jshint sub:true*/
 /* LOAD USERS.JS AS WELL */
-
+// synced skorie1,2,3 15sep25
 function show_user_table(selection, page_length, columns, query, panes, col_reorder) {
 
 
@@ -103,7 +103,11 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
             var d = dt.row(this).data();
             loading_on();
             //TODO: add next and include current search.
-            document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
+            if (d.keycloak_id) {
+                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
+            } else {
+                 document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
+            }
             loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
         }
     } );
@@ -140,8 +144,9 @@ function check_user(callback) {
     })
         .done(function (data) {
 
-            if (data.username.length) {
+            if ("username" in data && data.username.length) {
                 $("#username").val(data.username);
+                $("#user_id").val(data.id);
                 $("#id_email").val(data.email);
                 $("#id_first_name").val(data.first_name);
                 $("#id_last_name").val(data.last_name);
@@ -150,38 +155,47 @@ function check_user(callback) {
                 $("#message_div").fadeIn();
                 $(".user_email").html(data.email);
                 $(".user_name").html(data.first_name + " " + data.last_name);
-            }
-
-            email_exists_keycloak($("#check_email").val(), function (d) {
-
-                $("#check_user").slideUp();
-                $("#id_email").val($("#check_email").val());
-                $("#check_email").prop('readonly', true);
 
 
-                if (d) {
-                    if (d.status == "N") {
-                        $("#message").html("<p>No user with this email exists.</p>");
+                // can have scenaio with keycloak user but no local one (maybe joined another skorie)
+                // so don't want to continue check nos
+
+                email_exists_keycloak($("#check_email").val(), function (d) {
+
+                    $("#check_user").slideUp();
+                    $("#id_email").val($("#check_email").val());
+                    $("#check_email").prop('readonly', true);
+
+
+                    if (d) {
+                        if (d.status == "N") {
+                            $("#message").html("<p>No user with this email exists.</p>");
+                            // reveal rest of form for admin to fill in
+                            $("#add_user_form").slideDown();
+                        } else {
+                            // if user_pk hidden field exists then set to keycloak_id
+                            if ($("#user_pk").length) {
+                                $("#user_pk").val(d.id);
+                            }
+                            if (d.enabled && d.emailVerified) {
+                                $("#in_keycloak_and_local").slideDown();
+                            } else {
+                                $("#in_keycloak_not_local").slideDown();
+                            }
+
+                        }
+                    }
+                    if (callback) {
+                        callback(d);
+                    }
+
+
+                });
+            } else {
+                               $("#message").html("<p>No user with this email exists.</p>");
                         // reveal rest of form for admin to fill in
                         $("#add_user_form").slideDown();
-                    } else {
-
-                        if (d.enabled && d.emailVerified) {
-                            $("#in_keycloak_and_local").slideDown();
-                        } else {
-                            $("#in_keycloak_not_local").slideDown();
-                        }
-
-                    }
-                }
-                if (callback) {
-                    callback(d);
-                }
-
-
-            });
-
-
+  }
         })
         .fail(function (xhr, status, error) {
             console.log('failed' + status)
@@ -286,7 +300,7 @@ function set_keycloak_password(payload) {
 
 
 
-function check_user_exists(email, callback) {
+function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
         url: USERS_API_URL + "email_exists/",
@@ -297,7 +311,7 @@ function check_user_exists(email, callback) {
             callback(data);
         })
         .fail(function (xhr, status, error) {
-            console.log('failed' + status)
+            error_callback(error);
         });
 }
 
@@ -403,20 +417,36 @@ function get_user_roles(email) {
 }
 
 function activate_user(userid) {
+    // we are activating both django and keycloak here
+    const url = USERS_API_URL + "users/" + userid + "/activate_both/";
     $.ajax({
         method: "GET",
-        url: USERS_API_URL + "users/" + userid + "/activate/",
+        url: url,
     }).done(function (data) {
         console.log("done");
     }).fail(function (jqXHR, textStatus) {
-        console.log('failed to connect to server');
+        console.log('failed api call to '+url+' with error: ' + textStatus);
     });
 }
 
 function deactivate_user(userid) {
+    // note we are not deactivating the keycloak user here as other apps may not want to do that
+    // so this just deactivates the user in this django app
+    const url = USERS_API_URL + "users/" + userid + "/deactivate/";
     $.ajax({
         method: "GET",
-        url: USERS_API_URL + "users/" + userid + "/deactivate/",
+        url: url
+    }).done(function (data) {
+        console.log("done");
+    }).fail(function (jqXHR, textStatus) {
+        console.log('failed api call to '+url+' with error: ' + textStatus);
+    });
+}
+
+function verify_user(userid) {
+    $.ajax({
+        method: "GET",
+        url: USERS_API_URL + "users/" + userid + "/verify/",
     }).done(function (data) {
         console.log("done");
     }).fail(function (jqXHR, textStatus) {
