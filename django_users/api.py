@@ -38,6 +38,7 @@ from .tools.permissions import IsAdministratorPermission
 from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase, \
     SubscriptionStatusSerializer, SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, \
     SubscriptionHistorySerializer
+from .utils import send_otp
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
@@ -235,10 +236,11 @@ class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
 class SendOTP2User(UserCanAdministerMixin, APIView):
 
     def post(self, request):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
         channel = CommsChannel.objects.get(pk=request.data['channel_id'])
         otp = request.data['new_password']
 
-        channel_send_otp(channel, otp)
+        send_otp(channel, otp)
         return Response(status=status.HTTP_200_OK)
 
 

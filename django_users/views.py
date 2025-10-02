@@ -171,7 +171,11 @@ class AddUserBase(generic.CreateView):
         if keycloak_id:
             # now create the django instance
             user = form.save(commit=False)
-            # user = userform.instance
+
+            # not sure why user is sometimes a form instance and sometimes a user instance, just have to handle it
+            if not isinstance(user, User):
+                user = user.instance
+
             user.keycloak_id = keycloak_id
             user.attributes = {'temporary_password': form.cleaned_data[
                 'password']}  # lets use activation code (or verification code) to store the temporary password
