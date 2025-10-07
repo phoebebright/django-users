@@ -13,9 +13,10 @@
 
             {% if not can_login %}
                 <h2>{% trans "Verify Your Account" %}</h2>
-                <p>A code has been sent to {{ channel.get_channel_type_display }} {% if channel.channel_type == "email" %}{{ channel.obfuscated_email }}{% else %}{{ channel.obfuscated_mobile }}{% endif %}.  This will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes.  Enter the code below:</p>
+                <p>A verification code has been sent to {{ channel.get_channel_type_display }} {{ channel.value }}.  This will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes.  Enter the code in the email:</p>
                 <form method="post">
                     {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
 
                     <input type="text" name="code" class="form-control" id="id_code" placeholder="Verification Code" required>
                     <button class="btn btn-primary w-100 mt-3 " type="submit" id="button-addon2">{% trans "Verify" %}</button>
@@ -30,7 +31,7 @@
                             <button  class="btn btn-secondary resend_verify_code mt-1" data-channel_pk="{{ item.pk }}">{% trans "Resend Verification Code to" %} {{ item.get_channel_type_display }}  {{ item.value }}</button>
                         {% endfor %}
 
-                                            <a class="btn btn-secondary w-100 mt-3" href="{% url "users:add_channel" %}?email={{ user2verify.email|urlencode }}"><i class="bi bi-plus"></i>{% trans "Try Another Contact Method" %}</a>
+                                            <a class="btn btn-secondary w-100 mt-3" href="{% url "users:add_channel" %}?email={{ user2verify.email }}"><i class="bi bi-plus"></i>{% trans "Try Another Contact Method" %}</a>
 
                     </div>
                 </div>

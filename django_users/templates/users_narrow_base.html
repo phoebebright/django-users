@@ -51,5 +51,7 @@
 
     {% endblock  %}
 
+    {% if not USE_ASSETS %}
     <script src="{% static 'js/users.js' %}"></script>
+    {% endif %}
 {% endblock %}

@@ -3,7 +3,7 @@
 {% load static %}
 
 
-
+{% comment %}use competitors/profile.html{% endcomment %}
 
 {% block main %}
     <style>
@@ -37,14 +37,14 @@
         <div class="row">
             <div class="col-12 col-md-6 offset-md-3 ">
 
-                <p> <a id="signup" href="{% url "signup" %}" class="btn w-100"> Signup</a></p>
+                <p> <a id="signup" href="{% url "users:signup" %}" class="btn w-100"> Signup</a></p>
             </div>
         </div>
     {% else %}
 
         {% if user.is_unconfirmed %}
             <div class="card-panel warning">
-                <p>Please check your email for a message from us and click on the Confirm email to validate your email.</p>
+                <p>Your account is not currently confirmed - Please check your email for a message from us and click on the Confirm email to validate your email.</p>
 
 
 
@@ -161,7 +161,7 @@
 
                             <li class="list-group-item">
                                 <div class="row">
-                                    <a class="btn btn-primary" href="{% url "users:change-password" %}?next=users:user-profile">{% trans "Change Password" %}</a>
+                                    <a class="btn btn-primary" href="{% url "users:change-password" %}?next=profile">{% trans "Change Password" %}</a>
                                 </div>
                             </li>
 
@@ -203,7 +203,7 @@
                                     <div class="col-4">
                                         <select name="channel_type" class="form-select" required>
                                             <option value="1">Email</option>
-                                            <option value="2">SMS</option>
+{#                                            <option value="2">SMS</option>#}
                                         </select>
                                     </div>
                                     <div class="col-6">
@@ -261,13 +261,13 @@
                             {#                            </div>#}
                             {#                        </li>#}
 
-
+{% if NEWSLETTER_ON %}
 
                             <li class="list-group-item">
                                 <div class="row">
-<!--                                    <div class="col">-->
-<!--                                        <i class="bi bi-newspaper"></i> {% if user.subscribed %}{% blocktrans %}You are subscribed to occassional emails{% endblocktrans %}{% else %}{% blocktrans %}You are NOT currently subscribed to our updates{% endblocktrans %}{% endif %}-->
-<!--                                    </div>-->
+                                    <div class="col">
+                                        <i class="bi bi-newspaper"></i> {% if user.subscribed %}{% blocktrans %}You are subscribed to occassional emails{% endblocktrans %}{% else %}{% blocktrans %}You are NOT currently subscribed to our updates{% endblocktrans %}{% endif %}
+                                    </div>
 
                                     <div class="d-grid gap-2 col-6 mx-auto">
                                         {% if user.subscribed %}
@@ -281,6 +281,7 @@
 
                                 </div>
                             </li>
+    {% endif %}
                             <li class="list-group-item">
                                 <div class="row">
                                     <div class="col">
@@ -384,7 +385,7 @@
 
                         // Make AJAX request to update preferred channel
                         $.ajax({
-                            url: API_URL + '/commschannel/'+selectedChannelId+'/',
+                            url: SKORIE_API + '/comms_channel/'+selectedChannelId+'/',
                             type: 'PATCH',
                             contentType: 'application/json',
                             data: JSON.stringify({ 'preferred_channel_id': selectedChannelId }),

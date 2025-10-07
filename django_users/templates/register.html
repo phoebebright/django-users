@@ -10,7 +10,7 @@
 {% block content %}
 
              <div class="text-center mb-4">
-                <img src="/shared_static/images/calculator_icon.svg" alt="Skorie logo" width="120">
+                <img src="{{ LOGO_URL }}" alt="{{ SITE_NAME}}" width="120">
             </div>
 
             <h2 class="text-center mb-4">Register for an Account</h2>
@@ -23,7 +23,7 @@
                 {% bootstrap_field form.password %}
 
 
-                <p>You can choose to verify your account by email or from an SMS. </p>
+{#                <p>You can choose to verify your account by email or from an SMS. </p>#}
                 {% bootstrap_field form.preferred_channel %}
                 <div id="mobile" style="display:none;">
                     {% bootstrap_field form.mobile %}
@@ -36,7 +36,9 @@
             <div class="text-center mt-3">
                 <p>Already Registered? &nbsp;<a href="{% url "users:login" %}" class="text-primary">{{ LOGIN_TERM }}</a>
             </div>
-
+   <div class="text-center mt-3">
+                <p>Problem with Registering? &nbsp;<a href="{% url "users:problem_register" %}" class="text-primary">Help me {{ REGISTER_TERM }}</a>
+            </div>
 
 
 
@@ -50,6 +52,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"></script>
 
     <script>
+
         $(document).ready(function() {
 
             const phoneInputField = $("#id_mobile");
