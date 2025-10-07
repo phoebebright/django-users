@@ -602,7 +602,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
     def post(self, request):
         # NOTE THAT TEMPORARY PASSWORDS IN KEYCLOAK WILL NOT AUTHENTICATE HERE
         # HAVE TO REMOVE ALL REQUIRED ACTIONS FIRST
-        email = request.POST.get('email')
+        email = normalise_email(request.POST.get('email'))
         password = request.POST.get('password')
         next = request.GET.get('next', request.POST.get('next', None))
         authenticated = False
@@ -682,7 +682,7 @@ class RegisterViewBase(FormView):
     # @transaction.atomic
     def form_valid(self, form):
         preferred_channel = form.cleaned_data['preferred_channel']
-        email = form.cleaned_data['email']
+        email = normalise_email(form.cleaned_data['email'])
         mobile = form.cleaned_data.get('mobile')
         password = form.cleaned_data['password']
 
