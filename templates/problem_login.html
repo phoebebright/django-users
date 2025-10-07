@@ -1,0 +1,142 @@
+{% extends "users/users_narrow_base.html" %}
+{% load i18n %}
+{% load static %}
+
+
+{% block content %}
+
+    {% if user.is_authenticated %}
+        <p>You are successfully logged in as {{ user }}</p>
+    {% else %}
+        <h2>Having problems with {{ LOGIN_TERM }}?</h2>
+
+
+        <p>If you are having problems logging in we can help you reset your password using the contact methods you have previously set up.</p>
+
+        <p>Start by checking your account:</p>
+
+
+
+        <form id="emailForm">
+            <div class="mb-3">
+
+                <div class="form-floating mt-3">
+                    <input id="id_email" type="email" name="email" class="form-control" placeholder="Enter your email" required value="{{ email }}">
+                    <label for="id_email">Email</label>
+                    <div class="invalid-feedback">
+                        Please enter a valid email address.
+                    </div>
+                </div>
+
+
+            </div>
+            <div class="d-grid">
+                <input type="submit" id="submitBtn" class="btn btn-primary" value="Check my account..." disabled>
+            </div>
+        </form>
+
+        <div id="result" class="mt-4"></div>
+
+
+        <!-- Placeholder for displaying API response -->
+        <div id="apiResponse" class="mt-4" style="display: none;">
+            <h4>Status Information</h4>
+            <ul class="list-group">
+                <li class="list-group-item"><strong>Account Created:</strong> <span id="created"></span></li>
+                <li class="list-group-item"><strong>Enabled:</strong> <span id="enabled"></span></li>
+                <li class="list-group-item"><strong>Required Actions:</strong> <span id="actions"></span></li>
+                <li class="list-group-item"><strong>Email Verified:</strong> <span id="verified"></span></li>
+            </ul>
+        </div>
+
+        <!-- Error message -->
+        <div id="apiError" class="alert alert-danger mt-4" style="display: none;">
+            There was an error processing your request. Please try again later.
+        </div>
+
+
+
+        <div id="verify_how" style="display:none;">
+            <h4>Verify your Account:</h4>
+            <p>Choose how you would like to verify your account:</p>
+            <div id="existing_channels"></div>
+
+            <a class="btn btn-primary w-100 mt-3" href="{% url "users:add_channel" %}"><i class="bi bi-plus"></i>{% trans "Add Another Contact Method" %}</a>
+
+        </div>
+
+
+    {% endif %}
+{#       <div class="mt-3">#}
+{#        <a href="{% url 'users:login' %}" class="text-primary">{{ LOGIN_TERM }}</a>#}
+{#        <a href="{% url 'users:register' %}" class="text-primary float-end">{{ REGISTER_TERM }}</a>#}
+{#    </div>#}
+{% endblock %}
+
+{% block js %}
+    <script src="{% static 'js/users.js' %}"></script>
+
+    <script>
+
+
+    let emailInput = $('#id_email');
+        let submitBtn = $('#submitBtn');
+
+        $(document).ready(function () {
+
+            let pin = 0;
+
+            // Validate email input on any change
+            emailInput.on('input', function () {
+                checkEmail();
+            });
+
+            // On page load, check if email is already valid (for query param prefill)
+            if (emailInput.val()) {
+                checkEmail();
+            }
+
+            $('.verify_by_sms').on('click', function () {
+                // Show the phone input field when the button is clicked
+                $('#phoneInputContainer').slideDown();
+
+                // Enable the phone number input field to be required
+                $('#phone_number').prop('required', true);
+            });
+
+        });
+
+        function clear_feedback() {
+
+            // tidy from earlier calls
+            $("#result").slideUp();
+            $("#verify_how").slideUp();
+            $("#apiError").slideUp();
+            $("#user_id").val(0);
+            $("#keycloak_id").val(0);
+        }
+
+        clear_feedback();
+
+        $(document).on('submit', '#emailForm', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+clear_feedback();
+            const email = $('#id_email').val();
+            problem_login(email);
+
+        });
+
+        $(document).on('click', '.verify', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var channel_pk = $(this).data('channel_pk');
+            document.location.href="{% url "users:verify_channel" 0 %}".replace("0", channel_pk);
+        });
+
+        $(document).on("click", ".change_password_now", function(){
+            document.location.href = "{% url "users:change_password_now" %}?id_email=" + $("#email").val();
+        })
+
+    </script>
+{% endblock %}

@@ -7,3 +7,5 @@ djangorestframework
 djangorestframework-api-key
 python-jose
 git+https://github.com/phoebebright/django-docserve
+django_countries
+email-validator

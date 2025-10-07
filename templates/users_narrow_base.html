@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block extra_head %}
+    <style>
+
+
+
+    </style>
+{% endblock %}
+
+{% block messages %}{% endblock %}
+
+{% block outer %}
+
+
+    {% block main %}
+
+        <div class="container d-flex flex-column justify-content-center align-items-center vh-100">
+            <!-- No JavaScript Warning -->
+            <noscript>
+                <div class="alert alert-warning text-center">
+                    This portal requires JavaScript. Please enable it before proceeding.
+                </div>
+            </noscript>
+
+
+
+            <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+
+                <div class="card-content p-sm-3">
+
+                    {% bootstrap_messages %}
+                    <script>
+                        const forgot_pw_url = "{% url "users:forgot_password" %}";
+                        const login_url = "{% url "users:login" %}";
+                        const register_url = "{% url "users:register" %}";
+                        const problem_login_url = "{% url "users:problem_login" %}";
+                        const problem_register_url = "{% url "users:problem_register" %}";
+                        const REGISTER_TERM = "{{ REGISTER_TERM }}";
+                        const LOGIN_TERM = "{{ LOGIN_TERM }}";
+                    </script>
+                    {% block content %}
+
+                    {% endblock content %}
+                </div>
+            </div>
+        </div>
+
+
+    {% endblock  %}
+
+    {% if not USE_ASSETS %}
+    <script src="{% static 'js/users.js' %}"></script>
+    {% endif %}
+{% endblock %}
