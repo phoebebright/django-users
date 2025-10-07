@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import signing
+from django.core.validators import validate_email
 
 from django.db.models import Q, F
 from django.utils import timezone
@@ -230,3 +231,8 @@ def get_subscription_analytics():
         'event_rate': round((event_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
         'myevent_rate': round((myevent_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
     }
+
+def normalise_email(addr: str) -> str:
+    # Robust normalization incl. IDNA / Unicode
+    v = validate_email(addr, allow_smtputf8=True)
+    return v.normalized  # already lowercased domain; local part normalized

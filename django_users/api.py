@@ -38,7 +38,7 @@ from .tools.permissions import IsAdministratorPermission
 from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase, \
     SubscriptionStatusSerializer, SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, \
     SubscriptionHistorySerializer
-from .utils import send_otp
+from .utils import send_otp, normalise_email
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
@@ -51,10 +51,7 @@ logger = logging.getLogger('django')
 
 User = get_user_model()
 
-def normalize_email(addr: str) -> str:
-    # Robust normalization incl. IDNA / Unicode
-    v = validate_email(addr, allow_smtputf8=True)
-    return v.normalized  # already lowercased domain; local part normalized
+
 
 class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
@@ -282,7 +279,7 @@ def email_exists(request):
     User = get_user_model()
 
     try:
-        email = normalize_email(request.data.get('email'))
+        email = normalise_email(request.data.get('email'))
         User.objects.get(email=email)
         response = "Y"
     except User.DoesNotExist:
@@ -397,7 +394,7 @@ class CheckEmailInKeycloak(APIView):
             return [CustomOrdinaryUserRateThrottle, ]
 
     def post(self, request, *args, **kwargs):
-        email = normalize_email(request.POST.get('email'))
+        email = normalise_email(request.POST.get('email'))
         if email:
 
             user = search_user_by_email_in_keycloak(email, request.user)
@@ -463,7 +460,7 @@ class SendVerificationCode(APIView):
         VerificationCode = apps.get_model('users', 'VerificationCode')
         email = request.query_params.get('email', None)
         if email:
-            email = normalize_email(email)
+            email = normalise_email(email)
             user = User.objects.get(email=email)
 
             if not user.is_active:
@@ -529,7 +526,7 @@ class CheckEmailInKeycloakPublic(APIView):
         updated_keycloak_id = False
 
         if email:
-            email = normalize_email(email)
+            email = normalise_email(email)
 
             channels = []
 
@@ -647,7 +644,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
     def post(self, request, *args, **kwargs):
         User = get_user_model()
-        email = normalize_email(request.POST.get('email'))
+        email = normalise_email(request.POST.get('email'))
         # logger.warning(f"CheckEmail used to check {email}")
 
         # check this is an email
@@ -688,7 +685,7 @@ class CheckUserPublicBase(CheckEmailBase):
         email = request.POST.get('email', None)
 
         if email:
-            email = normalize_email(email)
+            email = normalise_email(email)
 
             channels = []
 

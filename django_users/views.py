@@ -48,6 +48,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 from .tools.permission_mixins import UserCanAdministerMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
+from .utils import normalise_email
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
@@ -987,10 +988,10 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             email = self.request.GET.get('email', self.request.POST.get('email', None))
             if email:
                 kwargs['initial'] = {
-                    'email': email,
+                    'email': normalise_email(email),
                 }
         elif step > 1:
-            email = self.request.session.get('forgot_email')
+            email = normalise_email(self.request.session.get('forgot_email'))
             User = get_user_model()
             self.user = User.objects.filter(email=email).first()
             if self.user:
@@ -1032,14 +1033,14 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
     def form_valid(self, form):
         step = self.get_step()
-        email = form.cleaned_data['email']
+        email = normalise_email(form.cleaned_data['email'])
         User = get_user_model()
         # we are using the email field to login so need to use that to find the user
         user = User.objects.filter(email=email).first()
 
         if step == 1:
             # Step 1: Check if email exists and save it in session
-            email = form.cleaned_data['email']
+            email = normalise_email(form.cleaned_data['email'])
 
             if user and not user.is_active and user.last_login:
                 # TODO: need to differentiate between not is_active because not verified email and was active but is not now.
@@ -1104,7 +1105,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             new_password = form.cleaned_data['new_password']
             confirm_password = form.cleaned_data['confirm_password']
             if new_password == confirm_password:
-                email = self.request.session.get('forgot_email')
+                email = normalise_email(self.request.session.get('forgot_email'))
 
                 if user:
                     if settings.USE_KEYCLOAK:
@@ -1306,7 +1307,7 @@ class ContactViewBase(FormView):
 
         # contact form where there is not a logged in user includes a question.  If answered correctly "passed" field is set to "yes"
         method = "Contact"
-        email = form.cleaned_data['email']
+        email = normalise_email(form.cleaned_data['email'])
         user = None
         if self.request.user and self.request.user.is_authenticated:
             user = self.request.user
@@ -1336,6 +1337,7 @@ class ContactViewBase(FormView):
 
         data = form.cleaned_data
         email = data['email'] or user.email
+        email = normalise_email(email)
         # add contact note
         UserContact = apps.get_model('users.UserContact')
         UserContact.add(user=user, method=method, notes=data['message'], data=form.cleaned_data)

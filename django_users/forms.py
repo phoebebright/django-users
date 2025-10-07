@@ -13,8 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from django_countries.fields import CountryField
 from phonenumber_field.formfields import PhoneNumberField
 
-
-
+from django_users.utils import normalise_email
 
 
 class SubscribeForm(forms.Form):
@@ -129,7 +128,7 @@ class ForgotPasswordForm(forms.Form):
         # Set the fields required for the current step
         if step >= 1:
             # Step 1: Only the email field is required and visible
-            required_fields['email'] = self.fields['email']
+            required_fields['email'] = normalise_email(self.fields['email'])
             required_fields['email'].required = True
 
 
@@ -247,7 +246,17 @@ class CustomUserCreationFormBase(ModelForm):
         strip=False,
         help_text=_("Suggested temporary password."),
     )
-
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            "class": "form-control force-lower",
+            "autocomplete": "email",
+            "autocapitalize": "none",
+            "autocorrect": "off",
+            "spellcheck": "false",
+            "pattern": "^[^A-Z]*$",
+            "title": "Please use lowercase letters only.",
+        })
+    )
     class Meta:
         model = None
         fields = ( "email", "first_name","last_name")
@@ -279,14 +288,34 @@ class OrganisationFormBase(ModelForm):
         fields = '__all__'
 
 class CommsChannelFormBase(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False)
+    email = forms.EmailField(label=_('Email'), required=False,
+        widget=forms.EmailInput(attrs={
+            "class": "form-control force-lower",
+            "autocomplete": "email",
+            "autocapitalize": "none",
+            "autocorrect": "off",
+            "spellcheck": "false",
+            "pattern": "^[^A-Z]*$",
+            "title": "Please use lowercase letters only.",
+        })
+    )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     class Meta:
         model = None
         fields = ['channel_type', 'email', 'mobile']
 
 class AddCommsChannelFormBase(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False)
+    email = forms.EmailField(label=_('Email'), required=False,
+        widget=forms.EmailInput(attrs={
+            "class": "form-control force-lower",
+            "autocomplete": "email",
+            "autocapitalize": "none",
+            "autocorrect": "off",
+            "spellcheck": "false",
+            "pattern": "^[^A-Z]*$",
+            "title": "Please use lowercase letters only.",
+        })
+    )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     # need to review why I put this in, but likely to trace same call between steps.  Where should it be set?
     username_code = forms.CharField(widget=HiddenInput(), required=False)
@@ -297,7 +326,7 @@ class AddCommsChannelFormBase(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        email = cleaned_data.get('email')
+        email = normalise_email(cleaned_data.get('email'))
         mobile = cleaned_data.get('mobile')
 
         # Validate that at least one of email or mobile is provided
@@ -307,9 +336,17 @@ class AddCommsChannelFormBase(forms.ModelForm):
         return cleaned_data
 
 class ContactFormBase(Form):
-
-
-    email = forms.EmailField()
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            "class": "form-control force-lower",
+            "autocomplete": "email",
+            "autocapitalize": "none",
+            "autocorrect": "off",
+            "spellcheck": "false",
+            "pattern": "^[^A-Z]*$",
+            "title": "Please use lowercase letters only.",
+        })
+    )
     message = forms.CharField( widget=forms.Textarea(attrs={'cols': 80, 'rows': 20}) )
     passed = forms.CharField(widget=forms.HiddenInput())
 
