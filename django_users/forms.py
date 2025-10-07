@@ -32,7 +32,16 @@ class SubscribeForm(forms.Form):
     # current_level = forms.ChoiceField(choices=User.LEVEL_CHOICES, required=False)
 
 class EmailForm(forms.Form):
-    recipient_email = forms.EmailField(label='Recipient\'s Email')
+    recipient_email = forms.EmailField(label='Recipient\'s Email',
+                                       widget=forms.EmailInput(attrs={
+                                           "class": "form-control force-lower",
+                                           "autocomplete": "email",
+                                           "autocapitalize": "none",
+                                           "autocorrect": "off",
+                                           "spellcheck": "false",
+                                           "pattern": "^[^A-Z]*$",
+                                           "title": "Please use lowercase letters only.",
+                                       }))
     subject = forms.CharField(label='Subject', max_length=100)
     message = forms.CharField(label='Message', widget=forms.Textarea)
 
@@ -53,7 +62,16 @@ class ProfileForm(Form):
     # whatsapp = forms.BooleanField(required=False, label="Whatsapp - Only for Events you are participating in or for support")
 
 class UserMigrationForm(forms.Form):
-    email = forms.EmailField(label="Email")
+    email = forms.EmailField(label="Email",
+                             widget=forms.EmailInput(attrs={
+                                 "class": "form-control force-lower",
+                                 "autocomplete": "email",
+                                 "autocapitalize": "none",
+                                 "autocorrect": "off",
+                                 "spellcheck": "false",
+                                 "pattern": "^[^A-Z]*$",
+                                 "title": "Please use lowercase letters only.",
+                             }))
     password = forms.CharField(label="Password", widget=forms.PasswordInput)
 
 class VerificationCodeForm(forms.Form):
@@ -64,7 +82,16 @@ class SignUpForm(forms.Form):
 
         first_name = forms.CharField(max_length=30, required=True, label=_('First Name'))
         last_name = forms.CharField(max_length=30, required=True, label=_('Last Name'))
-        email = forms.EmailField(max_length=254, required=True, label=_('Email Address'))
+        email = forms.EmailField(max_length=254, required=True, label=_('Email Address'),
+                                 widget=forms.EmailInput(attrs={
+                                     "class": "form-control force-lower",
+                                     "autocomplete": "email",
+                                     "autocapitalize": "none",
+                                     "autocorrect": "off",
+                                     "spellcheck": "false",
+                                     "pattern": "^[^A-Z]*$",
+                                     "title": "Please use lowercase letters only.",
+                                 }))
         mobile = PhoneNumberField(required=False, label=_('Phone Number (for SMS/WhatsApp)'))
         password = forms.CharField(label="Password", widget=forms.PasswordInput)
         preferred_channel = None  # Placeholder for the preferred_channel field
@@ -104,7 +131,16 @@ class SignUpForm(forms.Form):
 
 
 class ForgotPasswordForm(forms.Form):
-    email = forms.EmailField(label=_('Email Address'), required=False)
+    email = forms.EmailField(label=_('Email Address'), required=False,
+                             widget=forms.EmailInput(attrs={
+                                 "class": "form-control force-lower",
+                                 "autocomplete": "email",
+                                 "autocapitalize": "none",
+                                 "autocorrect": "off",
+                                 "spellcheck": "false",
+                                 "pattern": "^[^A-Z]*$",
+                                 "title": "Please use lowercase letters only.",
+                             }))
     channel = forms.ChoiceField(label=_('Channel to use'), required=False)
     verification_code = forms.CharField(label=_('Verification Code'), required=False)    # verifications codes are for verifying comms channels NOT for activing the user account
     new_password = forms.CharField(
