@@ -276,8 +276,10 @@ def email_exists(request):
     '''check an email exists in the system'''
     response = "N"
     User = get_user_model()
+
     try:
-        User.objects.get(email=request.data['email'])
+        email = request.data.get('email').lower()
+        User.objects.get(email=email)
         response = "Y"
     except User.DoesNotExist:
         pass
@@ -391,7 +393,7 @@ class CheckEmailInKeycloak(APIView):
             return [CustomOrdinaryUserRateThrottle, ]
 
     def post(self, request, *args, **kwargs):
-        email = request.POST.get('email', None)
+        email = request.POST.get('email').lower()
         if email:
 
             user = search_user_by_email_in_keycloak(email, request.user)
@@ -457,6 +459,7 @@ class SendVerificationCode(APIView):
         VerificationCode = apps.get_model('users', 'VerificationCode')
         email = request.query_params.get('email', None)
         if email:
+            email = email.lower()
             user = User.objects.get(email=email)
 
             if not user.is_active:
@@ -559,7 +562,7 @@ class CheckEmailInKeycloakPublic(APIView):
 
                 with transaction.atomic():
                     # create user in django
-                    django_user = User.objects.create_user(email=email, username=email,
+                    django_user = User.objects.create_user(email=email.lower(), username=email,
                                                            first_name=keycloak_user['firstName'],
                                                            last_name=keycloak_user['lastName'],
                                                            )
@@ -640,7 +643,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
     def post(self, request, *args, **kwargs):
         User = get_user_model()
-        email = request.POST.get('email', None)
+        email = request.POST.get('email').lower()
         # logger.warning(f"CheckEmail used to check {email}")
 
         # check this is an email
@@ -649,7 +652,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
         except ValidationError as e:
             raise ValidationError("Not an email")
 
-        queryset = User.objects.filter(email__iexact=email).first()
+        queryset = User.objects.filter(email=email).first()
 
         serializer = self.get_serializer(queryset)
         return Response(serializer.data)
