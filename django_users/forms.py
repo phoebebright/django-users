@@ -39,8 +39,6 @@ class EmailForm(forms.Form):
                                            "autocapitalize": "none",
                                            "autocorrect": "off",
                                            "spellcheck": "false",
-                                           "pattern": "^[^A-Z]*$",
-                                           "title": "Please use lowercase letters only.",
                                        }))
     subject = forms.CharField(label='Subject', max_length=100)
     message = forms.CharField(label='Message', widget=forms.Textarea)
@@ -69,8 +67,6 @@ class UserMigrationForm(forms.Form):
                                  "autocapitalize": "none",
                                  "autocorrect": "off",
                                  "spellcheck": "false",
-                                 "pattern": "^[^A-Z]*$",
-                                 "title": "Please use lowercase letters only.",
                              }))
     password = forms.CharField(label="Password", widget=forms.PasswordInput)
 
@@ -89,8 +85,6 @@ class SignUpForm(forms.Form):
                                      "autocapitalize": "none",
                                      "autocorrect": "off",
                                      "spellcheck": "false",
-                                     "pattern": "^[^A-Z]*$",
-                                     "title": "Please use lowercase letters only.",
                                  }))
         mobile = PhoneNumberField(required=False, label=_('Phone Number (for SMS/WhatsApp)'))
         password = forms.CharField(label="Password", widget=forms.PasswordInput)
@@ -138,8 +132,6 @@ class ForgotPasswordForm(forms.Form):
                                  "autocapitalize": "none",
                                  "autocorrect": "off",
                                  "spellcheck": "false",
-                                 "pattern": "^[^A-Z]*$",
-                                 "title": "Please use lowercase letters only.",
                              }))
     channel = forms.ChoiceField(label=_('Channel to use'), required=False)
     verification_code = forms.CharField(label=_('Verification Code'), required=False)    # verifications codes are for verifying comms channels NOT for activing the user account
@@ -289,8 +281,6 @@ class CustomUserCreationFormBase(ModelForm):
             "autocapitalize": "none",
             "autocorrect": "off",
             "spellcheck": "false",
-            "pattern": "^[^A-Z]*$",
-            "title": "Please use lowercase letters only.",
         })
     )
     class Meta:
@@ -331,8 +321,6 @@ class CommsChannelFormBase(forms.ModelForm):
             "autocapitalize": "none",
             "autocorrect": "off",
             "spellcheck": "false",
-            "pattern": "^[^A-Z]*$",
-            "title": "Please use lowercase letters only.",
         })
     )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
@@ -348,8 +336,7 @@ class AddCommsChannelFormBase(forms.ModelForm):
             "autocapitalize": "none",
             "autocorrect": "off",
             "spellcheck": "false",
-            "pattern": "^[^A-Z]*$",
-            "title": "Please use lowercase letters only.",
+
         })
     )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
@@ -379,8 +366,7 @@ class ContactFormBase(Form):
             "autocapitalize": "none",
             "autocorrect": "off",
             "spellcheck": "false",
-            "pattern": "^[^A-Z]*$",
-            "title": "Please use lowercase letters only.",
+
         })
     )
     message = forms.CharField( widget=forms.Textarea(attrs={'cols': 80, 'rows': 20}) )
