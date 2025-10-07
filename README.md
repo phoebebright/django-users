@@ -1,5 +1,26 @@
 Django-users shares the common functionality used in particular by skorie but potentially other projects as well.
 
+Note this is not (yet?) a standard app.  It expects you to create your own users app and use these base models.  In order to use the templates, add this to settings:
+
+
+
+    def app_templates_dir(app_label: str) -> Path:
+        pkg = importlib.import_module(app_label)
+        return Path(pkg.__file__).resolve().parent / "templates"
+    
+    USERS_TEMPLATES_DIR = app_templates_dir("django-users") 
+
+then update TEMPLTES
+
+    TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        # Search order: project templates first, then your app’s templates dir
+        "DIRS": [
+            BASE_DIR / "templates",
+            USERS_TEMPLATES_DIR,            <---------------------  add this
+        ],
+
 Can be run with or without keycloak
 
 
