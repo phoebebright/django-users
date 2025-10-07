@@ -1,4 +1,4 @@
-{% extends "users/users_narrow_base.html" %}
+{% extends "django_users/users_narrow_base.html" %}
 {% load i18n %}
 {% load static %}
 
@@ -34,7 +34,7 @@
         <div id="result" class="mt-4"></div>
 
         <div id="login_form_div" style="display:none;">
-            {% include "users/include_login_form.html" %}
+            {% include "django_users/include_login_form.html" %}
         </div>
         <!-- Placeholder for displaying API response -->
         <div id="apiResponse" class="mt-4" style="display: none;">

@@ -24,7 +24,7 @@ class CreateTicketView(LoginRequiredMixin, CreateView):
     """View for users to create support tickets"""
     model = None
     form_class = SupportTicketFormBase
-    template_name = 'users/helpdesk/create_ticket_user.html'
+    template_name = 'django_users/helpdesk/create_ticket_user.html'
 
     def form_valid(self, form):
         # Set user and method before saving
@@ -89,7 +89,7 @@ class CreateTicketView(LoginRequiredMixin, CreateView):
 class TicketDetailViewBase(LoginRequiredMixin, DetailView):
     """View ticket details"""
     model = None
-    template_name = 'users/helpdesk/ticket_detail.html'
+    template_name = 'django_users/helpdesk/ticket_detail.html'
     context_object_name = 'ticket'
 
     def get_queryset(self):

@@ -101,7 +101,7 @@ class AddUserBase(generic.CreateView):
     '''
     new_user = None
 
-    template_name = 'admin/users/add_user.html'
+    template_name = 'admin/django_users/add_user.html'
 
     # temporary code until all system transitioned to new naming
     def get_template_names(self):
@@ -110,7 +110,7 @@ class AddUserBase(generic.CreateView):
         try:
             get_template(self.template_name)
         except TemplateDoesNotExist:
-            template = 'users/admin/add_user.html'
+            template = 'django_users/admin/add_user.html'
         else:
             template = self.template_name
         return [template,]
@@ -343,7 +343,7 @@ class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
 
     def get_template_names(self):
 
-        return "users/change_profile.html"
+        return "django_users/change_profile.html"
 
     def get_initial(self):
         initial = super().get_initial()
@@ -405,14 +405,14 @@ class Troubleshoot(UserCanAdministerMixin, View):
 
 @method_decorator(never_cache, name='dispatch')
 class ProblemSignup(TemplateView):
-    template_name = "users/problem_register.html"
+    template_name = "django_users/problem_register.html"
     verified = False
 
     def get_template_names(self):
         if self.request.user.is_authenticated and self.request.user.is_administrator:
-            return "users/admin/problem_register_admin.html"
+            return "django_users/admin/problem_register_admin.html"
         else:
-            return "users/problem_register.html"
+            return "django_users/problem_register.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -425,7 +425,7 @@ class ProblemSignup(TemplateView):
 
 @method_decorator(never_cache, name='dispatch')
 class ProblemLogin(ProblemSignup):
-    template_name = "users/problem_login.html"
+    template_name = "django_users/problem_login.html"
 
     def dispatch(self, request, *args, **kwargs):
 
@@ -451,15 +451,15 @@ class ProblemLogin(ProblemSignup):
 
     def get_template_names(self):
         if self.request.user.is_authenticated and self.request.user.is_administrator:
-            #return "users/users/problem_login_admin.html"
-            return 'admin/users/problem_login_admin.html'
+            #return "django_users/django_users/problem_login_admin.html"
+            return 'admin/django_users/problem_login_admin.html'
         else:
-            return "users/problem_login.html"
+            return "django_users/problem_login.html"
 
 
 @method_decorator(never_cache, name='dispatch')
 class NewUsers(UserCanAdministerMixin, TemplateView):
-    template_name = "admin/users/new_users.html"
+    template_name = "admin/django_users/new_users.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -592,7 +592,7 @@ def send_sms(recipient_user, message, user=None):
 
 @method_decorator(never_cache, name='dispatch')
 class LoginView(GoNextTemplateMixin, TemplateView):
-    template = "users/login.html"
+    template = "django_users/login.html"
 
     def get(self, request):
         # TODO: check user is not already logged in
@@ -668,7 +668,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 @method_decorator(never_cache, name='dispatch')
 class RegisterViewBase(FormView):
     # form_class = SignUpForm
-    template_name = "users/register.html"
+    template_name = "django_users/register.html"
     user = None
 
     def get_form_class(self):
@@ -785,7 +785,7 @@ class AddCommsChannelViewBase(FormView):
         if user:
             form.fields['username_code'].initial = user.password
 
-        return render(request, 'users/add_channel.html', {'form': form})
+        return render(request, 'django_users/add_channel.html', {'form': form})
 
     def post(self, request):
         """Handle POST request, validate form, and create communication channel."""
@@ -812,7 +812,7 @@ class AddCommsChannelViewBase(FormView):
                 return HttpResponseRedirect(reverse('users:login'))
 
         # If form is invalid, re-render the form with errors
-        return render(request, 'users/add_channel.html', {'form': form})
+        return render(request, 'django_users/add_channel.html', {'form': form})
 
 
 def set_current_user(request, user_id=None, user_login_mode=None):
@@ -884,7 +884,7 @@ class VerifyChannelViewBase(View):
         if request.user.is_authenticated and request.user.is_administrator:
             context['verification_code'] = vc.code
 
-        return render(request, 'users/verify_channel.html', context)
+        return render(request, 'django_users/verify_channel.html', context)
 
     def post(self, request, channel_id):
         CommsChannel = apps.get_model('users.CommsChannel')
@@ -900,14 +900,14 @@ class VerifyChannelViewBase(View):
                 return redirect(url)
 
         messages.error(request, _('Invalid or expired verification code.'))
-        return render(request, 'users/verify_channel.html', {'channel': channel})
+        return render(request, 'django_users/verify_channel.html', {'channel': channel})
 
 
 @method_decorator(never_cache, name='dispatch')
 class ManageCommsChannelsView(View):
     def get(self, request):
         channels = request.user.comms_channels.all()
-        return render(request, 'users/manage_channels.html', {'channels': channels})
+        return render(request, 'django_users/manage_channels.html', {'channels': channels})
 
     def post(self, request):
         # Handle deletion or re-verification if needed
@@ -916,7 +916,7 @@ class ManageCommsChannelsView(View):
 
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
-    template_name = "users/change_password.html"
+    template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
 
 
@@ -966,7 +966,7 @@ class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
     # TODO: instead of putting vc code into session, put the pk of the record and check properly
     # Recheck vc on last step before changing password - could bypass step 3?
-    template_name = "users/forgot_password.html"
+    template_name = "django_users/forgot_password.html"
     form_class = ForgotPasswordForm
     success_url = reverse_lazy("users:change_password")
     user = None
@@ -1154,7 +1154,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordView(GoNextTemplateMixin, FormView):
-    template_name = "users/change_password.html"
+    template_name = "django_users/change_password.html"
     form_class = ChangePasswordForm
     success_url = reverse_lazy("users:user-profile")
 
@@ -1198,7 +1198,7 @@ def update_users(request):
 # this should only be used with keycloak, UserEntity is a link to the keycloak user model
 class UnverifiedUsersList(UserCanAdministerMixin, ListView):
     model = UserEntity
-    template_name = 'users/unverified_users_report.html'
+    template_name = 'django_users/unverified_users_report.html'
     context_object_name = 'users'  # Name to use in the template
 
     def get_queryset(self):
@@ -1462,7 +1462,7 @@ def qr_login_token(request):
 
 
 class QRLogin(LoginRequiredMixin, TemplateView):
-    template_name = "users/qr_login.html"
+    template_name = "django_users/qr_login.html"
 
     def get_context_data(self, **kwargs):
         me = self.request.user
