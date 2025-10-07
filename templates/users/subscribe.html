@@ -1,0 +1,165 @@
+{% extends "registration/registration_base.html" %}
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+{% load eventtags %}
+
+{% block title %}{% trans "Subscribe" %}{% endblock %}
+
+{% block extra_head %}
+    <style>
+        .w-100 {
+            width: 100%;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="row">
+        <div class=" col">
+            <h1>Subscribe for DressageCalculator.com and Skor.ie News & Updates</h1>
+
+            <p>DressageCalculator.com does what it says on the tin, it makes scoring dressage tests quick and easy.  Skor.ie is it's big brother, taking the pain out scheduling, printing, scoring your dressage event.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class=" col">
+
+            <form id="subscribe_form" method="post" action=".">
+                {% csrf_token %}
+
+
+                    <div class="mb-3">
+{#                    {{ content|safe }}#}
+                        Tell us a bit more about yourself - all fields are optional.
+    </div>
+
+                    {% bootstrap_field form.country %}
+                    {% bootstrap_field form.where_did_you_hear %}
+
+
+                <div class="row">
+                    <div class="input-field col">
+                        <h5>I am interested in:</h5>
+                        <p>
+                            <label>
+                                <input name="score" type="checkbox" />
+                                <span>Scoring Dressage Tests</span>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input name="store" type="checkbox" />
+                                <span>Saving my Dressage Tests</span>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input name="analyse" type="checkbox" />
+                                <span>Analysing my Dressage Tests</span>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input name="analyse_students" type="checkbox" />
+                                <span>Analysing my Students Dressage Tests</span>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input name="organise" type="checkbox" />
+                                <span>Running Dressage Shows</span>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input name="judge" type="checkbox" />
+                                <span>Analysing my Judging</span>
+                            </label>
+                        </p>
+                    </div>
+                </div>
+
+
+                <div class="row">
+                    <div class="input-field col">
+                        <h5>Early Access:</h5>
+                        <p>
+                            <label>
+                                <input name="early_access" type="checkbox" />
+                                <span>I would be interested in having access to early releases and helping to test DressageCalculator and Skor.ie.</span>
+                            </label>
+                        </p>
+                    </div>
+                </div>
+
+
+
+   <!-- Subscribe to Email List Section -->
+                <div class="mb-3 email-subscription-section">
+                    {% get_content "profile_why_signup" user as content %}
+                                 <div class="mb-3">
+                    {{ content|safe }}
+    </div>
+
+                    <div class="form-check fs-2 mb-3">
+                        <input type="checkbox" class="form-check-input subscribe_me" id="subscribeToEmail" name="subscribe_to_email">
+                        <label class="form-check-label" for="subscribeToEmail">Yes, send me very occassional updates </label>
+                    </div>
+                    <a href="{% url 'privacy' %}" class="mt-3">Read our Privacy Policy...</a>
+                </div>
+
+                <div class="row">
+                    <div class=" col">Emails will be sent to: {{ user.email }}
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-success">Save Profile</button>
+                </div>
+
+
+
+            </form>
+        </div>
+    </div>
+
+    <script src="{% static "js/jquery.validate.js" %}"></script>
+    <script>
+
+
+        // DOCUMENTATION: https://jqueryvalidation.org/
+        $("form").validate({
+            rules: {
+                email: {
+                    required: true,
+                    email: true
+                },
+
+
+            },
+
+
+            errorElement: 'span',
+            errorPlacement: function (error, element) {
+
+                $(error).addClass('form-text');
+                var placement = $(element).parent().find(".error_message");
+                if (placement) {
+                    $(placement).html(error);
+                } else {
+                    error.insertAfter(element);
+                }
+
+            },
+            errorClass: 'invalid',
+        });
+
+
+
+
+
+    </script>
+{% endblock %}

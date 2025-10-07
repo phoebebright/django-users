@@ -1,0 +1,54 @@
+{% extends "registration/registration_base.html" %}
+{% load i18n %}
+
+{% block title %}Login{% endblock %}
+{% block outer %}
+
+<div class="container d-flex flex-column justify-content-center align-items-center vh-100">
+    <!-- No JavaScript Warning -->
+    <noscript>
+        <div class="alert alert-warning text-center">
+            This portal requires JavaScript. Please enable it before proceeding.
+        </div>
+    </noscript>
+
+
+
+    <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+            <!-- Logo and Login Form -->
+    <div class="text-center mb-4">
+        <img src="/shared_static/images/calculator_icon.svg" alt="Skorie logo" width="120">
+    </div>
+
+        <h2 class="text-center mb-4">Log in</h2>
+
+     
+                        {% include "users/include_login_form.html" %}
+        
+ 
+
+        <!-- Signup Link -->
+        <div class="text-center mt-3">
+            <p>Don’t have an account? <a href="{% url "users:signup" %}" class="text-primary">Sign up</a></p>
+        </div>
+    </div>
+
+    <!-- Footer Links -->
+    <div class="text-center mt-4">
+        <a href="/privacy/" class="text-muted me-3">Privacy Policy</a>
+        <a href="/about/" class="text-muted">About Skorie</a>
+        <p class="text-muted mt-2">© {{ COPYRIGHT }}. All rights reserved.</p>
+    </div>
+</div>
+
+
+
+{% endblock %}
+
+{% block js  %}
+<script>
+        $(document).ready(function () {
+                      $(".login_form").slideDown();
+    })
+</script>
+{% endblock %}

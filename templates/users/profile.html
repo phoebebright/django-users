@@ -1,0 +1,491 @@
+{% extends 'competitor/competitor_base.html' %}
+{% load i18n %}
+{% load static %}
+
+
+{% comment %}use competitors/profile.html{% endcomment %}
+
+{% block main %}
+    <style>
+        .profile_card_text {
+            font-size: 1.4em;
+        }
+        .sheets_wrapper {
+            width:100%;
+        }
+
+        .go_account:hover {
+            cursor: pointer;
+        }
+
+
+    </style>
+
+    <form id="timezone">
+        <input type="hidden" id="id_timezone" name="timezone" value="" />
+    </form>
+
+    <div class="row">
+
+        <div class="col">
+            <h1 class="page_title hide-on-small-and-down">{% trans "My Account" %}</h1>
+        </div>
+    </div>
+
+    {% if not user.is_authenticated %}
+        <p>Signup to get a profile page.</p>
+        <div class="row">
+            <div class="col-12 col-md-6 offset-md-3 ">
+
+                <p> <a id="signup" href="{% url "users:signup" %}" class="btn w-100"> Signup</a></p>
+            </div>
+        </div>
+    {% else %}
+
+        {% if user.is_unconfirmed %}
+            <div class="card-panel warning">
+                <p>Your account is not currently confirmed - Please check your email for a message from us and click on the Confirm email to validate your email.</p>
+
+
+
+                {% else %}
+                <div class="row">
+
+                    <div class="col-12 col-md-6">
+
+
+                        <ul id="profile-page-about-details" class="list-group z-depth-1">
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col-4">
+                                        <i class="bi bi-person-fill"></i> {% trans "Name" %}</div>
+                                    <div class="col-7 right-align">
+                                        {{ user.full_name }}
+                                    </div>
+                                    {#                                    <div class="col-1 right-align">#}
+                                    {#                                        <i class="bi bi-pencil-fill go_account"></i>#}
+                                    {#                                    </div>#}
+                                </div>
+                            </li>
+                            {#                            <li class="list-group-item">#}
+                            {#                                <div class="row">#}
+                            {#                                    <div class="col-4">#}
+                            {#                                        <i class="bi bi-clock-fill"></i> {% trans "Timezone" %}</div>#}
+                            {#                                    <div class="col-7 right-align">#}
+                            {##}
+                            {#                                        <select name="timezone" class="form-select update"  id="id_timezone" required>#}
+                            {#                                            <option selected disabled value="">Choose...</option>#}
+                            {#                                            {% for k,v in timezone_list %}#}
+                            {#                                                <option value="{{ k}}">{{ v }}</option>#}
+                            {#                                            {% endfor %}#}
+                            {##}
+                            {#                                        </select>#}
+                            {#                                    </div>#}
+                            {##}
+                            {#                                </div>#}
+                            {#                            </li>#}
+                            {#                            <li class="list-group-item">#}
+                            {#                                <div class="row">#}
+                            {#                                    <div class="input-field col">#}
+                            {#                                        <h5>I am interested in:</h5>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="score" type="checkbox" class="profile_info"/>#}
+                            {#                                                <span>Scoring Dressage Tests for an event</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="score_mine" type="checkbox" class="profile_info"/>#}
+                            {#                                                <span>Checking my scores at an event</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="store" type="checkbox" class="profile_info"/>#}
+                            {#                                                <span>Saving my Dressage Tests</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="analyse" type="checkbox" class="profile_info" />#}
+                            {#                                                <span>Analysing my Dressage Tests</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="analyse_students" type="checkbox" class="profile_info" />#}
+                            {#                                                <span>Analysing my Students Dressage Tests</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="organise" type="checkbox" class="profile_info" />#}
+                            {#                                                <span>Running Dressage Shows</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="judge" type="checkbox" class="profile_info" />#}
+                            {#                                                <span>Analysing my Judging</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                    </div>#}
+                            {#                                </div>#}
+                            {##}
+                            {##}
+                            {#                                <div class="row">#}
+                            {#                                    <div class="input-field col">#}
+                            {#                                        <h5>Early Access:</h5>#}
+                            {#                                        <p>#}
+                            {#                                            <label>#}
+                            {#                                                <input name="early_access" type="checkbox" class="profile_info"/>#}
+                            {#                                                <span>I would be interested in having access to early releases and helping to test DressageCalculator.com and Skor.ie.</span>#}
+                            {#                                            </label>#}
+                            {#                                        </p>#}
+                            {#                                    </div>#}
+                            {#                                </div>#}
+                            {##}
+                            {##}
+                            {#                            </li>#}
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col-4">
+                                        {% trans "Username" %}</div>
+                                    <div class="col-7 right-align">{{ user.email }}</div>
+                                    {#                                    <div class="col-1 right-align">#}
+                                    {#                                        <i class="bi bi-pencil-fill go_account"></i>#}
+                                    {#                                    </div>#}
+                                </div>
+                            </li>
+
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <a class="btn btn-primary" href="{% url "users:change-password" %}?next=profile">{% trans "Change Password" %}</a>
+                                </div>
+                            </li>
+
+                            {% for item in user.comms_channels.all %}
+                                <li class="list-group-item">
+                                    <div class="row">
+                                        <div class="col-1">
+                                            {% if item.is_verified %}
+                                                <input
+                                                        type="checkbox"
+                                                        class="preferred-channel-checkbox"
+                                                        name="preferred_channel"
+                                                        value="{{ item.id }}"
+                                                        {% if user.preferred_channel == item %}checked{% endif %}>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-3">
+                                            {{ item.get_channel_type_display}}
+                                        </div>
+                                        <div class="col-6 right-align">{{ item.value }}</div>
+                                        <div class="col-2 right-align">
+                                            {% if not item.is_verified %}
+                                                <a href="#" class="verify_channel"><i class="bi bi-check-circle " title="Verify Channel"></i></a>
+                                            {% endif %}
+                                        {% if not user.preferred_channel == item %}
+                                            <a href="#" class="delete_channel"><i class="bi bi-trash " title="Delete Channel"></i></a>
+                                        {% endif %}
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <a class="btn btn-primary add_comms_channel" href="#"><i class="bi bi-plus"></i>{% trans "Add Comms Channel" %}</a>
+                                </div>
+                            </li>
+     <li class="list-group-item add_channel_form" style="display:none;">
+                                <div class="row">
+                                    <div class="col-4">
+                                        <select name="channel_type" class="form-select" required>
+                                            <option value="1">Email</option>
+{#                                            <option value="2">SMS</option>#}
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="text" name="channel_value" class="form-control" required>
+                                    </div>
+
+
+
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col col-sm-5">
+                                        <i class="bi bi-calendar"></i> {% trans "Registered" %}</div>
+                                    <div class="col col-sm-7 right-align">{{ user.date_joined }}</div>
+                                </div>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col col-sm-5">
+                                        <i class="bi bi-calendar"></i> {% blocktrans %}Last Login{% endblocktrans %}</div>
+                                    <div class="col col-sm-7 right-align">{{ user.last_login }}</div>
+
+                                </div>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col col-sm-5">
+                                        <i class="bi bi-universal-access"></i> {% blocktrans %}Your Access{% endblocktrans %}</div>
+
+                                    <div class="col col-sm-7 right-align">
+                                        <ul>
+                                            {% for key, value in roles %}
+                                                <li>{{ value }}</li>
+                                            {% endfor %}
+                                        </ul>
+
+                                        {% if user.is_default %}
+                                            <a href="{% url "signup_as_rider" %}" class="btn upgrade after_upgrade right btn-flat">{% trans "Upgrade..." %}</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </li>
+
+                            {#                        <li class="list-group-item">#}
+                            {#                            <div class="row">#}
+                            {#                                <div class="col col-sm-5">#}
+                            {#                                    <i class="material-icons left">lock</i> {% blocktrans %}Update Profile / Password{% endblocktrans %}#}
+                            {#                                </div>#}
+                            {#                             <div class="col col-sm-7 right-align">#}
+                            {#                                    {% comment %}TODO: update for new list of user access flags{% endcomment %}#}
+                            {#                                    {% if object.is_default %}#}
+                            {#                                        <a href="{% url "signup_as_rider" %}" class="btn upgrade after_upgrade right btn-flat">{% trans "Upgrade..." %}</a>#}
+                            {#                                    {% endif %}#}
+                            {#                                </div>#}
+                            {##}
+                            {#                            </div>#}
+                            {#                        </li>#}
+
+{% if NEWSLETTER_ON %}
+
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col">
+                                        <i class="bi bi-newspaper"></i> {% if user.subscribed %}{% blocktrans %}You are subscribed to occassional emails{% endblocktrans %}{% else %}{% blocktrans %}You are NOT currently subscribed to our updates{% endblocktrans %}{% endif %}
+                                    </div>
+
+                                    <div class="d-grid gap-2 col-6 mx-auto">
+                                        {% if user.subscribed %}
+
+                                            <a class="btn btn-primary" href="{% url "unsubscribe" user.email  %}" >{% trans "Click to Unsubscribe" %}</a>
+
+                                        {% else %}
+                                            <a class="btn btn-primary" href="{% url "subscribe" user.email  %}">{% trans "Click to Subscribe" %}</a>
+                                        {% endif %}
+                                    </div>
+
+                                </div>
+                            </li>
+    {% endif %}
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col">
+                                        <label class="form-label" >
+                                            <a href="{% url 'privacy' %}">Read our Privacy Policy...</a>
+
+                                        </label>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+
+                        <a class="btn btn-primary mt-3" href="{% url "what-next" %}">{% trans "Home" %}...</a>
+                        <a href="{%  url "contact" %}" class="btn btn-primary mt-3" >Contact us...</a>
+                    </div>
+
+                    {#                <div class="col-12 col-md-6">#}
+                    {#                    <h3>{% blocktrans %}Tests Scored{% endblocktrans %}</h3>#}
+                    {##}
+                    {#                    <svg id="scored" width="100%" height="300"></svg>#}
+                    {##}
+                    {#                </div>#}
+
+
+                    {% comment %}
+                        TODO: profile template
+                    Includes for each mode
+                    - events organised
+                    - events scored
+                    - events writer
+                    - events rider
+                    - events judged
+                    Close Account
+                {% endcomment %}
+
+
+                </div>
+
+
+            </div>
+
+        {% endif %}
+    {% endif %}
+
+
+{% endblock %}
+
+{% block js %}
+
+
+
+
+
+    <script src="{% static "js/d3.v5.min.js" %}"></script>
+    <script src="{% static "js/inplace.js" %}?v={{ API_VERSION }}"></script>
+
+    {% if not USE_ASSETS %}
+
+        <script src="{% static 'js/base.js' %}?v={{ API_VERSION }}"></script>
+
+
+    {% else  %}
+        <script src="/assets/js/calculator.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+
+
+
+    <script>
+
+        {#$(document).on("click", '.go_account', function() {#}
+        {#    document.location.href="{{update_account_url}}";#}
+        {#});#}
+            $(document).on("click", '.go_change_pass', function() {
+                document.location.href="{{update_account_url}}password/";
+            });
+            {#$(document).on("click", '.profile_info', function() {#}
+            {##}
+            {#    var payload = {'profile_info': {'interests':{}}};#}
+            {#    $(".profile_info").each(function(){#}
+            {#        payload.profile_info.interests[this.name] = this.checked;#}
+            {#    });#}
+            {#     $.ajax({#}
+            {#        method: "PATCH",#}
+            {#        url: SKORIE_API + "/api/v2/userprofile/" ,#}
+            {#        data: payload,#}
+            {#    })#}
+            {#        .done(function (data) {#}
+            {#            console.log("updated")#}
+            {#        });#}
+            {##}
+            {#});#}
+
+                $(document).ready(function() {
+
+                    $('.preferred-channel-checkbox').on('change', function() {
+                        // Uncheck all other checkboxes
+                        $('.preferred-channel-checkbox').not(this).prop('checked', false);
+
+                        // Get the selected channel ID
+                        const selectedChannelId = $(this).val();
+
+                        // Make AJAX request to update preferred channel
+                        $.ajax({
+                            url: SKORIE_API + '/comms_channel/'+selectedChannelId+'/',
+                            type: 'PATCH',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ 'preferred_channel_id': selectedChannelId }),
+                            success: function(response) {
+                                if (response.success) {
+                                    console.log('Preferred channel updated successfully');
+                                } else {
+                                    console.error('Failed to update preferred channel');
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Error:', error);
+                            }
+                        });
+                    });
+
+                    // set timezone based on best guess
+                    if ($("#id_timezone").val() == null) {
+
+                        $("#id_timezone").val(luxon.DateTime.local().zoneName);
+                        $("#id_timezone").trigger("change");
+
+                    }
+
+
+                    var svg = d3.select("#scored"),
+                        margin = {top: 20, right: 20, bottom: 50, left: 40},
+                        width = +$("#scored").width() - margin.left - margin.right,
+                        height = +$("#scored").height() - margin.top - margin.bottom,
+                        bar_padding = 2;
+
+                    var parseTime = d3.timeParse("%Y-%b");
+                    var x = d3.scaleBand()
+                        .rangeRound([0, width])
+                        .padding(0.1);
+
+                    var  y = d3.scaleLinear().rangeRound([height, 0]);
+
+                    var g = svg.append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                    d3.json(SKORIE_API + "/api/v2/my_entered_tally/", function(d) {
+                        d.month = d.month.substr(0, 7);
+                        d.count = +d.count;
+                        return d;
+                    }).then(function(data) {
+
+                        // init code above is not running for some reason
+                        d3.map(data, function(d) {
+                            d.month = new Date(d.month);
+                            d.count = +d.count;
+                            return d;
+                        });
+
+                        x.domain(d3.extent(data, function(d) { return d.month; }));
+                        y.domain([0, d3.max([10, d3.max(data, function(d) { return d.count; })])]);
+
+                        g.append("g")
+                            .attr("class", "axis axis--x")
+                            .attr("transform", "translate(0," + height + ")")
+                            .call(d3.axisBottom(x).tickFormat(d3.timeFormat(" %Y-%m ")))
+                            .selectAll("text")
+                            .style("text-anchor", "end")
+                            .attr("dx", "-.8em")
+                            .attr("dy", ".15em")
+                            .attr("transform", "rotate(-65)");
+
+                        g.append("g")
+                            .attr("class", "axis axis--y")
+                            .call(d3.axisLeft(y))
+                            .append("text")
+                            .attr("transform", "rotate(-90)")
+                            .attr("y", 6)
+                            .attr("dy", "0.71em")
+                            .attr("text-anchor", "end")
+                            .text("Scored");
+
+                        g.selectAll(".bar")
+                            .data(data)
+                            .enter().append("rect")
+                            .attr("class", "bar")
+                            .attr("x", function(d) { return x(d.month); })
+                            .attr("y", function(d) { return y(d.count); })
+                            .attr("width", function(d) {
+                                //return d3.min([x.bandwidth(), 30]);
+                                return x.bandwidth()
+                            })
+                            .attr("height", function(d) {
+                                return height - y(d.count);
+                            });
+                    })
+                        .catch((status, err) => {
+                            console.log("error loading my_entered_tally");
+
+                        });
+
+
+                } );
+
+
+
+    </script>
+{% endblock %}

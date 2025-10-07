@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Create Support Ticket{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ticket-container {
+        max-width: 800px;
+    }
+
+    .priority-help {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    .form-floating textarea {
+        min-height: 120px;
+    }
+
+    .ticket-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+    }
+
+    .btn-create-ticket {
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .file-upload-area {
+        transition: all 0.3s ease;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .file-upload-area:hover {
+        background-color: #f8f9fa !important;
+        border-color: #007bff !important;
+    }
+
+    .file-upload-area.dragover {
+        background-color: #e3f2fd !important;
+        border-color: #2196f3 !important;
+        transform: scale(1.02);
+    }
+
+    .file-preview-item {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.75rem;
+        background: white;
+        position: relative;
+    }
+
+    .file-preview-item .remove-file {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #dc3545;
+        color: white;
+        border: 2px solid white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .file-preview-image {
+        max-width: 100%;
+        max-height: 100px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header Section -->
+            <div class="text-center mb-5">
+                <div class="ticket-icon">
+                    <i class="fas fa-headset text-white fa-lg"></i>
+                </div>
+                <h1 class="h2 fw-bold text-dark mb-3">Create Support Ticket</h1>
+                <p class="text-muted lead">
+                    Need help? We're here for you. Describe your issue and our support team will get back to you soon.
+                </p>
+            </div>
+
+            <!-- Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'warning' %}exclamation-triangle{% elif message.tags == 'error' %}times-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Ticket Form -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4 p-md-5">
+                    <form id="ticket_form" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        {% csrf_token %}
+
+                        <!-- Title Field -->
+                        <div class="form-floating mb-4">
+                            {{ form.title }}
+                            <label for="{{ form.title.id_for_label }}" class="form-label">
+                                <i class="fas fa-tag me-2"></i>Issue Summary *
+                            </label>
+                            {% if form.title.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.title.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Provide a brief, clear description of your issue
+                            </div>
+                        </div>
+
+                        <!-- Description Field -->
+                        <div class="form-floating mb-4">
+                            {{ form.notes }}
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                <i class="fas fa-align-left me-2"></i>Detailed Description *
+                            </label>
+                            {% if form.notes.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.notes.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Please provide as much detail as possible. Include steps to reproduce the issue, error messages, or any relevant information.
+                            </div>
+                        </div>
+
+                        <!-- File Upload Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.attachments.id_for_label }}" class="form-label">
+                                <i class="fas fa-paperclip me-2"></i>Attachments
+                            </label>
+                            <div class="file-upload-area border rounded-3 p-4 text-center bg-light">
+                                {{ form.attachments }}
+                                <div class="file-upload-text mt-2">
+                                    <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                    <p class="mb-1">
+                                        <strong>Drop files here or click to browse</strong>
+                                    </p>
+                                    <small class="text-muted">
+                                        Screenshots, documents, logs (max {{ max_file_size }} per file)<br>
+                                        Supported: {{ allowed_file_types }}
+                                    </small>
+                                </div>
+                            </div>
+                            {% if form.attachments.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.attachments.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Tip: Screenshots help us understand your issue faster
+                            </div>
+
+                            <!-- File Preview Area -->
+                            <div id="file-preview" class="mt-3" style="display: none;">
+                                <div class="row g-2" id="file-list"></div>
+                            </div>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.priority }}
+                                    <label for="{{ form.priority.id_for_label }}" class="form-label">
+                                        <i class="fas fa-exclamation-circle me-2"></i>Priority
+                                    </label>
+                                    {% if form.priority.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.priority.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="priority-help text-muted">
+                                    <small>
+                                        <strong>Low:</strong> General questions<br>
+                                        <strong>Normal:</strong> Standard issues<br>
+                                        <strong>High:</strong> Business impacting<br>
+                                        <strong>Urgent:</strong> Critical/blocking
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.site }}
+                                    <label for="{{ form.site.id_for_label }}" class="form-label">
+                                        <i class="fas fa-map-marker-alt me-2"></i>Site/Location
+                                    </label>
+                                    {% if form.site.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.site.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        Optional: Specify the site or location related to this issue
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="row">
+                            <div class="text-muted">
+                                <small>
+                                    <i class="fas fa-shield-alt me-1"></i>
+                                    Your information is secure and will only be used to resolve your support request.
+                                </small>
+                            </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex">
+                                <a href="{{next}}" class="btn btn-outline-secondary">
+                                    Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-create-ticket">
+                                    </i>Submit Ticket
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="row mt-5">
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-clock text-primary fa-2x mb-3"></i>
+                            <h5 class="card-title">Response Time</h5>
+                            <p class="card-text text-muted small">
+                                We typically respond within 24 hours during business days.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-envelope text-success fa-2x mb-3"></i>
+                            <h5 class="card-title">Email Updates</h5>
+                            <p class="card-text text-muted small">
+                                You'll receive email notifications about your ticket status.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-light h-100">
+                        <div class="card-body text-center p-4">
+                            <i class="fas fa-phone text-info fa-2x mb-3"></i>
+                            <h5 class="card-title">Urgent Issues</h5>
+                            <p class="card-text text-muted small">
+                                For critical issues, call our emergency support line.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+$(document).ready(function() {
+    // File upload variables
+    let selectedFiles = [];
+    const $fileInput = $('#id_attachments');
+    const $fileUploadArea = $('.file-upload-area');
+    const $filePreview = $('#file-preview');
+    const $fileList = $('#file-list');
+
+    // Initialize screenshot button if supported
+    initializeScreenCapture();
+
+    // File input change handler
+    $fileInput.on('change', function(e) {
+        const newFiles = Array.from(e.target.files);
+        newFiles.forEach(file => {
+            if (!isDuplicateFile(file)) {
+                selectedFiles.push(file);
+                addFilePreview(file);
+            }
+        });
+        updatePreviewVisibility();
+    });
+
+    // Drag and drop handlers
+    $fileUploadArea.on('dragover dragenter', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).addClass('dragover');
+    });
+
+    $fileUploadArea.on('dragleave dragend', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('dragover');
+    });
+
+    $fileUploadArea.on('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('dragover');
+        handleFiles(e.originalEvent.dataTransfer.files);
+    });
+
+    // Click to upload
+    $fileUploadArea.on('click', function(e) {
+        if (e.target === this || $(e.target).hasClass('file-upload-text') || $(e.target).closest('.file-upload-text').length) {
+            $fileInput.click();
+        }
+    });
+
+    // Remove file handler
+    $(document).on('click', '.remove-file', function() {
+        const fileId = $(this).data('file-id');
+        const $fileItem = $(`#file-${fileId}`);
+        const file = $fileItem.data('file');
+
+        selectedFiles = selectedFiles.filter(f => f !== file);
+        $fileItem.remove();
+        $fileInput.val('');
+        updatePreviewVisibility();
+        updateFileInput();
+    });
+
+    // Clipboard paste handler
+    $(document).on('paste', function(e) {
+        const items = e.originalEvent.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                const file = new File([blob], `pasted-image-${Date.now()}.png`, {
+                    type: blob.type
+                });
+
+                selectedFiles.push(file);
+                addFilePreview(file);
+                updateFileInput();
+                updatePreviewVisibility();
+                showNotification('Image pasted successfully!', 'success');
+                break;
+            }
+        }
+    });
+
+    // Helper functions
+    function handleFiles(files) {
+        const maxFiles = 5;
+        const maxSize = 10 * 1024 * 1024; // 10MB
+
+        if (selectedFiles.length + files.length > maxFiles) {
+            alert(`You can only upload up to ${maxFiles} files.`);
+            return;
+        }
+
+        Array.from(files).forEach(file => {
+            if (file.size > maxSize) {
+                alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+                return;
+            }
+
+            selectedFiles.push(file);
+            addFilePreview(file);
+        });
+
+        updateFileInput();
+        updatePreviewVisibility();
+    }
+
+    function isDuplicateFile(file) {
+        return selectedFiles.some(existingFile =>
+            existingFile.name === file.name &&
+            existingFile.size === file.size &&
+            existingFile.lastModified === file.lastModified
+        );
+    }
+
+    function addFilePreview(file) {
+        const fileId = Date.now() + Math.random();
+        const isImage = file.type.startsWith('image/');
+
+        let previewContent = '';
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $(`#file-${fileId} .file-preview-content`).html(
+                    `<img src="${e.target.result}" class="file-preview-image" alt="${file.name}">`
+                );
+            };
+            reader.readAsDataURL(file);
+        } else {
+            const iconClass = getFileIcon(file.type);
+            previewContent = `<i class="${iconClass} fa-2x text-muted"></i>`;
+        }
+
+        const fileItem = $(`
+            <div class="col-md-3 col-sm-4 col-6" id="file-${fileId}">
+                <div class="file-preview-item text-center">
+                    <div class="remove-file" data-file-id="${fileId}">&times;</div>
+                    <div class="file-preview-content mb-2">
+                        ${previewContent}
+                    </div>
+                    <small class="text-muted d-block" title="${file.name}">
+                        ${file.name.length > 20 ? file.name.substring(0, 20) + '...' : file.name}
+                    </small>
+                    <small class="text-muted">${formatFileSize(file.size)}</small>
+                </div>
+            </div>
+        `);
+
+        $fileList.append(fileItem);
+        fileItem.data('file', file);
+    }
+
+    function getFileIcon(mimeType) {
+        if (mimeType.includes('pdf')) return 'fas fa-file-pdf text-danger';
+        if (mimeType.includes('word')) return 'fas fa-file-word text-primary';
+        if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'fas fa-file-excel text-success';
+        if (mimeType.includes('text')) return 'fas fa-file-alt text-info';
+        return 'fas fa-file text-secondary';
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function updateFileInput() {
+        try {
+            if (typeof DataTransfer !== 'undefined' && selectedFiles.length > 0) {
+                const dt = new DataTransfer();
+                selectedFiles.forEach(file => dt.items.add(file));
+                $fileInput[0].files = dt.files;
+            }
+        } catch (error) {
+            console.debug('Could not update file input:', error);
+        }
+    }
+
+    function updatePreviewVisibility() {
+        selectedFiles.length > 0 ? $filePreview.show() : $filePreview.hide();
+    }
+
+    function showNotification(message, type = 'info') {
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-info';
+        const icon = type === 'success' ? 'check-circle' : 'info-circle';
+
+        $(`<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${icon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>`).prependTo('.container .row .col-lg-8').delay(3000).fadeOut();
+    }
+
+    function initializeScreenCapture() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            const screenshotBtn = $(`
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="capture-screenshot">
+                    <i class="fas fa-camera me-1"></i>Capture Screenshot
+                </button>
+            `);
+
+            $('.file-upload-area .file-upload-text').append(screenshotBtn);
+
+            $('#capture-screenshot').on('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const $btn = $(this);
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Capturing...');
+
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { mediaSource: 'screen' }
+                    });
+
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.play();
+
+                    video.addEventListener('loadedmetadata', () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0);
+
+                        canvas.toBlob((blob) => {
+                            const file = new File([blob], `screenshot-${Date.now()}.png`, {
+                                type: 'image/png'
+                            });
+
+                            selectedFiles.push(file);
+                            addFilePreview(file);
+                            updateFileInput();
+                            updatePreviewVisibility();
+
+                            stream.getTracks().forEach(track => track.stop());
+                            $btn.prop('disabled', false).html('<i class="fas fa-camera me-1"></i>Capture Screenshot');
+                            showNotification('Screenshot captured successfully!', 'success');
+                        }, 'image/png');
+                    });
+
+                } catch (err) {
+                    console.error('Error capturing screenshot:', err);
+                    alert('Screenshot capture failed. Please try uploading an image file instead.');
+                    $btn.prop('disabled', false).html('<i class="fas fa-camera me-1"></i>Capture Screenshot');
+                }
+            });
+        }
+    }
+
+    // Global validation function for your existing form validation
+    window.validateAttachments = function() {
+        if (selectedFiles.length > 5) {
+            alert('You can upload a maximum of 5 files.');
+            return false;
+        }
+
+        for (let file of selectedFiles) {
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+                return false;
+            }
+        }
+
+        updateFileInput();
+        return true;
+    };
+});
+
+// Integration with your existing form validation
+function submit_form(form) {
+    // Call the file validation before submitting
+    if (typeof window.validateAttachments === 'function') {
+        if (!window.validateAttachments()) {
+            return false; // Stop submission if file validation fails
+        }
+    }
+
+    $("#ticket_form").submit();
+}
+</script>
+{% endblock %}
