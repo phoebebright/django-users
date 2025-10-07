@@ -51,6 +51,10 @@ logger = logging.getLogger('django')
 
 User = get_user_model()
 
+def normalize_email(addr: str) -> str:
+    # Robust normalization incl. IDNA / Unicode
+    v = validate_email(addr, allow_smtputf8=True)
+    return v.normalized  # already lowercased domain; local part normalized
 
 class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
@@ -278,7 +282,7 @@ def email_exists(request):
     User = get_user_model()
 
     try:
-        email = request.data.get('email').lower()
+        email = normalize_email(request.data.get('email'))
         User.objects.get(email=email)
         response = "Y"
     except User.DoesNotExist:
@@ -393,7 +397,7 @@ class CheckEmailInKeycloak(APIView):
             return [CustomOrdinaryUserRateThrottle, ]
 
     def post(self, request, *args, **kwargs):
-        email = request.POST.get('email').lower()
+        email = normalize_email(request.POST.get('email'))
         if email:
 
             user = search_user_by_email_in_keycloak(email, request.user)
@@ -459,7 +463,7 @@ class SendVerificationCode(APIView):
         VerificationCode = apps.get_model('users', 'VerificationCode')
         email = request.query_params.get('email', None)
         if email:
-            email = email.lower()
+            email = normalize_email(email)
             user = User.objects.get(email=email)
 
             if not user.is_active:
@@ -525,7 +529,7 @@ class CheckEmailInKeycloakPublic(APIView):
         updated_keycloak_id = False
 
         if email:
-            email = email.lower()
+            email = normalize_email(email)
 
             channels = []
 
@@ -643,7 +647,7 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
     def post(self, request, *args, **kwargs):
         User = get_user_model()
-        email = request.POST.get('email').lower()
+        email = normalize_email(request.POST.get('email'))
         # logger.warning(f"CheckEmail used to check {email}")
 
         # check this is an email
@@ -684,7 +688,7 @@ class CheckUserPublicBase(CheckEmailBase):
         email = request.POST.get('email', None)
 
         if email:
-            email = email.lower()
+            email = normalize_email(email)
 
             channels = []
 
