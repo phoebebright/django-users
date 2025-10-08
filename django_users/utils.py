@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-
+from django.core.exceptions import ValidationError
 
 from django.db.models import Q, F
 from django.utils import timezone
@@ -236,8 +236,8 @@ def get_subscription_analytics():
 
 def normalise_email(addr: str) -> str:
     try:
-    v = validate_email(addr, allow_smtputf8=True)
+        v = validate_email(addr, allow_smtputf8=True)
         # v.normalized in v2; v.email in v1 – support both:
-        return getattr(v, "normalized", v.email)
+        return getattr(v, "normalized", v.email).lower()
     except EmailNotValidError as e:
         raise ValidationError(str(e))

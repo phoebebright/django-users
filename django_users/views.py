@@ -104,7 +104,7 @@ class AddUser(generic.CreateView):
     '''
     new_user = None
 
-    template_name = 'admin/django_users/add_user.html'
+    template_name = 'django_users/admin/add_user.html'
 
     # temporary code until all system transitioned to new naming
     def get_template_names(self):
@@ -197,7 +197,7 @@ class AddUser(generic.CreateView):
 
 class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
     # form_class = CustomUserCreationForm
-    template_name = 'organiser/users/manage_user_profile.html'
+    template_name = 'django_users/admin/manage_user_profile.html'
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -218,7 +218,7 @@ class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
 
 
 class SubscribeView(LoginRequiredMixin, FormView):
-    template_name = "subscribe.html"
+    template_name = "django_users/subscribe.html"
     form_class = SubscribeForm
     success_url = '/'
 
@@ -228,6 +228,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
     def get_context_data(self):
         context = super().get_context_data()
         if settings.NEWSLETTER_ON:
+            Newsletter = apps.get_model('news', 'Newsletter')
             context['subcribed2newsletter'] = Newsletter.is_subscribed_to_newsletter(self.request.user)
 
         return context
@@ -465,14 +466,14 @@ class ProblemLogin(ProblemSignup):
     def get_template_names(self):
         if self.request.user.is_authenticated and self.request.user.is_administrator:
             #return "django_users/django_users/problem_login_admin.html"
-            return 'admin/django_users/problem_login_admin.html'
+            return 'django_users/admin/problem_login_admin.html'
         else:
             return "django_users/problem_login.html"
 
 
 @method_decorator(never_cache, name='dispatch')
 class NewUsers(UserCanAdministerMixin, TemplateView):
-    template_name = "admin/django_users/new_users.html"
+    template_name = "django_users/admin/new_users.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1223,7 +1224,7 @@ class UnverifiedUsersList(UserCanAdministerMixin, ListView):
 
 
 class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
-    template_name = 'admin/users/send_otp.html'
+    template_name = 'django_users/admin/send_otp.html'
     docserve_page = 'admin/users/user_otp.html'
 
     def get_context_data(self, **kwargs):
@@ -1282,7 +1283,7 @@ class ManageNonEventRoles(ManageRoles):
 
 class ManageUsers(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/users/manage_users.html"
+    template_name = "django_users/admin/manage_users.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1295,7 +1296,7 @@ class ManageUsers(UserCanAdministerMixin, TemplateView):
 @method_decorator(never_cache, name='dispatch')
 class ManageUser(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/admin_user.html"
+    template_name = "django_users/admin/admin_user.html"
     docserve_page = 'admin/manage_user'
 
     def get_context_data(self, *args, **kwargs):
@@ -1313,7 +1314,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         except User.DoesNotExist:
             raise Http404(_("No user found"))
 
-        context['user_status'] = CustomUser.check_register_status(email=context['object'].email, requester=self.request.user)
+        context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
         context['competitors'] = Competitor.objects.filter(user=context['object'])
 
 
@@ -1363,7 +1364,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
 class ContactView(FormView):
     form_class = ContactForm
     success_url = reverse_lazy('contact-thanks')
-    template_name = "contact.html"
+    template_name = "django_users/contact.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1468,7 +1469,7 @@ def update_password_django(user, password):
 
 class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
     form_class = OrganisationFormBase
-    template_name = 'admin/users/organisation_detail.html'
+    template_name = 'django_users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
 
     def get_context_data(self, **kwargs):
@@ -1505,7 +1506,7 @@ class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
 
 class OrganisationListView(ListView):
     model = None
-    template_name = "admin/user/organisation_list.html"
+    template_name = "django_users/admin/organisation_list.html"
     context_object_name = "organisations"
 
 
@@ -1600,7 +1601,7 @@ def login_with_token(request, key=None):
 
 
 class UserContactAnalyticsView(TemplateView):
-    template_name = 'admin/user/user_contact_analytics.html'
+    template_name = 'django_users/admin/user_contact_analytics.html'
 
     def get_context_data(self, **kwargs):
         UserContact = apps.get_model('users.UserContact')
@@ -1712,7 +1713,7 @@ class SubscriptionPreferencesView(LoginRequiredMixin, UpdateView):
     """View for managing subscription preferences"""
     model = get_user_model()
     form_class = SubscriptionPreferencesForm
-    template_name = 'accounts/subscription_preferences.html'
+    template_name = 'django_users/subscription_preferences.html'
     success_url = reverse_lazy('subscription_preferences')
 
     def get_object(self):
@@ -1731,7 +1732,7 @@ class SubscriptionPreferencesView(LoginRequiredMixin, UpdateView):
 
 class UnsubscribeTokenView(TemplateView):
     """Handle unsubscribe via email token"""
-    template_name = 'accounts/unsubscribe_confirm.html'
+    template_name = 'django_users/unsubscribe_confirm.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1842,4 +1843,4 @@ class AnonUserView(UserCanAdministerMixin, TemplateView):
 
 
 class UserCountries(UserCanAdministerMixin, TemplateView):
-    template_name = "admin/user_countries.html"
+    template_name = "django_users/admin/user_countries.html"
