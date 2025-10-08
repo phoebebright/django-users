@@ -1740,3 +1740,34 @@ def dedupe_role(request, role_ref):
         item.updated = timezone.now()
         item.save()
     return HttpResponse("Done")
+
+
+class AnonUserView(UserCanAdministerMixin, TemplateView):
+    '''anonymise user - can only be done if account already marked inactive'''
+    template_name = 'django_users/anon_user.html'
+    user = None
+
+    def get(self):
+        self.user = User.objects.get(id=self.kwargs['pk'])
+
+        if self.user.is_active:
+            return HttpResponse("User must be inactive to anonymise")
+
+        return super().get(self.request)
+
+    def get_context_data(self, **kwargs):
+        Person = apps.get_model('users.Person')
+        Role = apps.get_model('users.Role')
+        CommsLog = apps.get_model('users.CommsLog')
+        VerificationCode = apps.get_model('users.VerificationCode')
+
+        context = super().get_context_data(**kwargs)
+        context['user'] = self.user
+        context['person'] = Person.objects.filter(user=self.user)
+        context['role'] = Role.objects.filter(user=self.user)
+        context['commslog'] = CommsLog.objects.filter(user=self.user)
+        context['verification_code'] = VerificationCode.objects.filter(user=self.user)
+        context['to_anon'] = ['user','person','role']
+        context['to_delete'] = ['commslog','verification_code']
+        return context
+        return context

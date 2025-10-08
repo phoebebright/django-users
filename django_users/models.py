@@ -251,6 +251,12 @@ class CommsChannelBase(models.Model):
         elif self.channel_type == self.CHANNEL_WHATSAPP:
             send_whatsapp_verification_code(self.value, msg)
 
+class VerificationCodeQuerySet(models.QuerySet):
+
+    def expired(self):
+        return self.filter(expires_at__lt=timezone.now())
+
+
 class VerificationCodeBase(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='verification_codes')
@@ -260,7 +266,7 @@ class VerificationCodeBase(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     attempts = models.PositiveIntegerField(default=0)
 
-
+    objects = VerificationCodeQuerySet.as_manager()
 
     def __str__(self):
         return f"Code for {self.user} via {self.channel}"

@@ -87,6 +87,8 @@ urlpatterns = [
     path('subscribe_only/', subscribe_only.as_view(), name="subscribe_only"),
     path('unsubscribe_only/', unsubscribe_only.as_view(), name="unsubscribe_only"),
 
+    #TODO
+    #path('anon/<uuid:pk>/', AnonUserView.as_view(), name='anon_user')
 
 
 ]
