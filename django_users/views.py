@@ -24,7 +24,8 @@ from django.views.decorators.cache import never_cache
 
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
-    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase, SubscriptionPreferencesForm
+    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase, SubscriptionPreferencesForm, \
+    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm
 
 import requests
 
@@ -679,7 +680,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
 @method_decorator(never_cache, name='dispatch')
 class RegisterView(FormView):
-    # form_class = SignUpForm
+    form_class = SignUpForm
     template_name = "django_users/register.html"
     user = None
 
@@ -780,13 +781,7 @@ class RegisterView(FormView):
 class AddCommsChannelView(FormView):
     '''This can be called after the user has logged in or before. If before, there needs to be some throttling'''
 
-    form_class = None  # Ensure this is defined in subclasses
-
-    def get_form_class(self):
-        """Return the form class for this view."""
-        if not self.form_class:
-            raise NotImplementedError("Define `form_class` in the child class.")
-        return self.form_class
+    form_class = AddCommsChannelForm
 
     def get(self, request):
         """Handle GET request and render form."""
@@ -868,12 +863,9 @@ def get_current_user(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelView(View):
+class VerifyChannelView(FormView):
+    form_class = VerificationCodeForm
 
-    def get_form_class(self):
-        if not hasattr(self, 'form_class') or self.form_class is None:
-            raise NotImplementedError("Define `form_class` in the child class.")
-        return self.form_class
 
     def get(self, request, channel_id):
         user, user_login_mode = get_current_user(request)

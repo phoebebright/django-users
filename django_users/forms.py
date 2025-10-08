@@ -313,7 +313,7 @@ class OrganisationFormBase(ModelForm):
         model = None
         fields = '__all__'
 
-class CommsChannelFormBase(forms.ModelForm):
+class CommsChannelForm(forms.ModelForm):
     email = forms.EmailField(label=_('Email'), required=False,
         widget=forms.EmailInput(attrs={
             "class": "form-control force-lower",
@@ -328,7 +328,7 @@ class CommsChannelFormBase(forms.ModelForm):
         model = None
         fields = ['channel_type', 'email', 'mobile']
 
-class AddCommsChannelFormBase(forms.ModelForm):
+class AddCommsChannelForm(forms.ModelForm):
     email = forms.EmailField(label=_('Email'), required=False,
         widget=forms.EmailInput(attrs={
             "class": "form-control force-lower",
