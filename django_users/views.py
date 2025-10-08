@@ -224,6 +224,13 @@ class SubscribeView(LoginRequiredMixin, FormView):
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
+    def get_context_data(self):
+        context = super().get_context_data()
+        if settings.NEWSLETTER_ON:
+            context['subcribed2newsletter'] = Newsletter.is_subscribed_to_newsletter(self.request.user)
+
+        return context
+
     def form_valid(self, form):
         UserContact = apps.get_model('users.UserContact')
 
@@ -361,8 +368,11 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
     def get_context_data(self, **kwargs):
         self.user = self.request.user if self.request.user.is_authenticated else None
+        Subscription = apps.get_model('news.Subscription')
         context = super().get_context_data(**kwargs)
         context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
+        if settings.NEWSLETTER_ON:
+            context['subscriptions'] = Subscription.objects.filter(user=self.user).order_by('-created')
         context['now'] = timezone.now()
         context['roles'] = self.request.user.user_roles(descriptions=True)
 
@@ -767,7 +777,7 @@ class RegisterView(FormView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class AddCommsChannelViewBase(FormView):
+class AddCommsChannelView(FormView):
     '''This can be called after the user has logged in or before. If before, there needs to be some throttling'''
 
     form_class = None  # Ensure this is defined in subclasses
@@ -918,7 +928,7 @@ class ManageCommsChannelsView(View):
 
 
 @method_decorator(never_cache, name='dispatch')
-class ChangePasswordNowViewBase(GoNextTemplateMixin, FormView):
+class ChangePasswordNowView(GoNextTemplateMixin, FormView):
     template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
 
@@ -1293,7 +1303,8 @@ class ManageUsers(UserCanAdministerMixin, TemplateView):
 @method_decorator(never_cache, name='dispatch')
 class ManageUser(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/users/admin_user.html"
+    template_name = "admin/admin_user.html"
+    docserve_page = 'admin/manage_user'
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1310,17 +1321,50 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         except User.DoesNotExist:
             raise Http404(_("No user found"))
 
-        context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
-        context['roles4user'] = context['object'].user_roles()
+        context['user_status'] = CustomUser.check_register_status(email=context['object'].email, requester=self.request.user)
+        context['competitors'] = Competitor.objects.filter(user=context['object'])
+
+
+        context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones created by me - includes ones added for another
+        #context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones that have me as competitor
+
+        if settings.NEWSLETTER_ON:
+            # context['subscriptions'] = Subscription.objects.filter(user=context['object'])
+            # # context['newsletters'] = Newsletter.objects.all()
+
+            # prefetch subscriptions only for this user
+            user_subs = Subscription.objects.filter(user=context['object'])
+
+            newsletters = Newsletter.objects.visible().prefetch_related(
+                Prefetch("subscriptions", queryset=user_subs, to_attr="user_subs")
+            )
+
+            # each Newsletter will have .user_subs = [subscription] or []
+            context["newsletter_subs"] = [
+                {"newsletter": nl, "subscription": nl.user_subs[0] if nl.user_subs else None}
+                for nl in newsletters
+            ]
+
+        if settings.USE_PAYMENTS:
+            context['payments'] = Payment.objects.filter(payer=context['object']).order_by('-created')
+
+        context['roles4user'] = Role.objects.active().filter(user=context['object']).order_by('role_type')
+        context['roles4user_list'] = [r.role_type for r in context['roles4user']]
+
+
+        # context['tickets'] = Ticket.objects.filter(submitter_email=context['object'].email)
+
+        # handle update of person attributes
+        context['person_form'] = PersonForm(instance=context['object'].person)
+
+        context['contacts'] = UserContact.objects.filter(user=context['object']).order_by('-pk')
 
         # # want to add event roles as well...
-        #
-        # context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
-        #                     ModelRoles.NON_EVENT_CHOICES}
-        #
-        # Role = apps.get_model('users.Role')
-        # context['role_list'] = Role.objects.exclude(role_type__in=[ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
+        # available roles
+        context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
+                            ModelRoles.NON_EVENT_CHOICES}
 
+        context['emails'] = DirectEmail.objects.filter(receiver=context['object']).order_by('-id')
         return context
 
 
@@ -1802,4 +1846,8 @@ class AnonUserView(UserCanAdministerMixin, TemplateView):
         context['to_anon'] = ['user','person','role']
         context['to_delete'] = ['commslog','verification_code']
         return context
-        return context
+
+
+
+class UserCountries(UserCanAdministerMixin, TemplateView):
+    template_name = "admin/user_countries.html"
