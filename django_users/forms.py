@@ -266,7 +266,7 @@ class ProfileForm(Form):
     required=False)
     whatsapp = forms.BooleanField(required=False, label="Whatsapp - Only for Events you are participating in or for support")
 
-class CustomUserCreationFormBase(ModelForm):
+class CustomUserCreationForm(ModelForm):
     #email = forms.HiddenInput() not working
     #username = forms.HiddenInput()
     password = forms.CharField(
@@ -308,7 +308,7 @@ class CustomUserCreationFormBase(ModelForm):
     def save(self, commit=True):
         return super().save(commit=commit)
 
-class OrganisationFormBase(ModelForm):
+class OrganisationForm(ModelForm):
     class Meta:
         model = None
         fields = '__all__'
@@ -358,7 +358,7 @@ class AddCommsChannelForm(forms.ModelForm):
 
         return cleaned_data
 
-class ContactFormBase(Form):
+class ContactForm(Form):
     email = forms.EmailField(
         widget=forms.EmailInput(attrs={
             "class": "form-control force-lower",
@@ -373,7 +373,7 @@ class ContactFormBase(Form):
     passed = forms.CharField(widget=forms.HiddenInput())
 
 
-class PersonFormBase(forms.ModelForm):
+class PersonForm(forms.ModelForm):
     """Form for creating and updating a Person instance."""
 
 
@@ -382,7 +382,7 @@ class PersonFormBase(forms.ModelForm):
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 
-class SupportTicketFormBase(forms.ModelForm):
+class SupportTicketForm(forms.ModelForm):
 
 
     class Meta:

@@ -14,7 +14,7 @@ from django.apps import apps
 from django.core import signing
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.db import models
-from django.db.models import Count, Case, When, CharField, Q
+from django.db.models import Count, Case, When, CharField, Q, Prefetch
 from django.db.models.functions import Extract, Concat, Cast, LPad
 from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
@@ -24,8 +24,8 @@ from django.views.decorators.cache import never_cache
 
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
-    ContactFormBase as ContactForm, OrganisationFormBase, CustomUserCreationFormBase, SubscriptionPreferencesForm, \
-    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm
+    ContactForm as ContactForm, OrganisationForm, CustomUserCreationForm, SubscriptionPreferencesForm, \
+    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm
 
 import requests
 
@@ -1293,6 +1293,8 @@ class ManageUsers(UserCanAdministerMixin, TemplateView):
         return context
 
 
+
+
 @method_decorator(never_cache, name='dispatch')
 class ManageUser(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
@@ -1315,10 +1317,10 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
             raise Http404(_("No user found"))
 
         context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
-        context['competitors'] = Competitor.objects.filter(user=context['object'])
+        context['competitors'] = context['object'].competitor_set.all()
 
 
-        context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones created by me - includes ones added for another
+        context['entries'] = context['object'].entry_set.all().order_by('-created')   # ones created by me - includes ones added for another
         #context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones that have me as competitor
 
         if settings.NEWSLETTER_ON:
@@ -1326,7 +1328,8 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
             # # context['newsletters'] = Newsletter.objects.all()
 
             # prefetch subscriptions only for this user
-            user_subs = Subscription.objects.filter(user=context['object'])
+            Newsletter = apps.get_model('newsletters', 'Newsletter')
+            user_subs = context['object'].subscription_set.all()
 
             newsletters = Newsletter.objects.visible().prefetch_related(
                 Prefetch("subscriptions", queryset=user_subs, to_attr="user_subs")
@@ -1339,9 +1342,9 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
             ]
 
         if settings.USE_PAYMENTS:
-            context['payments'] = Payment.objects.filter(payer=context['object']).order_by('-created')
+            context['payments'] = context['object'].payment_set.all().order_by('-created')
 
-        context['roles4user'] = Role.objects.active().filter(user=context['object']).order_by('role_type')
+        context['roles4user'] = context['object'].role_set.active().order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
 
@@ -1350,14 +1353,14 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         # handle update of person attributes
         context['person_form'] = PersonForm(instance=context['object'].person)
 
-        context['contacts'] = UserContact.objects.filter(user=context['object']).order_by('-pk')
+        context['contacts'] = context['object'].usercontact_set.all().order_by('-pk')
 
         # # want to add event roles as well...
         # available roles
         context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
                             ModelRoles.NON_EVENT_CHOICES}
 
-        context['emails'] = DirectEmail.objects.filter(receiver=context['object']).order_by('-id')
+        context['emails'] = context['object'].directemail_set.all().order_by('-id')
         return context
 
 
@@ -1468,7 +1471,7 @@ def update_password_django(user, password):
 
 
 class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
-    form_class = OrganisationFormBase
+    form_class = OrganisationForm
     template_name = 'django_users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
 
@@ -1483,7 +1486,7 @@ class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_user_form(self, data=None, instance=None):
         """Returns a user form instance, either blank or with data for validation."""
-        return CustomUserCreationFormBase(data, instance=instance)
+        return CustomUserCreationForm(data, instance=instance)
 
     def get_object(self):
         return self.queryset.get(code=self.kwargs['code'])
