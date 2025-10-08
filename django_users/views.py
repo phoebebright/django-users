@@ -94,7 +94,7 @@ class GoNextTemplateMixin(TemplateView):
         return context
 
 
-class AddUserBase(generic.CreateView):
+class AddUser(generic.CreateView):
     '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)
     To use, inherit this class and ensure correct permissions are set in the child class
     Define success url that may pass on to a send message to user - this only creates the user
@@ -192,7 +192,7 @@ class AddUserBase(generic.CreateView):
         return super().form_valid(form)
 
 
-class ManageUserProfileBase(LoginRequiredMixin, generic.CreateView):
+class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
     # form_class = CustomUserCreationForm
     template_name = 'organiser/users/manage_user_profile.html'
 
@@ -330,7 +330,7 @@ def after_login_redirect(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class UserProfileViewBase(LoginRequiredMixin, GoNextMixin, FormView):
+class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
     # form_class = ProfileForm
     # model = CustomUser
     user = None
@@ -666,7 +666,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class RegisterViewBase(FormView):
+class RegisterView(FormView):
     # form_class = SignUpForm
     template_name = "django_users/register.html"
     user = None
@@ -855,7 +855,7 @@ def get_current_user(request):
 
 
 @method_decorator(never_cache, name='dispatch')
-class VerifyChannelViewBase(View):
+class VerifyChannelView(View):
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -1231,7 +1231,7 @@ class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
         return context
 
 
-class ManageRolesBase(UserCanAdministerMixin, TemplateView):
+class ManageRoles(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/users/manage_roles.html"
 
@@ -1246,7 +1246,7 @@ class ManageRolesBase(UserCanAdministerMixin, TemplateView):
         return context
 
 
-class ManageUsersBase(UserCanAdministerMixin, TemplateView):
+class ManageUsers(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/users/manage_users.html"
 
@@ -1259,7 +1259,7 @@ class ManageUsersBase(UserCanAdministerMixin, TemplateView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class ManageUserBase(UserCanAdministerMixin, TemplateView):
+class ManageUser(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
     template_name = "admin/users/admin_user.html"
 
@@ -1292,7 +1292,7 @@ class ManageUserBase(UserCanAdministerMixin, TemplateView):
         return context
 
 
-class ContactViewBase(FormView):
+class ContactView(FormView):
     form_class = ContactForm
     success_url = reverse_lazy('contact-thanks')
     template_name = "contact.html"
@@ -1398,7 +1398,7 @@ def update_password_django(user, password):
     user.save()
 
 
-class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
+class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
     form_class = OrganisationFormBase
     template_name = 'admin/users/organisation_detail.html'
     pk_url_kwarg = 'code'  # Since Organisation uses 'code' as PK
@@ -1435,7 +1435,7 @@ class OrganisationUpdateViewBase(LoginRequiredMixin, UpdateView):
         return self.get(request, *args, **kwargs)
 
 
-class OrganisationListViewBase(ListView):
+class OrganisationListView(ListView):
     model = None
     template_name = "admin/user/organisation_list.html"
     context_object_name = "organisations"
