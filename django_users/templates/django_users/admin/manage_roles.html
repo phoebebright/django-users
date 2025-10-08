@@ -1,0 +1,159 @@
+{% extends "admin/administrator_base.html" %}
+{% load i18n %}
+{% load static %}
+
+
+{% block extra_head %}
+    <style>
+
+    </style>
+
+{% endblock %}
+
+{% block title %}
+    {% trans "Manage Roles" %}
+{% endblock %}
+
+{% block content %}
+
+        <div class="row">
+            <div class="col-12 col-lg-4">
+                <h1 class="page-header">{% blocktrans %}Manage User Roles{% endblocktrans %}</h1>
+                <p>Search for User</p>
+            <input type="hidden" id="username" value="">
+                <input type="hidden" id="person_id" value="">
+
+
+                <div class="row height d-flex justify-content-left align-items-left">
+                    <div class="col-md-8">
+                        <div class="search"> <i class="fa fa-search"></i>
+
+                            <input id="search_user" name="search_user_input" type="text" class="form-control search4user" value="{{ update_user.username }}" placeholder="{% trans "start typing user email" %}...">
+                        </div>
+                    </div>
+                </div>
+
+
+
+
+                <div id="roles" style="display:none;">
+                    <h3 class="mt-3">{% trans "Roles" %}</h3>
+                    {% for key,value in roles.items %}
+                        <p>
+                            <label>
+                                <input id="role_{{ key }}" type="checkbox" name="{{ key }}" class="role"/>
+                                <span>{{ value }}</span>
+                            </label>
+                        </p>
+                    {% endfor %}
+
+                </div>
+            </div>
+            <div class="col-12 col-lg-8">
+                <table id="roles_list" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
+                    <thead>
+
+                    <th>Role</th>
+                    <th>Name</th>
+                    <th>User</th>
+                    <th>Last Login</th>
+                    <th></th>
+
+                    </thead>
+                    <tbody>
+
+                    {% for item in role_list %}
+                        <tr>
+                            <td>{{ item.get_role_type_display }}</td>
+                            <td>{{ item.user.get_full_name }}</td>
+                            <td>{{ item.user.email }}</td>
+                            <td>{{ item.user.last_login }}</td>
+                         <td>{% if item.user %}<a href="{% if item.user.keycloak_id %}{% url "users:admin_user" item.user.keycloak_id %}{% else %}{% url "users:admin_user" item.user.pk %}{% endif %}" class="btn btn-sm btn-outline-primary">Admin</a>{% endif %}</td>                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+
+
+{% endblock %}
+
+{% block js %}
+    <script src="{% static "js/tiny-autocomplete.js" %}"></script>
+
+{{ DATATABLES_LOAD|safe}}
+
+    {% if not USE_ASSETS %}
+        <script src="{% static "js/administrator.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
+
+    {% else %}
+        <script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+
+    <script>
+
+        $(document).ready(function() {
+
+
+            usersearch(function(val) {
+
+                if (val != null) {
+
+                    $("#search_user").val(val.email);
+                    // don't want to pull back user details until one is selected
+                    get_user_roles(val.email)
+
+                }
+            });
+
+
+            $('#role_list').dataTable({
+                sortable: true,
+                paginate: false,
+            });
+
+
+            var rdt = new DataTable('#roles_list', {
+                searchPanes: {
+                    viewTotal: true,
+                    columns: [0, ]
+                },
+
+                paging: false,
+                order: [[ 1, 'asc' ]],
+                stateSave: true,
+                select: true,
+                dom: 'Plfrtip',
+            });
+
+            $('#roles_list tbody').on( 'click', 'tr ', function (e) {
+                // prevent row click being triggered when clicking on pdf icon
+                if (!e.target.className.includes('bi')) {
+                    var d = rdt.row(this).data();
+                    $("#search_user").val(d[2]);
+                             get_user_roles(d[2]);
+
+
+                }
+            } );
+
+        } );
+
+
+
+        $(document).on("change", ".role", function() {
+
+            const role = this.id.substring(5);
+            const username = $("#username").val();
+            const active = this.checked;
+
+            toggleRoles(username, role, active);
+
+        });
+
+
+    </script>
+{% endblock %}

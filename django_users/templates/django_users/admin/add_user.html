@@ -1,0 +1,162 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+
+
+{% block title %}{% trans "Invite User" %}{% endblock %}
+
+{% block page_header %}Add User{% endblock %}
+{% block content %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form id="check_user_form" method="post">
+                <input type="hidden" name="user_pk" id="user_pk" value="">
+                <input type="hidden" name="user_id" id="user_id" value="">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <input type="email" name="check_email" class="form-control" placeholder="Email" title="" required="" id="check_email">
+                </div>
+
+
+                <button id="check_user" class="btn btn-primary float-end">{% blocktrans %}Check if already setup{% endblocktrans %}</button>
+                <div id="message mt-3"></div>
+            </form>
+        </div>
+    </div>
+
+    <form id="add_user" method="post">
+        {% csrf_token %}
+        <input id="username" name="username" type="hidden" value="">
+        <input id="id_email" name="email" type="hidden" value="">
+
+        <div id="in_keycloak_not_local" class="card" style="display:none;">
+
+            <div class="card-header">Finish User Setup</div>
+            <div class="card-body">
+                {% comment %}in old systems this was where user in keycloak but not local{% endcomment %}
+                <p>User not fully setup - See Update User</p>
+                {#                        {% bootstrap_field form.mobile %}#}
+                {#                        {% bootstrap_field form.whatsapp %}#}
+                {#                        <button class="btn btn-primary confirm_keycloak_user">Confirm User in Keycloak (requires mobile)</button>#}
+                  <button id="manage_user" class="btn btn-primary float-end">Update User</button>
+            </div>
+        </div>
+
+        <div id="in_keycloak_and_local" class="card"  style="display:none;">
+
+            <div class="card-header">User is already setup </div>
+            <div class="card-body">
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+
+                    <button  class="btn btn-outline-primary" onclick="location.reload();">Add another User</button>
+                    <button id="manage_user" class="btn btn-primary">Update User</button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div id="add_user_form" class="card"  style="display:none;">
+            <div class="card-header">Add User {% if form.role.value %}- {{ form.role.value }}{% endif %}</div>
+            <div class="card-body">
+
+                {% bootstrap_field form.role %}
+                {% bootstrap_field form.first_name %}
+                {% bootstrap_field form.last_name %}
+                {% bootstrap_field form.send_welcome_email %}
+
+                <input type="hidden" name="password" value="{{ form.password.value }}"  id="id_password">
+
+                <p>Temporary Password: {{ form.password.value }}</p>
+
+                {#                        Optional means of communication:#}
+                {#                        {% bootstrap_field form.mobile %}#}
+                {#                        {% bootstrap_field form.whatsapp %}#}
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                    <a href="{{ next }}"  class="btn btn-outline-secondary">Cancel</a>
+                    <button id="add_user" class="btn btn-primary">Add User</button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+
+
+    <div id="message_div" class="mt-3" style="display:none;">
+
+        <label for="message" class="form-label">Message User <span class="user_name"></span> at <span class="user_email"></span></label>
+        <textarea id="message" class="form-control w-100" rows="5">{{ message }}</textarea>
+
+
+        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+            <a href="{{ next }}" class="btn btn-outline-secondary">Cancel</a>
+            <button id="send_message" class="btn btn-primary">Send Message</button>
+        </div>
+
+    </div>
+
+
+{% endblock %}
+
+{% block js %}
+
+    <script src="{% static "js/jquery.validate.js" %}"></script>
+    {% if not USE_ASSETS %}
+        <script src="{% static "js/organiser.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/organiser_custom.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
+    {% else %}
+        <script src="/assets/js/organiser.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+    <script>
+
+        $(document).on("click", "#manage_user", function(e) {
+            e.preventDefault();
+            document.location.href = "{% url 'users:admin_user' '9999' %}"
+                .replace("9999", $("#user_id").val());
+        });
+
+        $(document).on("click", "#send_message", function(e) {
+            e.preventDefault();
+            document.location.href = "{% url 'users:admin_user' '9999' %}"
+                .replace("9999", $("#user_id").val());
+        });
+
+        function submit_form(submitter_id) {
+            /* actions on submitting form. If using POST, can leave empty
+           required on all templates that have forms with validation */
+            $('[data-maybe-hidden][required]').each(function () {
+                if (!$(this).is(':visible')) {
+                    $(this).removeAttr('required');
+                }
+            });
+
+            $("#add_user").submit();
+
+        }
+
+
+
+        $(document).on("submit", "#check_user_form", function(e) {
+            e.preventDefault();
+            //set email
+            $("#id_email").val($("#check_email").val());
+            return false;
+        });
+
+        $(document).on("click", "#check_user", function(e) {
+            check_user();
+        });
+
+
+    </script>
+
+
+{% endblock %}

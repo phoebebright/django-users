@@ -1236,7 +1236,7 @@ class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
 
 class ManageRoles(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
-    template_name = "admin/users/manage_roles.html"
+    template_name = "django_users/admin/manage_roles.html"
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1244,10 +1244,39 @@ class ManageRoles(UserCanAdministerMixin, TemplateView):
         # see skorie roles_and_disciplines.py as an example - just defines lists and dicts
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         context['roles'] = ModelRoles.ROLE_DESCRIPTIONS
-
         context['role_list'] = Role.objects.all().select_related('user', 'person')
+
+        context['update_user'] = None
+
+        if 'user_id' in self.kwargs:
+            context['user'] = User.objects.get(pk=self.kwargs['user_id'])
+
+
         return context
 
+class ManageEventRoles(ManageRoles):
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(*args, **kwargs)
+        ModelRoles = import_string(settings.MODEL_ROLES_PATH)
+        Role = apps.get_model('users.Role')
+
+        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.EVENT_CHOICES}
+        context['role_list'] = Role.objects.exclude(role_type__in = [ModelRoles.ROLE_DEFAULT,])
+
+        return context
+
+class ManageNonEventRoles(ManageRoles):
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(*args, **kwargs)
+        ModelRoles = import_string(settings.MODEL_ROLES_PATH)
+        Role = apps.get_model('users.Role')
+
+        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.NON_EVENT_CHOICES}
+        context['role_list'] = Role.objects.exclude(role_type__in = [ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
+
+        return context
 
 class ManageUsers(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production

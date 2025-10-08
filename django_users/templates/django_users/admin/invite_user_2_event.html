@@ -1,0 +1,211 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+
+
+{% block title %}{% trans "Invite User to Event" %}{% endblock %}
+
+{% block content %}
+
+
+    <div class="row">
+        <div class="col-12">
+            <h2>Invite User to {{ event }}</h2>
+
+
+            <form id="check_user_form" method="post">
+                <div class="mb-3">
+                    <label class="form-label" for="check_email">Email</label>
+                    <input type="email" name="check_email" class="form-control" placeholder="Email" title="" required="" id="check_email">
+                </div>
+
+
+                <button id="check_user" class="btn btn-primary mb-3">{% blocktrans %}Check if already setup{% endblocktrans %}</button>
+                <div id="message mt-3"></div>
+            </form>
+
+            <form id="add_user_form" method="post">
+                {% csrf_token %}
+                <input id="username" name="username" type="hidden" value="">
+                <input id="id_email" name="email" type="hidden" value="">
+
+
+                <div id="in_keycloak_not_local" class="card" style="display:none;">
+                    <div class="card-header">Finish User Setup</div>
+                    <div class="card-body">
+                        {% comment %}in old systems this was where user in keycloak but not local{% endcomment %}
+                        <p>User has not yet verified their account.  Emails may not be delivered.</p>
+
+
+                    </div>
+                </div>
+
+                <div id="in_keycloak_and_local" class="card"  style="display:none;">
+
+                    <div class="card-body">
+                        <p>User is already setup </p>
+
+                        <button id="#manage_user" class="btn btn-primary">Update User</button>
+                        <button  class="btn btn-primary" onclick="location.reload();">Add another User</button>
+                    </div>
+                </div>
+
+                <div id="add_user_form_display" class="card"  style="display:none;">
+                    <div class="card-header">Invite new User</div>
+                    <div class="card-body">
+
+                        <div class="mb-3 is-valid"><label class="form-label" for="id_first_name">First name</label><input type="text" name="first_name" class="form-control update is-valid" placeholder="First name" title="" required id="id_first_name"></div>
+
+                        <div class="mb-3 is-valid"><label class="form-label" for="id_last_name">Last name</label><input type="text" name="last_name" class="form-control update is-valid" placeholder="Last name" title="" required id="id_last_name"></div>
+
+                        <input type="hidden" name="password" value=" {{ form.password.value }}"  id="id_password">
+                        <p>Temporary Password: {{ form.password.value }}</p>
+
+                        <a href="{{ next }}"  class="btn btn-primary goto cancel">Cancel</a>
+                        <button type="submit" id="add_user_button" class="btn btn-primary">Add Invite Message...</button>
+                    </div>
+                </div>
+
+            </form>
+
+            <div id="message_div" class="mt-3" style="display:none;">
+
+                <label for="message" class="form-label">Message</label>
+                <textarea id="message" class="form-control w-100" rows="5">{{ message }}</textarea>
+                <a href="{{ next }}"  class="btn btn-primary goto cancel">Cancel</a>
+                <button id="send_message" class="btn btn-primary">Invite and Send Message</button>
+            </div>
+
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script src="{% static "js/jquery.validate.js" %}"></script>
+    {% if not USE_ASSETS %}
+        <script src="{% static "js/organiser.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/organiser_custom.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
+
+    {% else %}
+        <script src="/assets/js/organiser.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+    <script>
+
+        function populate_message(name, email, password) {
+            const url = "{{ SITE_URL }}{% url "enter-online" event.ref %}?email=" + encodeURIComponent(email);
+            if (password == "") {
+                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and login with email " + email + " : \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
+            } else {
+                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and login with email " + email + " and temporary password " + password +".  You will then be asked to enter a new password.  \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
+            }
+            $("#message_div").show();
+        }
+
+        $(document).on("click", "#send_message", function(e) {
+            e.preventDefault();
+
+            add2myevents($("#check_email").val(), "{{ event.ref }}");
+
+            const email = encodeURIComponent($("#check_email").val());
+            const message = encodeURIComponent($("#message").val());
+            const subject = encodeURIComponent("Invite to Skorie {{ event.name }}");
+
+            // Construct the mailto link with the pre-filled message
+            var mailtoLink = "mailto:"+email+"?subject="+subject+"&body=" + message;
+
+            // Redirect the user to their email client
+            window.location.href = mailtoLink;
+
+            $(".cancel").html("Done").removeClass("btn-warning").addClass("btn-primary");
+        });
+
+        function submit_form(e) {
+            /* actions on submitting form. If using POST, can leave empty
+           required on all templates that have forms with validation */
+
+
+            return false;
+
+        }
+
+        $(document).on("submit", "#check_user_form", function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        $(document).on("click", "#check_user", function(e) {
+            get_user_signup_info($("#check_email").val(), function(d) {
+                if (d.django_user_id > 0) {
+
+                    //TODO: should be sending message to preferred communications channel
+                    populate_message(d.friendly_name, $("#check_email").val(), "");
+                } else {
+                    $("#message").html("<p>No user with this email exists.</p>");
+                    $("#add_user_form_display").slideDown();
+                    $("#message_div").slideUp();
+                }
+            });
+        });
+
+
+        $(document).on("submit", "#add_user_form", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const payload = {
+                email: $("#check_email").val(),
+                first_name: $("#id_first_name").val(),
+                last_name: $("#id_last_name").val(),
+                password: $("#id_password").val(),
+            };
+
+
+            add_user(payload, function(d) {
+                add2myevents(payload.email, "{{ event.ref }}");
+                populate_message(payload.first_name, payload.email, payload.password);
+            });
+            return false;
+        });
+
+
+        {#$(document).on("click", "#add_user_button", function(e) {#}
+        {#    get_user_signup_info($("#check_email").val(), function(d) {#}
+        {#        if (d.django_user_id > 0) {#}
+        {##}
+        {#            populate_message(d.friendly_name, d.email, d.password);#}
+        {#        } else {#}
+        {#            $("#message").html("<p>No user with this email exists.</p>");#}
+        {#            $("#add_user_form_display").slideDown();#}
+        {#            $("#message_div").slideUp();#}
+        {#        }#}
+        {#    });#}
+        {#});#}
+
+
+            function add2myevents(email, event_ref) {
+
+                $.ajax({
+                    method: "POST",
+                    url: SKORIE_API + "/api/v2/myevent/",
+                    data: {'email': email, 'event_ref': event_ref},
+
+                    success: function (d) {
+                        console.log("done");
+                    },
+                    error: function () {
+                        console.log('failed adding to myevents');
+                    }
+                });
+            }
+
+    </script>
+
+
+{% endblock %}
