@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-users"
-version = "0.4.27"
+version = "0.4.28"
 description = "A reusable Django app to manage users that also use keycloak for SSO."
 readme = "README.md"
 license = {text = "MIT License"}
@@ -29,6 +29,10 @@ Repository = "https://github.com/phoebebright/django-users"
 [tool.setuptools]
 include-package-data = true
 
+
 [tool.setuptools.packages.find]
-# This will automatically find all packages
-# Equivalent to find_packages() in setup.py
+where = ["."]
+include = ["django_users*"]
+
+[tool.setuptools.package-data]
+"news" = ["templates/**/*.html", "templates/**/*.txt","templates/**/*.handlebars", "static/**/*"]
