@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.core.validators import validate_email
+
 
 from django.db.models import Q, F
 from django.utils import timezone
@@ -14,6 +14,8 @@ from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 from django.utils.module_loading import import_string
+
+from email_validator import validate_email, EmailNotValidError
 
 logger = logging.getLogger('django')
 
@@ -233,6 +235,9 @@ def get_subscription_analytics():
     }
 
 def normalise_email(addr: str) -> str:
-    # Robust normalization incl. IDNA / Unicode
+    try:
     v = validate_email(addr, allow_smtputf8=True)
-    return v.normalized  # already lowercased domain; local part normalized
+        # v.normalized in v2; v.email in v1 – support both:
+        return getattr(v, "normalized", v.email)
+    except EmailNotValidError as e:
+        raise ValidationError(str(e))
