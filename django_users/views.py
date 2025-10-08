@@ -41,18 +41,20 @@ from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView, UpdateView
 
-from post_office import mail
+
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 
 from .tools.permission_mixins import UserCanAdministerMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
-from .utils import normalise_email
+from .utils import normalise_email, get_mail_class
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
 User = get_user_model()
+
+mail = get_mail_class()
 
 logger = logging.getLogger('django')
 
@@ -800,6 +802,7 @@ class AddCommsChannelViewBase(FormView):
                     'mobile']
 
                 # Create or get an existing communication channel
+                CommsChannel = apps.get_model('users.CommsChannel')
                 channel, created = CommsChannel.objects.get_or_create(
                     user=user,
                     channel_type=validated_data['channel_type'],
@@ -1535,7 +1538,7 @@ class UserContactAnalyticsView(TemplateView):
     template_name = 'admin/user/user_contact_analytics.html'
 
     def get_context_data(self, **kwargs):
-        from users.models import UserContact
+        UserContact = apps.get_model('users.UserContact')
         context = super().get_context_data(**kwargs)
 
         # Get date range - default to last 12 weeks
