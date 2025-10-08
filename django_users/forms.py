@@ -3,6 +3,7 @@ import string
 
 from django import forms
 from django.apps import apps
+from django.contrib.auth import get_user_model
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
@@ -14,6 +15,10 @@ from django_countries.fields import CountryField
 from phonenumber_field.formfields import PhoneNumberField
 
 from django_users.utils import normalise_email
+# we assume that models have been subclassed in users app in target system to allow for customisation
+from users.models import Organisation, CommsChannel, Person, Role, HelpDeskTicket
+
+User = get_user_model()
 
 
 class SubscribeForm(forms.Form):
@@ -156,7 +161,7 @@ class ForgotPasswordForm(forms.Form):
         # Set the fields required for the current step
         if step >= 1:
             # Step 1: Only the email field is required and visible
-            required_fields['email'] = normalise_email(self.fields['email'])
+            required_fields['email'] = self.fields['email']
             required_fields['email'].required = True
 
 
@@ -284,7 +289,7 @@ class CustomUserCreationForm(ModelForm):
         })
     )
     class Meta:
-        model = None
+        model = User
         fields = ( "email", "first_name","last_name")
 
     def __init__(self, *args, **kwargs):
@@ -310,7 +315,7 @@ class CustomUserCreationForm(ModelForm):
 
 class OrganisationForm(ModelForm):
     class Meta:
-        model = None
+        model = Organisation
         fields = '__all__'
 
 class CommsChannelForm(forms.ModelForm):
@@ -325,7 +330,7 @@ class CommsChannelForm(forms.ModelForm):
     )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     class Meta:
-        model = None
+        model = CommsChannel
         fields = ['channel_type', 'email', 'mobile']
 
 class AddCommsChannelForm(forms.ModelForm):
@@ -344,7 +349,7 @@ class AddCommsChannelForm(forms.ModelForm):
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
-        model = None
+        model = CommsChannel
         fields = ['channel_type', 'email', 'mobile']
 
     def clean(self):
@@ -378,7 +383,7 @@ class PersonForm(forms.ModelForm):
 
 
     class Meta:
-        model = None
+        model = Person
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 
@@ -386,7 +391,7 @@ class SupportTicketForm(forms.ModelForm):
 
 
     class Meta:
-        model = None
+        model = HelpDeskTicket
         fields = ['title', 'notes', 'priority', 'site']
         widgets = {
             'title': forms.TextInput(attrs={

@@ -120,7 +120,7 @@ class AddUser(generic.CreateView):
 
 
     def get_success_url(self):
-        return reverse('users:admin_user', kwargs={'pk': self.object.id})
+        return reverse('users:admin_user', kwargs={'pk': self.new_user.id})
 
     def get_form_class(self):
         if not hasattr(self, 'form_class') or self.form_class is None:
@@ -1303,32 +1303,30 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
-
+        user = None
         # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
         try:
             if 'pk' in kwargs:
                 try:
-                    context['object'] = User.objects.get(keycloak_id=kwargs['pk'])
+                    user = User.objects.get(keycloak_id=kwargs['pk'])
                 except:
-                    context['object'] = User.objects.get(id=kwargs['pk'])  # don;t use id
+                    user = User.objects.get(id=kwargs['pk'])  # don;t use id
             elif 'email' in kwargs:
-                context['object'] = User.objects.get(email=kwargs['email'])
+                user = User.objects.get(email=kwargs['email'])
         except User.DoesNotExist:
             raise Http404(_("No user found"))
 
+        context['object'] = user
+
         context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
-        context['competitors'] = context['object'].competitor_set.all()
 
-
-        context['entries'] = context['object'].entry_set.all().order_by('-created')   # ones created by me - includes ones added for another
-        #context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones that have me as competitor
 
         if settings.NEWSLETTER_ON:
             # context['subscriptions'] = Subscription.objects.filter(user=context['object'])
             # # context['newsletters'] = Newsletter.objects.all()
 
             # prefetch subscriptions only for this user
-            Newsletter = apps.get_model('newsletters', 'Newsletter')
+            Newsletter = apps.get_model('news', 'Newsletter')
             user_subs = context['object'].subscription_set.all()
 
             newsletters = Newsletter.objects.visible().prefetch_related(
@@ -1341,10 +1339,8 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
                 for nl in newsletters
             ]
 
-        if settings.USE_PAYMENTS:
-            context['payments'] = context['object'].payment_set.all().order_by('-created')
 
-        context['roles4user'] = context['object'].role_set.active().order_by('role_type')
+        context['roles4user'] = context['object'].Role.objects.active().filter(user=user).order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
 

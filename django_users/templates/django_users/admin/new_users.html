@@ -1,0 +1,36 @@
+{% extends "admin/administrator_base.html" %}
+{% load i18n %}
+{% load static %}
+
+
+{% block extra_head %}
+    <style>
+
+    </style>
+
+{% endblock %}
+
+{% block title %}
+    {% trans "New Users in last 7 days" %}
+{% endblock %}
+
+{% block content %}
+    <div id="wrapper" class="container">
+        <div class="row">
+            {% for user, logs in users %}
+                <h2>{{ user.name }} {{ user.email }}</h2>  <!-- Change to the appropriate field of the user model -->
+                <p>Subscribed: {{ user.subscribed }}</p>
+                <p>UnSubscribed: {{ user.unsubscribed}} </p>
+                <ul>
+                    {% for log in logs %}
+                        <li>{{ log }}</li>
+                    {% empty %}
+                        <li>No logs for this user.</li>
+                    {% endfor %}
+                </ul>
+            {% empty %}
+                <p>No new users.</p>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}
