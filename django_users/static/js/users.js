@@ -52,7 +52,7 @@ function problem_login(email){
     <div class="alert alert-success" role="alert">
         Your account is verified and ready to use. Have you forgotten your password? 
         <a href="${forgot_pw_url}?email=${encodeURIComponent(email)}" class="text-primary">Yes</a><br />
-        or Try to <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
+        Try <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
             ${LOGIN_TERM}
         </a>
  
@@ -87,7 +87,8 @@ function validateEmail(email) {
 
 // Check the email validity and update form state accordingly
 function checkEmail() {
-    let email = emailInput.val();
+    let email = emailInput.val().toLowerCase();
+
     if (validateEmail(email)) {
         emailInput.removeClass('is-invalid').addClass('is-valid');
         submitBtn.prop('disabled', false);
@@ -176,11 +177,11 @@ $('#pin').on('input', function () {
 
 $(document).on("click", ".goto_problem_login", function () {
     const email = encodeURIComponent($('#id_email').val());
-    document.location.href = problem_login_url + '?email=' + email;
+    document.location.href = problem_login_url + '?email=' + email.toLowerCase();
 });
 $(document).on("click", ".goto_problem_register", function () {
     const email = encodeURIComponent($('#id_email').val());
-    document.location.href = problem_register_url + '?email=' + email;
+    document.location.href = problem_register_url + '?email=' + email.toLowerCase();
 });
 
 
@@ -230,3 +231,18 @@ function show_channels (channels) {
         icon.removeClass('bi-eye-slash').addClass('bi-eye'); // Change icon back to "eye"
       }
     });
+
+function check_user_exists(email, callback, error_callback) {
+    $.ajax({
+        method: "POST",
+        url: USERS_API_URL + "email_exists/",
+        data: {'email': email.toLowerCase()},
+
+    })
+        .done(function (data) {
+            callback(data);
+        })
+        .fail(function (xhr, status, error) {
+            error_callback(error);
+        });
+}

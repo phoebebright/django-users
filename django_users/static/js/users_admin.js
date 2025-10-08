@@ -1,6 +1,7 @@
 /*jshint sub:true*/
 /* LOAD USERS.JS AS WELL */
 // synced skorie1,2,3 15sep25
+
 function show_user_table(selection, page_length, columns, query, panes, col_reorder) {
 
 
@@ -130,6 +131,133 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
 }
 
 
+function show_user_table_paged(selection, page_length, columns, query, panes, col_reorder) {
+
+
+    // https://datatables.net/
+
+
+
+    if (typeof elements == "undefined") {
+        elements = 'ftr';   // remove header and footer blocks
+    }
+
+    if (typeof page_length == "undefined") {
+        page_length = 100;
+    }
+
+
+    if (typeof query == "undefined") {
+        query = "all";
+    }
+
+    if (typeof col_reorder == "undefined") {
+        col_reorder = [];
+    }
+
+
+    var url = USERS_API_URL + "userlist/?"+query;
+    console.log(url);
+    var table_options = {
+        "language": {
+            "processing": "Loading data..."
+        },
+        pageLength: page_length,
+        stateSave: true,
+        responsive: {
+            details: false // so we can click rows
+        } ,
+
+        "ajax": {
+            url: url,
+            "dataSrc": function ( payload ) {
+
+                for ( var i=0; i<payload.length ; i++ ) {
+                    if (payload[i]['date_joined']) {
+                        payload[i]['date_joined'] = payload[i]['date_joined'].substring(0, 10);
+                    }
+                    if (payload[i]['last_login']) {
+                        payload[i]['last_login'] = payload[i]['last_login'].substring(0, 10);
+                    }
+                }
+
+                return payload;
+            }
+        },
+        columns: columns,
+        colReorder: {order: col_reorder},
+
+    };
+
+    //     // can block panes, eg. if only a few entries, by settings panes to []
+    // if (typeof panes != "undefined" && panes.length > 0) {
+    //     table_options['searchPanes'] =  {
+    //         viewTotal: true,
+    //         columns: panes,
+    //     };
+    //     table_options['select'] = true;
+    //     table_options['dom'] = 'Plfrtip';
+    //
+    // }
+
+    // Configure SearchPanes if panes are provided
+    const searchPaneConfig = getSearchPaneConfig(panes);
+    if (Object.keys(searchPaneConfig).length > 0) {
+        table_options['searchPanes'] = searchPaneConfig;
+
+    }
+
+    table_options['select'] = true;
+    table_options['dom'] = 'BPlfrtip';
+
+    table_options['buttons'] = [
+        'csv' // Add the CSV export button
+    ]
+
+    var csrftoken = $("[name=csrfmiddlewaretoken]").val();
+    var dt = $(selection).DataTable( table_options );
+
+    dt.on( 'draw', function () {
+        let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl, {
+                container: 'body',
+                trigger : 'hover'
+            });
+        });
+    } );
+
+    $(selection + ' tbody').on( 'click', 'tr ', function (e) {
+        // prevent row click being triggered when clicking on pdf icon
+        if (!e.target.className.includes('bi')) {
+            var d = dt.row(this).data();
+            loading_on();
+            //TODO: add next and include current search.
+            if (d.keycloak_id) {
+                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
+            } else {
+            document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
+            }
+            loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
+        }
+    } );
+
+    // link to row being triggered when you click on links within the row - requires use of icon (so has class bi) and class newpage on cell
+    $(selection + ' tbody').on( 'click', 'tr .newpage', function (e) {
+        if (e.target.className.includes('bi')) {
+            e.stopPropagation();
+            e.preventDefault();
+            window.open( e.target.parentNode.href, '_blank').focus();
+        }
+
+    } );
+
+    loaded();
+
+    $("#user_wrapper").slideDown("slow");
+
+    return dt;
+}
 function check_user(callback) {
 
     $("#check_user").html("Checking if already setup...");
@@ -418,6 +546,7 @@ function get_user_roles(email) {
 
 function activate_user(userid) {
     // we are activating both django and keycloak here
+    // previously just doing active
     const url = USERS_API_URL + "users/" + userid + "/activate_both/";
     $.ajax({
         method: "GET",
