@@ -313,6 +313,50 @@ class CustomUserCreationForm(ModelForm):
     def save(self, commit=True):
         return super().save(commit=commit)
 
+
+class SkorieUserCreationForm(CustomUserCreationForm):
+    """Project-specific CustomUser creation form."""
+
+    # add select list of roles from choices in ModelROles.EVENT_ROLES
+    # role = forms.ChoiceField(choices=ModelRoles.EVENT_ROLE_CHOICES, required=True, label="Primary Role", help_text="Select the primary role for this user")
+    role = forms.CharField(widget=forms.HiddenInput(), required=False)
+    send_welcome_email = forms.BooleanField(required=False, label="Send Welcome Email", initial=True)
+
+    class Meta(CustomUserCreationForm.Meta):
+        model = User  # Use the project-specific CustomUser model
+
+    def __init__(self, role, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
+        if role:
+            # if role corresponds to a field, set its initial value
+            if 'role' in self.fields:
+                self.fields['role'].initial = role
+
+    def is_valid(self):
+        valid = super().is_valid()
+
+        if not valid:
+            return valid
+
+        # additional custom validation can be added here if needed
+
+        return True
+    def save(self, commit=True):
+        # if creating a new user in this system then auto confirm them.
+
+        obj = super().save(commit=commit)
+        obj.username = obj.email
+        obj.activation_code = self.cleaned_data["password"]
+        obj.password = None
+        obj.save()
+
+
+        #obj.confirm() # may not want to do this as will prevent about screen on first login
+        return self
+
+
 class OrganisationForm(ModelForm):
     class Meta:
         model = Organisation
