@@ -17,10 +17,19 @@
     <div class="col-12 col-md-8 col-lg-6">
 
         <p>This password can be used only once.</p>
-        <p class="fs-3">To {{ recipient }} at {{ recipient.email }}:     <button type="button" class="btn btn-outline-secondary"
-                                                                                 onclick="copyToClipboard('{{ recipient.email }}')">
-            <i class="bi bi-clipboard"></i>
-        </button></p>
+        <p class="fs-3">To {{ recipient }} at {{ recipient.email }}:         <button type="button" class="btn btn-outline-secondary"
+                        onclick="navigator.clipboard.writeText('{{ recipient.email }}')
+                                 .then(() => {
+                                     const alertDiv = document.createElement('div');
+                                     alertDiv.className = 'alert alert-success position-fixed top-0 end-0 m-3';
+                                     alertDiv.textContent = 'Copied: {{ recipient.email }}';
+                                     document.body.appendChild(alertDiv);
+                                     setTimeout(() => alertDiv.remove(), 2000);
+                                 })
+                                 .catch(err => console.error('Failed to copy text:', err));">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+         </p>
         <p class="fs-2 mt-4 mb-4 ms-4">{{ otp }}</p>
 
         <form method="get">
@@ -83,14 +92,7 @@
             }
         });
 
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                // Optional: Give feedback to the user
-                alert("Copied: " + text);
-            }).catch(err => {
-                console.error("Failed to copy text: ", err);
-            });
-        }
+
 
     });
 </script>
