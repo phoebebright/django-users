@@ -9,78 +9,96 @@
 {% block title %}{% trans "Send OTP" %}{% endblock %}
 
 {% block page_header %}
-    {% trans "Send One Time Password (OTP)" %}
+{% trans "Send One Time Password (OTP)" %}
 {% endblock %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-12 col-md-8 col-lg-6">
+<div class="row">
+    <div class="col-12 col-md-8 col-lg-6">
 
-            <p>This password can be used only once.</p>
-            <p class="fs-3">To {{ recipient }} at {{ recipient.email }}:</p>
-            <p class="fs-2 mt-4 mb-4 ms-4">{{ otp }}</p>
+        <p>This password can be used only once.</p>
+        <p class="fs-3">To {{ recipient }} at {{ recipient.email }}:</p>
+        <p class="fs-2 mt-4 mb-4 ms-4">{{ otp }}</p>
 
-            <form method="get">
-                {% csrf_token %}
+        <form method="get">
+            {% csrf_token %}
 
-                <input type="hidden" id="keycloak_id" value="{{ recipient.keycloak_id }}">
-                <input type="hidden" id="otp" value="{{ recipient.activation_code }}">
-                <input type="hidden" id="channel_id" value="{{ recipient.preferred_channel_id }}">
+            <input type="hidden" id="keycloak_id" value="{{ recipient.keycloak_id }}">
+            <input type="hidden" id="otp" value="{{ recipient.activation_code }}">
+            <input type="hidden" id="channel_id" value="{{ recipient.preferred_channel_id }}">
 
-                <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between">
 
-                    <a href="{{ next }}" type="button" class="btn btn-outline-secondary" disabled>Back</a>
-                    <button  type="submit" class="btn btn-primary">Email to  {{ recipient.email }}</button>
+                <a href="{{ next }}" type="button" class="btn btn-outline-secondary" disabled>Back</a>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary"
+                            onclick="copyToClipboard('{{ recipient.email }}')">
+                        Copy Email
+                    </button>
+
+                    <button type="submit" class="btn btn-primary">
+                        Email to {{ recipient.email }}
+                    </button>
                 </div>
-
-
-            </form>
-
-            <div id="status" class="alert alert-success mt-3" role="alert" style="display:none;">
-                OTP sent.
             </div>
 
+
+        </form>
+
+        <div id="status" class="alert alert-success mt-3" role="alert" style="display:none;">
+            OTP sent.
         </div>
+
     </div>
+</div>
 
 {% endblock %}
 
 {% block js %}
-    {% if not USE_ASSETS %}
+{% if not USE_ASSETS %}
 
-        <script src="{% static "js/users.js" %}?v={{ API_VERSION }}">    </script>
-        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
-    {% else %}
-        <script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
-    {% endif %}
+<script src="{% static "js/users.js" %}?v={{ API_VERSION }}">    </script>
+<script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
+{% else %}
+<script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
+{% endif %}
 
-    <script>
-        $(document).ready(function() {
+<script>
+    $(document).ready(function() {
 
-            $('form').submit(async function(e) {
-                e.preventDefault();
-                e.stopPropagation();
+        $('form').submit(async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
 
-                const payload = {
-                    'username': $("#keycloak_id").val(),
-                    'new_password': $("#otp").val(),
-                };
+            const payload = {
+                'username': $("#keycloak_id").val(),
+                'new_password': $("#otp").val(),
+            };
 
-                try {
-                    const data = await set_keycloak_password(payload);
-                    console.log(data);
+            try {
+                const data = await set_keycloak_password(payload);
+                console.log(data);
 
-                    // Ensure the value is properly retrieved
-                    payload['channel_id'] = $("#channel_id").val();
+                // Ensure the value is properly retrieved
+                payload['channel_id'] = $("#channel_id").val();
 
-                    const d = await send_otp_via_channel(payload);
-                    $("#status").slideDown();
-                } catch (error) {
-                    console.error("Error:", error);
-                }
-            });
-
-
+                const d = await send_otp_via_channel(payload);
+                $("#status").slideDown();
+            } catch (error) {
+                console.error("Error:", error);
+            }
         });
-    </script>
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Optional: Give feedback to the user
+                alert("Copied: " + text);
+            }).catch(err => {
+                console.error("Failed to copy text: ", err);
+            });
+        }
+
+    });
+</script>
 {% endblock %}
