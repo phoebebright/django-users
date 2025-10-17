@@ -942,30 +942,38 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
 
     def form_valid(self, form):
 
-        new_password = form.cleaned_data.get("new_password")
-        if settings.USE_KEYCLOAK:
-            user_id = self.request.user.keycloak_id
+        user = self.request.user
+        new_password = form.cleaned_data["new_password"]
 
-            # Update the password in Keycloak
-            try:
+        use_keycloak = getattr(settings, "USE_KEYCLOAK", False)
+        migrating = getattr(settings, "KEYCLOAK_MIGRATING", False)
+
+        try:
+            if use_keycloak:
+                # 1) Update in Keycloak (source of truth)
+                user_id = getattr(user, "keycloak_id", None)
+                if not user_id:
+                    form.add_error(None, "Cannot update password: missing Keycloak ID.")
+                    return self.form_invalid(form)
+
                 update_password_keycloak(user_id, new_password)
-                messages.success(self.request, "Password updated successfully.")
 
-            except Exception as e:
-                form.add_error(None, f"Failed to update password: {e}")
-                return self.form_invalid(form)
+                # 2) If migrating, mirror to Django so future Django auth works
+                if migrating:
+                    update_password_django(user, new_password)
+                    # We changed the Django password, so rotate the session hash
+                    update_session_auth_hash(self.request, user)
 
-            if KEYCLOAK_MIGRATING:
-                update_password_django(self.request.user, new_password)
+            else:
+                # Pure Django setup: change password + rotate session
+                update_password_django(user, new_password)
+                update_session_auth_hash(self.request, user)
 
+        except Exception as e:
+            form.add_error(None, f"Failed to update password: {e}")
+            return self.form_invalid(form)
 
-        else:
-            # Update the password in Django
-            update_password_django(self.request.user, new_password)
-
-            messages.success(self.request, "Password updated successfully.")
-            update_session_auth_hash(self.request, self.request.user)
-
+        messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
 
 @method_decorator(never_cache, name='dispatch')
