@@ -1173,25 +1173,53 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
     success_url = reverse_lazy("users:user-profile")
 
     def form_valid(self, form):
+        #TODO: should we check for user still being logged in?
+
         current_password = form.cleaned_data.get("current_password")
         new_password = form.cleaned_data.get("new_password")
+
+        # Your helper returns the canonical user object to update
         user, user_login_mode = get_current_user(self.request)
 
+        # Verify current password before changing it
         if not verify_login(self.request.user.email, current_password):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
-        # Update the password in Keycloak
+        use_keycloak = getattr(settings, "USE_KEYCLOAK", False)
+        migrating = getattr(settings, "KEYCLOAK_MIGRATING", False)
+
         try:
-            if settings.USE_KEYCLOAK:
+            # 1) Change the password in the correct source(s) of truth
+            if use_keycloak:
                 update_password_keycloak(user.keycloak_id, new_password)
-                if KEYCLOAK_MIGRATING:
+                if migrating:
+                    # Mirror to Django during migration
                     update_password_django(user, new_password)
             else:
+                # Pure Django
                 update_password_django(user, new_password)
+
+            # 2) Keep the *current* session authenticated (rotate session hash)
+            # Only necessary if the Django password was updated, but safe to call.
+            update_session_auth_hash(self.request, user)
+
+            # # 3) If this code ever runs in a flow where the user isn't authenticated
+            # # (e.g., recovery form), sign them in with the new password now.
+            # if not self.request.user.is_authenticated:
+            #     # Try with username first (works for default Django backends)
+            #     auth_user = authenticate(self.request,
+            #                              username=getattr(user, "get_username", lambda: user.username)(),
+            #                              password=new_password)
+            #     if not auth_user and getattr(user, "email", None):
+            #         # Fallback for email-based backends
+            #         auth_user = authenticate(self.request, email=user.email, password=new_password)
+            #     if auth_user:
+            #         login(self.request, auth_user)
 
             messages.success(self.request, "Password updated successfully.")
             return super().form_valid(form)
+
         except Exception as e:
             form.add_error(None, f"Failed to update password: {e}")
             return self.form_invalid(form)
