@@ -857,6 +857,7 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
         # Ignore default_authority=0
         default_authority = query_params.get('default_authority', None)
+        default_authority_id = 0
         if default_authority:
             try:
                 default_authority_id = int(default_authority)
