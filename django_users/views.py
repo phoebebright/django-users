@@ -463,12 +463,12 @@ class ProblemLogin(ProblemSignup):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def get_template_names(self):
-        if self.request.user.is_authenticated and self.request.user.is_administrator:
-            #return "django_users/django_users/problem_login_admin.html"
-            return 'django_users/admin/problem_login_admin.html'
-        else:
-            return "django_users/problem_login.html"
+    # def get_template_names(self):
+    #     if self.request.user.is_authenticated and self.request.user.is_administrator:
+    #         #return "django_users/django_users/problem_login_admin.html"
+    #         return 'django_users/admin/problem_login_admin.html'
+    #     else:
+    #         return "django_users/problem_login.html"
 
 
 @method_decorator(never_cache, name='dispatch')
