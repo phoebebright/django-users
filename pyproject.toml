@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-users"
-version = "1.1.6"
+version = "1.1.7"
 description = "A reusable Django app to manage users that also use keycloak for SSO."
 readme = "README.md"
 license = {text = "MIT License"}
@@ -45,4 +45,5 @@ django_users = [
   "static/**/*",
   "management/**/*",
   "docs/**/*",
+    "tools/**/*",
 ]
