@@ -1,2 +1,5 @@
 recursive-include django-users/static *
 recursive-include django-users/templates *
+recursive-include django-users/tools *
+recursive-include django-users/management *
+recursive-include django-users/docs *
