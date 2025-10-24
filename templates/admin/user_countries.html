@@ -1,0 +1,53 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block page_header %}
+    World Heatmap of Competitors by Country
+{% endblock %}
+
+{% block content %}
+
+    <div id="map" style="width: 100%; height: 500px;"></div>
+
+       <h2>Country Data (Descending Order)</h2>
+    <div id="country_data"></div>
+
+{% endblock %}
+
+{% block js %}
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson@3"></script>
+    <script src="{% static 'js/globe_viz.js' %}?v={{ API_VERSION }}"></script>
+    <script>
+        $(document).ready(function() {
+            // Ensure D3 and TopoJSON are fully loaded before running this
+            const COUNTRY_API = "{% url 'user-country-api' %}";
+
+            // Fetch data from the API endpoint that returns the country data
+            d3.json(COUNTRY_API)
+                .then(function(data) {
+
+                    const countLookup = data.reduce((lookup, item) => {
+                        lookup[item.country] = item.count;
+                        return lookup;
+                    }, {});
+                    let max_count = Math.max(d3.max(data, d => d.count), 50);
+
+                    // Pass the TopoJSON data to the map creation function
+                    initGlobe("{% static 'data/world.json' %}", countLookup, max_count);
+
+                            const sortedData = data.sort((a, b) => b.count - a.count);
+
+        // Create and populate the table with sorted data
+        createCountryTable("#country_data", sortedData);
+                });
+
+        });
+
+
+
+    </script>
+{% endblock %}

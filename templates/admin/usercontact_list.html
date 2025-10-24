@@ -1,0 +1,134 @@
+{% extends "admin/administrator_base.html" %}
+{% load i18n %}
+{% load static %}
+{% load user_agents %}
+{% load eventtags %}
+
+
+
+{% block title %}{% trans "User Contact List" %}{% endblock %}
+
+{% block main %}
+
+
+    <h1>{% trans "User Contact List" %}</h1>
+
+
+    <div class="row  my-3">
+    <div class="col">
+
+        {#        <table id="entries" class="table table-sm table-dashboard fs--1  border-bottom  no-footer hover">#}
+        <table id="users" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
+            <thead>
+
+            <th>Name</th>
+            <th>Email</th>
+            <th>Joined</th>
+            <th>Last Login</th>
+            <th>Country</th>
+            <th>Active</th>
+
+
+
+            </thead>
+            <tbody>
+
+            </tbody>
+        </table>
+    </div>
+
+    </div>
+    {#    </div>#}
+
+
+
+{% endblock  %}
+
+{% block js %}
+
+
+{{ DATATABLES_LOAD|safe}}
+
+    {% if not USE_ASSETS %}
+        <script src="{% static "js/organiser.js" %}?v={{ API_VERSION }}">    </script>
+        <script src="{% static "js/userbrowser.js" %}?v={{ API_VERSION }}">    </script>
+    {% else %}
+        <script src="/assets/js/organiser.min.js?v={{ API_VERSION }}"></script>
+    {% endif %}
+
+    <script>
+
+        {##}
+        {#        var EVENT_REF = "{{object.ref}}";#}
+        {#        org_settings = simpleStorage.get("org_settings_"+EVENT_REF);#}
+        {##}
+        {#        var compref = "{{ competition.ref }}";#}
+        {#        var here = "{% url "entry-browser" event.ref %}";#}
+        {#        var new_entry_url = "{% url "add_entry_to_event" event.ref  %}";#}
+
+        var panes = [0];
+        var counter = 0;
+
+
+
+        // define columns to display
+        var columns = [];
+        columns = columns.concat([
+
+            { data: "name", responsivePriority: 2},
+            { data: "email", responsivePriority: 4},
+                        { data: "date_joined", responsivePriority: 4},
+            { data: "last_login", responsivePriority: 4},
+            { data: "country", responsivePriority: 4},
+            { data: "is_active", responsivePriority: 4},
+
+
+
+
+        ]);
+
+
+
+
+        function loaded() {
+            loading_off();
+        }
+
+        put_in_header("{{event.name}}");
+
+        var EVENT_REF = "{{ event.ref }}";
+
+
+
+
+
+        $(document).on("click", "#clear", function(e) {
+
+            {#$("#competitor-auto").val("");#}
+            {#$("#partner-auto").val("");#}
+            $("#entry_wrapper").slideUp();
+            load_all();
+
+        });
+
+
+
+
+        $(document).ready(function(){
+            var query="all";
+            {% if event %}
+                query='event_ref={{ event.ref }}';
+            {% endif %}
+
+            var col_reorder = [1,0]
+
+
+            show_user_table("#users", 100, columns, query, panes, col_reorder);
+
+            loading_off();
+        });
+
+
+
+    </script>
+{% endblock %}
