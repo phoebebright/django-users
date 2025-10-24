@@ -227,7 +227,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
     def get_context_data(self):
         context = super().get_context_data()
-        if settings.NEWSLETTER_ON:
+        if settings.USE_NEWSLETTER:
             Newsletter = apps.get_model('news', 'Newsletter')
             context['subcribed2newsletter'] = Newsletter.is_subscribed_to_newsletter(self.request.user)
 
@@ -373,7 +373,7 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         Subscription = apps.get_model('news.Subscription')
         context = super().get_context_data(**kwargs)
         context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
-        if settings.NEWSLETTER_ON:
+        if settings.USE_NEWSLETTER:
             context['subscriptions'] = Subscription.objects.filter(user=self.user).order_by('-created')
         context['now'] = timezone.now()
         context['roles'] = self.request.user.user_roles(descriptions=True)
@@ -1357,7 +1357,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
 
 
-        if settings.NEWSLETTER_ON:
+        if settings.USE_NEWSLETTER:
             # context['subscriptions'] = Subscription.objects.filter(user=context['object'])
             # # context['newsletters'] = Newsletter.objects.all()
 
