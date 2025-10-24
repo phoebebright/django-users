@@ -39,3 +39,10 @@ include = ["django_users"]
 [tool.setuptools.package-data]
 # key is the import path of your app
 "skorie_news" = ["templates/**/*.html", "templates/**/*.txt","templates/**/*.handlebars", "static/**/*"]
+
+django_users = [
+  "templates/**/*.html",
+  "static/**/*",
+  "management/**/*",
+  "docs/**/*",
+]
