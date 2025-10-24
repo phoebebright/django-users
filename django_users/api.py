@@ -42,6 +42,7 @@ from .utils import send_otp, normalise_email
 
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
+from pycountry import countries
 
 if settings.USE_KEYCLOAK:
     from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
@@ -1073,3 +1074,35 @@ class SubscriptionHistoryAPIView(APIView):
         history = request.user.get_subscription_history()
         serializer = SubscriptionHistorySerializer(history, many=True)
         return Response(serializer.data)
+
+
+class UserCountry(UserCanAdministerMixin, APIView):
+    def get(self, request):
+        # Initialize an empty dictionary to store country counts
+        country_count = {}
+
+        # Loop over all user profiles
+        for item in User.objects.filter(country__isnull=False):
+            country = None
+            if item.country:
+                country = item.country.alpha3
+            elif type(item.profile) == dict:
+                country = item.profile.get('country', None)
+                if country:
+                    # go from two letter to three letter code
+
+                    try:
+                        country = countries.lookup(country).alpha3
+                    except LookupError:
+                        country = None
+
+            if country:
+                if country in country_count:
+                    country_count[country] += 1
+                else:
+                    country_count[country] = 1
+
+        # Convert the dictionary to a list of dictionaries to return as JSON
+        formatted_data = [{"country": country, "count": count} for country, count in country_count.items()]
+
+        return JsonResponse(formatted_data, safe=False, status=status.HTTP_200_OK)
