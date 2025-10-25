@@ -234,5 +234,5 @@ def get_subscription_analytics():
 
 def normalise_email(addr: str) -> str:
     # Robust normalization incl. IDNA / Unicode
-    v = validate_email(addr, allow_smtputf8=True)
+    v = validate_email(addr)
     return v.normalized  # already lowercased domain; local part normalized
