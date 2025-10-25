@@ -31,13 +31,14 @@ from rest_framework_api_key.permissions import HasAPIKey
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from rest_framework.permissions import AllowAny
+
+from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
+    SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
 from .tools.permissions import IsAdministratorPermission
-from .serializers import UserSerializerBase as UserSerializer, RoleSerializerBase, PersonSerializerBase, \
-    SubscriptionStatusSerializer, SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, \
-    SubscriptionHistorySerializer
+
 from .utils import send_otp, normalise_email
 
 from .views import send_sms, set_current_user
@@ -1039,7 +1040,7 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RoleViewSetBase(viewsets.ModelViewSet):
     queryset = None
-    serializer = RoleSerializerBase
+    serializer = RoleSerializer
 
 
 class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
@@ -1083,7 +1084,7 @@ class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
 class PersonViewSet(viewsets.ModelViewSet):
     queryset = None
     lookup_field = 'ref'
-    serializer = PersonSerializerBase
+    serializer = PersonSerializer
 
 # deprecated for skorie_users - use PersonViewSet directly
 class PersonViewSetBase(PersonViewSet):
