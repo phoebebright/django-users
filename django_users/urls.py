@@ -1,8 +1,9 @@
 # create your own urls.py in your users views app - this is a template
 from django.contrib.auth.decorators import user_passes_test
-from django.urls import path
+from django.urls import path, register_converter
 
 from .api import SendVerificationCode
+from .ref import EventRefConverter
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, AddUser, update_users, \
@@ -14,6 +15,7 @@ from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
 
+register_converter(EventRefConverter, 'event_ref')
 
 def has_role_administrator(user):
     if user and user.is_authenticated:
@@ -94,8 +96,10 @@ urlpatterns = [
     path('contact_viz/',UserContactAnalyticsView.as_view(),name='user_contact_analytics'),
     path('preferences/', SubscriptionPreferencesView.as_view(), name='subscription_preferences'),
     path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
-    path('subscribe_only/', subscribe_only.as_view(), name="subscribe_only"),
-    path('unsubscribe_only/', unsubscribe_only.as_view(), name="unsubscribe_only"),
+
+    # these were for the old subscribe field in User
+    # path('subscribe_only/', subscribe_only.as_view(), name="subscribe_only"),
+    # path('unsubscribe_only/', unsubscribe_only.as_view(), name="unsubscribe_only"),
 
     #TODO
     #path('anon/<uuid:pk>/', AnonUserView.as_view(), name='anon_user')

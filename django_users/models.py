@@ -745,25 +745,25 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         else:
             return "Unknown"
 
-    @property
-    def is_subscribed(self):
-        return (self.subscribed and not self.unsubscribed)
+    # @property
+    # def is_subscribed(self):
+    #     return (self.subscribed and not self.unsubscribed)
 
 
-    def update_subscribed(self, subscribe:bool):
-        '''call with true or false to update'''
-        if subscribe and not self.is_subscribed:
-            self.subscribed = timezone.now()
-            self.unsubscribed = None
-        elif not subscribe and self.is_subscribed:
-            self.unsubscribed = timezone.now()
-
-        # by subscribing (or not) status is at least confirmed
-        if self.status < self.USER_STATUS_CONFIRMED:
-            self.confirm(False)
-
-        # status is now at least
-        self.save()
+    # def update_subscribed(self, subscribe:bool):
+    #     '''call with true or false to update'''
+    #     if subscribe and not self.is_subscribed:
+    #         self.subscribed = timezone.now()
+    #         self.unsubscribed = None
+    #     elif not subscribe and self.is_subscribed:
+    #         self.unsubscribed = timezone.now()
+    #
+    #     # by subscribing (or not) status is at least confirmed
+    #     if self.status < self.USER_STATUS_CONFIRMED:
+    #         self.confirm(False)
+    #
+    #     # status is now at least
+    #     self.save()
 
     # @classmethod
     # def valid_profile_fields(cls):
