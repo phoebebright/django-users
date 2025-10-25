@@ -131,7 +131,7 @@ clear_feedback();
             e.preventDefault();
             e.stopPropagation();
             var channel_pk = $(this).data('channel_pk');
-            document.location.href="{% url "users:verify_channel" 0 %}".replace("0", channel_pk);
+            document.location.href="{% url "user:verify_channel" 0 %}".replace("0", channel_pk);
         });
 
         $(document).on("click", ".change_password_now", function(){

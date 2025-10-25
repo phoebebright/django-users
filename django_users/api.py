@@ -451,7 +451,7 @@ class SendVerificationPinPublic(APIView):
 #         # add phone and status
 #         return Response({'status': 'success'}, status=200)
 
-
+@method_decorator(never_cache, name='dispatch')
 class SendVerificationCode(APIView):
     '''set keycloak account as verified even though email is not verified'''
     authentication_classes = []
