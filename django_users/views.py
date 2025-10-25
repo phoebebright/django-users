@@ -192,26 +192,6 @@ class AddUser(generic.CreateView):
         return super().form_valid(form)
 
 
-class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
-    # form_class = CustomUserCreationForm
-    template_name = 'django_users/admin/manage_user_profile.html'
-
-    def get_form_class(self):
-        if not hasattr(self, 'form_class') or self.form_class is None:
-            raise NotImplementedError("Define `form_class` in the child class.")
-        return self.form_class
-
-
-
-    def form_valid(self, form):
-        # This method is called when valid form data has been POSTed.
-        # It should return an HttpResponse.
-        user = form.save()  # Save the user and get the instance
-
-        # Custom post-save logic here
-        # e.g., sending a confirmation email
-
-        return super().form_valid(form)
 
 
 class SubscribeView(LoginRequiredMixin, FormView):
@@ -1336,6 +1316,9 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
+        Competitor = apps.get_model('web.Competitor')
+        Entry = apps.get_model('web.Entry')
+        Payment =apps.get_model('skorie_payments.Payment')
         user = None
         # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
         try:
@@ -1376,6 +1359,11 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context['roles4user'] = context['object'].Role.objects.active().filter(user=user).order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
+        context['competitors'] = Competitor.objects.filter(user=context['object'])
+        context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones created by me - includes ones added for another
+
+        if settings.USE_PAYMENTS:
+            context['payments'] = Payment.objects.filter(payer=context['object']).order_by('-created')
 
         # context['tickets'] = Ticket.objects.filter(submitter_email=context['object'].email)
 
@@ -1391,6 +1379,25 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
 
         context['emails'] = context['object'].directemail_set.all().order_by('-id')
         return context
+
+
+class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
+    # form_class = CustomUserCreationForm
+    template_name = 'django_users/admin/manage_user_profile.html'
+
+    def get_form_class(self):
+        return SkorieUserCreationForm
+
+
+    def form_valid(self, form):
+        # This method is called when valid form data has been POSTed.
+        # It should return an HttpResponse.
+        user = form.save()  # Save the user and get the instance
+
+        # Custom post-save logic here
+        # e.g., sending a confirmation email
+
+        return super().form_valid(form)
 
 
 class ContactView(FormView):
@@ -1928,6 +1935,7 @@ class SubscriptionDataFrameView(TemplateView):
     def get_filtered_queryset(self):
         """Get filtered queryset based on request parameters"""
         # Base filter for subscription/interest/form related contacts
+        UserContact = apps.get_model('users.UserContact')
         queryset = UserContact.objects.filter(method__icontains='subscribe').select_related('user')
 
         # Apply filters from request
@@ -1991,6 +1999,7 @@ class SubscriptionDataFrameView(TemplateView):
 
     def get_filter_options(self):
         """Get available filter options"""
+        # is this used?
         base_queryset = UserContact.objects.filter(
             Q(method__icontains='subscribe') |
             Q(method__icontains='interest') |
@@ -2002,3 +2011,12 @@ class SubscriptionDataFrameView(TemplateView):
             'methods': list(base_queryset.values_list('method', flat=True).distinct().order_by('method')),
             'sites': list(base_queryset.values_list('site', flat=True).distinct().order_by('site')),
         }
+
+class ConfirmAccount(UserCanAdministerMixin, View):
+
+    def get(self, request, *args, **kwargs):
+
+        user = User.objects.get(id=kwargs['pk'])
+        user.confirm(request.user)
+
+        return redirect(reverse('users:admin_user', kwargs={'pk': kwargs['pk']}))

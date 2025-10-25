@@ -29,7 +29,7 @@ class DynamicModelSerializer(serializers.ModelSerializer):
             raise ValueError("Meta.model must be defined or dynamically resolved in the derived serializer.")
 
 
-class EmailExistsSerializerBase(DynamicModelSerializer):
+class EmailExistsSerializer(DynamicModelSerializer):
 
     class Meta:
         model = None
@@ -54,10 +54,10 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
         return ret
 
 
-class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
+class UserShortSerializer(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
-        model = None
+        model = User
         fields = ('id','username','email','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
 
     def to_representation(self, instance):
@@ -77,7 +77,7 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
         ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
         return ret
 
-class UserSerializer(UserShortSerializerBase):
+class UserSerializer(UserShortSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
@@ -118,14 +118,14 @@ class UserContactSerializer(DynamicModelSerializer):
 class UserContactSerializerBase(UserContactSerializer):
     pass
 
-class UserEmailSerializerBase(DynamicModelSerializer):
+class UserEmailSerializer(DynamicModelSerializer):
 
     class Meta:
         model = User
         fields = ('email',)
 
 
-class UserSyncSerializerBase(DynamicModelSerializer):
+class UserSyncSerializer(DynamicModelSerializer):
 
     class Meta:
         model = User

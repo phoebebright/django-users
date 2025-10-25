@@ -5,10 +5,11 @@ from django.urls import path
 from .api import SendVerificationCode
 from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
-    ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
+    ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
-    ManageUser
+    ManageUser, InviteUser2Event, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
+    ManageUserProfile
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -20,6 +21,8 @@ def has_role_administrator(user):
     else:
         return False
 
+def is_authenticated(user):
+    return user and user.is_authenticated
 
 # urlpatterns = [
 #
@@ -41,7 +44,7 @@ urlpatterns = [
     # path('api/v2/email_exists_on_keycloak/', CheckEmailInKeycloak.as_view(), name='email_exists_on_keycloak'),
     # path('api/v2/set_temp_password/', SetTemporaryPassword.as_view(), name='set_temp_password'),
     path('add_user/', user_passes_test(has_role_administrator)(AddUser.as_view()), name='add-user'),
-    path('manage_user_profile/', user_passes_test(has_role_administrator)(ManagerUserProfile.as_view()),
+    path('manage_user_profile/', user_passes_test(has_role_administrator)(ManageUserProfile.as_view()),
          name='manage-user-profile'),
     # path('subscribers/', user_passes_test(has_role_administrator)(subscribers_list), name='subscriber_list'),
     # create ManageRoles, Users and User using Base views in django-users
