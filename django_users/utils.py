@@ -31,46 +31,30 @@ def get_mail_class():
 
 
 def send_otp(channel, code):
-    context = {'verification_code': code,
-               'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL)}
-    template = 'send_otp'
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if channel.value < ' ':
-        to_email = channel.user.email
-        logger.error(f"Channel id has no value {channel.id} ")
-    else:
-        to_email = channel.value
-
-    # mail = get_mail_class()
+    subject = _('Your One Time Password')
+    message = f'Here is your One Time Password: {code} to login to {settings.SITE_NAME}.  You will be asked to enter a new password when you log in.  Login link {settings.SITE_URL}{reverse(settings.LOGIN_URL)}'
+    html_message = message
     mail.send(
-        to_email,
+        channel.value,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
-        context=context,
-        # receiver=channel.user,
+        subject=subject,
+        message=message,
+        html_message=html_message
     )
 
     return True
 
 
 def send_email_verification_code(verificationcode):
-    template = 'email_verification_code'
-    context = {'code': verificationcode.code}
-
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if verificationcode.channel.value <= ' ':
-        to_email = verificationcode.channel.user.email
-        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
-    else:
-        to_email = verificationcode.channel.value
-    #
-    # mail = get_mail_class()
+    subject = _('Your Verification Code')
+    message = render_to_string('registration/email_verification_code.txt', {'code': verificationcode.code})
+    html_message = render_to_string('registration/email_verification_code.html', {'code': verificationcode.code})
     mail.send(
-        to_email,
+        verificationcode.channel.value,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
-        context=context,
-        # receiver=verificationcode.user,
+        subject=subject,
+        message=message,
+        html_message=html_message
     )
     return True
 
