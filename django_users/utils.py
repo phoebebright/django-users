@@ -47,7 +47,7 @@ def send_otp(channel, code):
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
-        receiver=channel.user,
+        # receiver=channel.user,
     )
 
     return True
@@ -70,7 +70,7 @@ def send_email_verification_code(verificationcode):
         settings.DEFAULT_FROM_EMAIL,
         template=template,
         context=context,
-        receiver=verificationcode.user,
+        # receiver=verificationcode.user,
     )
     return True
 
