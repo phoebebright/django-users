@@ -19,11 +19,13 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status, viewsets
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import api_view, permission_classes, authentication_classes, action
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, action, throttle_classes
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.fields import EmailField
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.serializers import Serializer
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
@@ -58,6 +60,9 @@ User = get_user_model()
 
 class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
+
+class CheckEmailThrottle(AnonRateThrottle):
+    rate =  "3/5m"
 
 
 class CustomOrdinaryUserRateThrottle(UserRateThrottle):
@@ -620,6 +625,21 @@ class CheckEmailInKeycloakPublic(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
+class EmailExistsSerializer(Serializer):
+    email = EmailField(write_only=True)
+
+@api_view(["POST"])
+@authentication_classes([])           # allow anonymous without CSRF/session auth
+@permission_classes([AllowAny])
+@throttle_classes([CheckEmailThrottle])
+def email_exists(request):
+    ser = EmailExistsSerializer(data=request.data)
+    ser.is_valid(raise_exception=True)
+
+    email = ser.validated_data["email"]
+    User = get_user_model()
+    exists = User.objects.filter(email__iexact=email).exists()
+    return Response({"exists": exists}, status=status.HTTP_200_OK)
 
 class CheckEmail(viewsets.ReadOnlyModelViewSet):
     '''
