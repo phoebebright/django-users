@@ -620,7 +620,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 authenticated = True
-                if KEYCLOAK_MIGRATING:
+                if KEYCLOAK_MIGRATING  and user.activation_code != password:
                     user.set_password(password)
                     user.save()
             else:
@@ -630,15 +630,15 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                     messages.error(request, _('Invalid username or password.'))
                     return render(request, self.template, {'email': email})
                 else:
-                    if KEYCLOAK_MIGRATING:
+                    if KEYCLOAK_MIGRATING and user.activation_code != password:
                         user.set_password(password)
 
         if user and not authenticated:
             # keycloak won't allow login if temporary password so have to do it this way for now
             # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
             if (user.activation_code and password == user.activation_code):
-                user.backend = settings.AUTHENTICATION_BACKENDS[0]
-                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                user.backend = 'django.contrib.auth.backends.ModelBackend'
+                login(request, user)
 
                 # do this already?
                 user.activation_code = None

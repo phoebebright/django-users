@@ -19,6 +19,8 @@ from email_validator import validate_email, EmailNotValidError
 
 logger = logging.getLogger('django')
 
+from post_office import mail
+
 def get_mail_class():
     """
     Load the configured mail class from settings.APP_MAIL_CLASS.
@@ -39,7 +41,7 @@ def send_otp(channel, code):
     else:
         to_email = channel.value
 
-    mail = get_mail_class()
+    # mail = get_mail_class()
     mail.send(
         to_email,
         settings.DEFAULT_FROM_EMAIL,
@@ -61,8 +63,8 @@ def send_email_verification_code(verificationcode):
         logger.error(f"Channel id has no value {verificationcode.channel.id} ")
     else:
         to_email = verificationcode.channel.value
-
-    mail = get_mail_class()
+    #
+    # mail = get_mail_class()
     mail.send(
         to_email,
         settings.DEFAULT_FROM_EMAIL,
