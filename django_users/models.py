@@ -29,8 +29,6 @@ from django.utils.functional import cached_property
 from django.utils import timezone
 from django_countries.fields import CountryField
 
-from post_office import mail
-from post_office.models import EmailTemplate
 
 from timezone_field import TimeZoneField
 from yamlfield.fields import YAMLField
@@ -42,6 +40,9 @@ from django.db import IntegrityError, models, transaction
 
 from django.utils.translation import gettext_lazy as _
 
+from .utils import get_mail_class
+
+mail = get_mail_class()
 
 import logging
 

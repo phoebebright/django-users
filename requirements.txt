@@ -10,3 +10,8 @@ git+https://github.com/phoebebright/django-docserve
 django_countries
 email-validator
 pycountry
+
+git+https://github.com/phoebebright/django-yamlfield
+django-timezone-field
+django_countries
+nanoid

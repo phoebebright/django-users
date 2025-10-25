@@ -43,6 +43,7 @@ from .utils import send_otp, normalise_email
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
+from web.models import Role, EventRole, Competitor
 
 if settings.USE_KEYCLOAK:
     from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
@@ -111,7 +112,7 @@ class CommsChannelRateThrottle(SimpleRateThrottle):
         return is_allowed
 
 
-class UserViewsetBase(viewsets.ModelViewSet):
+class UserViewset(viewsets.ModelViewSet):
     # use this one to retrieve a single user
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
     # queryset = CustomUser.objects.all().select_related('person','preferred_channel')
@@ -213,8 +214,11 @@ class UserViewsetBase(viewsets.ModelViewSet):
 
         return Response("OK")
 
+# deprecated - call UserViewset directly
+class UserViewsetBase(UserViewset):
+    pass
 
-class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
+class UserListViewset(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
     # queryset = CustomUser.objects.all().exclude(is_active=False).select_related('person',)
@@ -234,6 +238,9 @@ class UserListViewsetBase(viewsets.ReadOnlyModelViewSet):
             raise NotImplementedError("Define `serializer_class` in the child class.")
         return self.serializer_class
 
+# deprecated - use UserListViewset directly
+class UserListViewsetBase(UserListViewset):
+    pass
 
 class SendOTP2User(UserCanAdministerMixin, APIView):
 
@@ -353,7 +360,7 @@ def resend_activation(request):
     return Response("OK")
 
 
-class UserProfileUpdateBase(APIView):
+class UserProfileUpdate(APIView):
     '''update user profile - only the user can update their own profile'''
 
     authentication_classes = (SessionAuthentication,)
@@ -381,6 +388,10 @@ class UserProfileUpdateBase(APIView):
 
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
+
+# deprecated - use UserProfileUpdate directly
+class UserProfileUpdateBase(UserProfileUpdate):
+    pass
 
 class CheckEmailInKeycloak(APIView):
     '''
@@ -623,7 +634,8 @@ class CheckEmailInKeycloakPublic(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
+
+class CheckEmail(viewsets.ReadOnlyModelViewSet):
     '''
     check if an email has already been registered in the users file
     '''
@@ -663,8 +675,13 @@ class CheckEmailBase(viewsets.ReadOnlyModelViewSet):
 
         return self.list(request, *args, **kwargs)
 
+# deprecated for skorie_users - use CheckEmail directly
+class CheckEmailBase(CheckEmail):
+    pass
 
-class CheckUserPublicBase(CheckEmailBase):
+
+
+class CheckUserPublic(CheckEmail):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [CustomAnonRateThrottle]
@@ -719,6 +736,9 @@ class CheckUserPublicBase(CheckEmailBase):
                     "channels": channels,
                 })
 
+# deprecated use CheckUserPublic directly
+class CheckUserPublicBase(CheckUserPublic):
+    pass
 
 class SetTemporaryPassword(APIView):
     permission_classes([IsAuthenticated, IsAdministratorPermission])
@@ -745,7 +765,7 @@ class SetTemporaryPassword(APIView):
             return Response({"error": "Failed to set temporary password."}, status=status_code)
 
 
-class CommsChannelViewSetBase(viewsets.ModelViewSet):
+class CommsChannelViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = []
     # queryset = CommsChannel.objects.none()
@@ -833,8 +853,10 @@ class CommsChannelViewSetBase(viewsets.ModelViewSet):
 
         return Response("OK")
 
+class CommsChannelViewSetBase(CommsChannelViewSet):
+    pass
 
-class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
+class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
     '''When filtering on country we include Organisations that have no country (ie. worldwide)'''
 
     # serializer_class = OrganisationSerializer
@@ -875,6 +897,8 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
+class OrganisationViewSetBase(OrganisationViewSet):
+    pass
 
 @api_view(['PATCH'])
 @user_passes_test(is_administrator)
@@ -1018,11 +1042,52 @@ class RoleViewSetBase(viewsets.ModelViewSet):
     serializer = RoleSerializerBase
 
 
-class PersonViewSetBase(viewsets.ModelViewSet):
+class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
+
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+
+    @action(methods=['patch'], detail=True)
+    def pick_active(self, request, pk=None, id=None):
+        '''pick a role to be active and all other roles of same type for same user are deactivated'''
+
+
+        active = self.get_object()
+        active.active = True
+        active.save()
+
+
+        for role in Role.objects.filter(user=active.user, role_type=active.role_type).exclude(pk=active.pk):
+            # wrap in a transaction
+            with transaction.atomic():
+                role.active = False
+                role.save()
+
+                # now repoint anything pointing to these roles to the new active role
+                if active.role_type == 'R':
+                    queryset = Competitor.objects.filter(role__active=False, role=role)
+                else:
+                    queryset = EventRole.objects.filter(role__active=False, role=role)
+
+                for ev in queryset:
+                    ev.role = active
+                    if ev.user and  ev.user != active.user:
+                        raise ValueError("EventRole user does not match active role user")
+                    else:
+                        ev.user = active.user
+                    ev.save()
+
+
+        return Response(status=status.HTTP_200_OK)
+
+class PersonViewSet(viewsets.ModelViewSet):
     queryset = None
     lookup_field = 'ref'
     serializer = PersonSerializerBase
 
+# deprecated for skorie_users - use PersonViewSet directly
+class PersonViewSetBase(PersonViewSet):
+    pass
 
 class SubscriptionStatusAPIView(APIView):
     """Get current subscription status"""

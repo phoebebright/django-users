@@ -7,7 +7,8 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
-    UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only
+    UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
+    ManageUser
 from .keycloak import logout_user_from_keycloak_and_django
 
 app_name = 'users'
@@ -45,6 +46,7 @@ urlpatterns = [
     # path('subscribers/', user_passes_test(has_role_administrator)(subscribers_list), name='subscriber_list'),
     # create ManageRoles, Users and User using Base views in django-users
     path('manage_roles/', user_passes_test(has_role_administrator)(ManageRoles.as_view()), name="manage_roles"),
+
     path('manage_users/', user_passes_test(has_role_administrator)(ManageUsers.as_view()), name="manage_users"),
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
@@ -66,7 +68,12 @@ urlpatterns = [
     path('qr_login/', QRLogin.as_view(), name='qr-login'),
     path('lwt/', login_with_token, name='qr-login'),
     path('login/', LoginView.as_view(), name='login'),
+
+    path('login/', LoginView.as_view(), name='signin'),  # deprecated
+    path('login/', LoginView.as_view(), name='user_login'),  # deprecated
+
     path('register/', RegisterView.as_view(), name='register'),
+    path('register/', RegisterView.as_view(), name='signup'),  # deprecated
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
     path("change_password/", ChangePasswordView.as_view(), name="change_password"),
     path("change_password_now/", ChangePasswordNowView.as_view(), name="change_password_now"),
@@ -89,8 +96,15 @@ urlpatterns = [
 
     #TODO
     #path('anon/<uuid:pk>/', AnonUserView.as_view(), name='anon_user')
+    path('invite_user/<event_ref:event_ref>/', user_passes_test(is_authenticated)(InviteUser2Event.as_view()),
+         name='invite-user2event'),
+    path('confirm_account/<int:pk>/', ConfirmAccount.as_view(), name='confirm_account'),
 
-
+    path('contact_list/', SubscriptionDataFrameView.as_view(), name='user_contact_list'),
+    path('dedupe_role/<str:role_ref>/', dedupe_role, name='dedupe_role'),
+    path(
+        "countries/", UserCountries.as_view(), name="user-countries"
+    ),
 ]
 
 '''API urls

@@ -1,13 +1,22 @@
 import copy
 
+from django.apps import apps
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext_lazy as _
 from django.http import QueryDict
 from django_countries.serializer_fields import CountryField
 from django_countries.serializers import CountryFieldMixin
 from rest_framework import serializers
 
+# assume that all user models have been subclass in users app in target system to allow for customisation
+from users.models import Person, Role, Organisation
+from web.models import EventRole
+
 User = get_user_model()
+
+
 
 class DynamicModelSerializer(serializers.ModelSerializer):
     """
@@ -68,7 +77,7 @@ class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
         ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
         return ret
 
-class UserSerializerBase(UserShortSerializerBase):
+class UserSerializer(UserShortSerializerBase):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
@@ -92,10 +101,13 @@ class UserSerializerBase(UserShortSerializerBase):
 
         return ret
 
-class UserContactSerializerBase(DynamicModelSerializer):
+class UserSerializerBase(UserSerializer):
+    pass
+
+class UserContactSerializer(DynamicModelSerializer):
     user = None
     class Meta:
-        model = None
+        model = User
         fields = ['user','contact_date']
 
     def to_representation(self, instance):
@@ -103,17 +115,20 @@ class UserContactSerializerBase(DynamicModelSerializer):
         ret = ret + instance.data
         return ret
 
+class UserContactSerializerBase(UserContactSerializer):
+    pass
+
 class UserEmailSerializerBase(DynamicModelSerializer):
 
     class Meta:
-        model = None
+        model = User
         fields = ('email',)
 
 
 class UserSyncSerializerBase(DynamicModelSerializer):
 
     class Meta:
-        model = None
+        model = User
         fields = ('email','username',)
 
 
@@ -161,11 +176,14 @@ class UserSyncSerializerBase(DynamicModelSerializer):
         else:
             return False
 
-class OrganisationSerializerBase(CountryFieldMixin, DynamicModelSerializer):
+class OrganisationSerializer(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
-        model = None
+        model = Organisation
         fields = '__all__'
+
+class OrganisationSerializerBase(OrganisationSerializer):
+    pass
 
 
 class CommsChannelSerializerBase(DynamicModelSerializer):
@@ -179,15 +197,31 @@ class CommsChannelSerializerBase(DynamicModelSerializer):
         validated_data['user'] = self.context['request'].user  # Use user from context if needed
         return super().create(validated_data)
 
-class RoleSerializerBase(serializers.ModelSerializer):
+class RoleShortSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = None
-        fields = '__all__'
+        model = Role
+        fields = ['id','name','ref']
 
-class PersonSerializerBase(serializers.ModelSerializer):
+
+class RoleSerializer(serializers.ModelSerializer):
+
     class Meta:
-        model = None
+        model = Role
+        fields = ['id','name','ref','person','user','organisation']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.user:
+            data['email'] = instance.user.email
+        else:
+            data['email'] = ''
+        return data
+
+
+class PersonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Person
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 

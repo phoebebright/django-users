@@ -25,7 +25,7 @@ from django.views.decorators.cache import never_cache
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactForm as ContactForm, OrganisationForm, CustomUserCreationForm, SubscriptionPreferencesForm, \
-    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm
+    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm, SkorieUserCreationForm
 
 import requests
 
@@ -46,7 +46,7 @@ from django.views.generic import FormView, TemplateView, DetailView, ListView, U
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 
-from .tools.permission_mixins import UserCanAdministerMixin
+from .tools.permission_mixins import UserCanAdministerMixin, RequiresEventMixin
 
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
 from .utils import normalise_email, get_mail_class
@@ -1879,3 +1879,129 @@ class AnonUserView(UserCanAdministerMixin, TemplateView):
 
 class UserCountries(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/user_countries.html"
+
+
+class InviteUser2Event(RequiresEventMixin, AddUser):
+
+    template_name = 'admin/users/invite_user_2_event.html'
+
+    def get_form_class(self):
+        return SkorieUserCreationForm
+
+    def get_success_url(self):
+        return HttpResponseRedirect("/")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['role'] = self.request.GET.get('role', None)
+        return kwargs
+
+
+
+class SubscriptionDataFrameView(TemplateView):
+    template_name = 'users/admin/subscribe_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get filtered queryset
+        queryset = self.get_filtered_queryset()
+
+        # Create DataFrame from the data
+        all_attributes = set()
+
+        # First pass: collect all unique attributes from the JSONField
+        for contact in queryset:
+            if contact.attributes and isinstance(contact.attributes, dict):
+                all_attributes.update(contact.attributes.keys())
+
+        # remove email and city from attributes
+        all_attributes.discard('email')
+        all_attributes.discard('city')
+        all_attributes.discard('mobile')
+
+        context.update({
+            'records': queryset,
+            'attribute_columns': list(all_attributes),
+
+        })
+
+        return context
+
+    def get_filtered_queryset(self):
+        """Get filtered queryset based on request parameters"""
+        # Base filter for subscription/interest/form related contacts
+        queryset = UserContact.objects.filter(method__icontains='subscribe').select_related('user')
+
+        # Apply filters from request
+        method_filter = self.request.GET.get('method')
+        site_filter = self.request.GET.get('site')
+        date_from = self.request.GET.get('date_from')
+        date_to = self.request.GET.get('date_to')
+
+        if method_filter:
+            queryset = queryset.filter(method=method_filter)
+
+        if site_filter:
+            queryset = queryset.filter(site=site_filter)
+
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+
+            except ValueError:
+                # default to last 6 months
+                from_date = timezone.now().date() - timezone.timedelta(days=180)
+
+            queryset = queryset.filter(contact_date__date__gte=from_date)
+
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+
+            except ValueError:
+                # default to last 6 months
+                to_date = timezone.now().date() - timezone.timedelta(days=180)
+            queryset = queryset.filter(contact_date__date__lte=to_date)
+        return queryset.order_by('-contact_date')
+
+
+
+    def normalize_value(self, value):
+        """Normalize values for consistent display"""
+        if value is None or value == '':
+            return ''
+
+        # Handle boolean values directly from JSONField
+        if isinstance(value, bool):
+            return value
+
+        # Handle string representations of booleans
+        if isinstance(value, str):
+            lower_val = value.lower().strip()
+            if lower_val in ['true', '1', 'yes', 'on', 'checked']:
+                return True
+            elif lower_val in ['false', '0', 'no', 'off', 'unchecked']:
+                return False
+
+        # Handle numeric values
+        if isinstance(value, (int, float)):
+            if value in [0, 1]:
+                return bool(value)
+            return value
+
+        return str(value)
+
+    def get_filter_options(self):
+        """Get available filter options"""
+        base_queryset = UserContact.objects.filter(
+            Q(method__icontains='subscribe') |
+            Q(method__icontains='interest') |
+            Q(method__icontains='form') |
+            Q(method__icontains='newsletter')
+        )
+
+        return {
+            'methods': list(base_queryset.values_list('method', flat=True).distinct().order_by('method')),
+            'sites': list(base_queryset.values_list('site', flat=True).distinct().order_by('site')),
+        }
