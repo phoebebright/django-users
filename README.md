@@ -36,6 +36,9 @@ This will run without any additional settings but the following settings can be 
     VERIFICATION_CODE_EXPIRY_MINUTES = 5
     VERIFY_ONCE = True    # if user is verified in one system sharing a realm  then will be auto everified on a second - if you want each client to verify their users then set to False
 
+    NOTIFY_NEW_USER_EMAILS = "phoebebright310@gmail.com"
+
+
 Make sure that django model authentication is your first choice, eg.
 
     AUTHENTICATION_BACKENDS = (

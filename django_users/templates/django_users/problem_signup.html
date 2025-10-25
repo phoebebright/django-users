@@ -210,7 +210,7 @@
                     $('#apiResponse').html("").hide();
             $.ajax({
                 method: "POST",
-                url: SKORIE_API + "/api/v2/email_exists_on_keycloak_p/",
+                url: USERS_API_URL + "email_exists_on_keycloak_p/",
                 data: {'email': email},
 
                 success: function (d) {

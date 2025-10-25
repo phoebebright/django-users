@@ -280,21 +280,6 @@ class ChangePassword(APIView):
         return Response("OK", status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-# TODO: need throttle
-def email_exists(request):
-    '''check an email exists in the system'''
-    response = "N"
-    User = get_user_model()
-
-    try:
-        email = normalise_email(request.data.get('email'))
-        User.objects.get(email=email)
-        response = "Y"
-    except User.DoesNotExist:
-        pass
-
-    return Response(response)
 
 
 class CheckActivationBase(APIView):
