@@ -62,7 +62,8 @@ class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
 
 class CheckEmailThrottle(AnonRateThrottle):
-    rate =  "3/5m"
+    # wanted 3 per 5 mins but too hard
+    rate = '3/minute'
 
 
 class CustomOrdinaryUserRateThrottle(UserRateThrottle):
