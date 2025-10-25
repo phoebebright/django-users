@@ -120,22 +120,19 @@ class AddUser(generic.CreateView):
 
 
     def get_success_url(self):
-        return reverse('users:admin_user', kwargs={'pk': self.new_user.id})
+
+        new_user_email_template = getattr(settings, 'NEW_USER_EMAIL_TEMPLATE', None)
+
+        return reverse('news:news-admin-send-from-template',
+                       kwargs={'pk': self.new_user.id, 'template_id': settings.NEW_USER_EMAIL_ID})
 
     def get_form_class(self):
-        if not hasattr(self, 'form_class') or self.form_class is None:
-            raise NotImplementedError("Define `form_class` in the child class.")
-        return self.form_class
+        return SkorieUserCreationForm
 
-    #
-    # def get_context_data(self, **kwargs):
-    #     context = super().get_context_data(**kwargs)
-    #     context['message'] = self.get_message_template()
-    #     return context
-    #
-    # def get_message_template(self):
-    #
-    #     return '''Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {form.cleaned_data['password']}.  Please log in and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie'''
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['role'] = self.request.GET.get('role', None)
+        return kwargs
 
     def send_create_keycloak_user(self, data, user):
         '''at the moment we are creating the keycloak user then the django user to make it easier to
