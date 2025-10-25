@@ -44,7 +44,7 @@ from .utils import send_otp, normalise_email
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
-from web.models import Role, EventRole, Competitor
+from web.models import EventRole, Competitor
 
 if settings.USE_KEYCLOAK:
     from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
@@ -1042,17 +1042,24 @@ class RoleViewSetBase(viewsets.ModelViewSet):
     queryset = None
     serializer = RoleSerializer
 
+    def get_queryset(self):
+        Role = apps.get_model('users', 'Role')
+        return Role.objects.all()
 
 class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
 
-    queryset = Role.objects.all()
+    queryset = None
     serializer_class = RoleSerializer
+
+    def get_queryset(self):
+        Role = apps.get_model('users', 'Role')
+        return Role.objects.all()
 
     @action(methods=['patch'], detail=True)
     def pick_active(self, request, pk=None, id=None):
         '''pick a role to be active and all other roles of same type for same user are deactivated'''
 
-
+        Role = apps.get_model('users', 'Role')
         active = self.get_object()
         active.active = True
         active.save()
@@ -1082,9 +1089,14 @@ class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
         return Response(status=status.HTTP_200_OK)
 
 class PersonViewSet(viewsets.ModelViewSet):
+
     queryset = None
     lookup_field = 'ref'
     serializer = PersonSerializer
+
+    def get_queryset(self):
+        Person = apps.get_model('users', 'Person')
+        return Person.objects.all()
 
 # deprecated for skorie_users - use PersonViewSet directly
 class PersonViewSetBase(PersonViewSet):

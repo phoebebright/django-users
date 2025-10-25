@@ -3,21 +3,11 @@ from django.conf import settings
 from rest_framework.routers import DefaultRouter
 from django.urls import path, include
 
-from skorie_news.api import (
-    IssueViewSet,
-    ArticleViewSet,
-    MailingViewSet,
-    AdminSubscriptionROViewSet,
-    SubscriptionPublicViewSet,
-    SubscriptionAdminViewSet,
-    SubscribeMe,
-    UnSubscribeMe,
-    SubscriberEventListAPIView, mailgun_webhook,
-)
+
 
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
     UserProfileUpdate, SetTemporaryPassword, toggle_role, CheckEmailInKeycloakPublic, CheckEmailInKeycloak, \
-    resend_activation, ChangePassword
+    resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet
 from django_users.views import login_with_token
 
 # Use DRF's DefaultRouter, not django.db.router
@@ -29,14 +19,10 @@ router.register(r'users', UserViewset, basename="users")  # admins only
 router.register(r'comms_channel', CommsChannelViewSet, basename="commschannel")
 
 router.register(r'person', PersonViewSet, basename="persons")
-router.register(r'internal_roles', InternalRoleViewSet, basename="internal_roles")
-router.register(r'role_list', RoleListViewSet, basename="rolelist")
+
+
 router.register(r'role', RoleViewSet, basename="role")
-
-
-
-
-router_ro.register(r'organisations', OrganisationViewSet, basename='organisation-ro')
+router.register(r'organisations', OrganisationViewSet, basename='organisation-ro')
 
 urlpatterns = [
     path('api/v2/change_pw/', ChangePassword.as_view(), name="change_pw"),
@@ -48,9 +34,7 @@ urlpatterns = [
     path('api/v2/set_temp_password/', SetTemporaryPassword.as_view(), name='set_temp_password'),
     path('api/v2/toggle_role/', toggle_role, name="toggle_role"),
     path('api/v2/userprofile/<str:username>/', UserProfileUpdate.as_view(), name="userprofile_update"),
-    path('unsubscribe_me/', UnSubscribeMe.as_view(), name='unsubscribe_me'),
-    path('news/subscribers/<int:pk>/events/', SubscriberEventListAPIView.as_view(), name='news-subscriber-events'),
-    path('mailgun_webhook/', mailgun_webhook, name="mailgun_webhook"),
+
     path('api/v2/comms_otp/', SendOTP2User.as_view(), name='comms_otp'),
     path('api/v2/create_user/', CreateUser.as_view(), name='create-user-api'),
     path('api/v2/user_countries/', UserCountry.as_view(), name='user-country-api'),
