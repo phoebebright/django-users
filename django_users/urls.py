@@ -86,7 +86,7 @@ urlpatterns = [
     path("change_password_now/", ChangePasswordNowView.as_view(), name="change_password_now"),
 
     # path('verify/<uuid:pk>/', VerificationView.as_view(), name='verify'),
-    path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),
+
     path('channels/add/', AddCommsChannelView.as_view(), name='add_channel'),
     path('channels/verify/<int:channel_id>/', VerifyChannelView.as_view(), name='verify_channel'),
 

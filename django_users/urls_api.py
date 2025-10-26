@@ -8,7 +8,7 @@ from django.urls import path, include
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
     UserProfileUpdate, SetTemporaryPassword, toggle_role, CheckEmailInKeycloakPublic, CheckEmailInKeycloak, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
-    email_exists
+    email_exists, SendVerificationCode
 from django_users.views import login_with_token
 
 # Use DRF's DefaultRouter, not django.db.router
@@ -41,9 +41,10 @@ urlpatterns = [
     path('create_user/', CreateUser.as_view(), name='create-user-api'),
     path('user_countries/', UserCountry.as_view(), name='user-country-api'),
     path('ql/', login_with_token, name='qr-login'),  # login to same app, eg. on mobile
-    path('lwt/', login_with_token, {'key': settings.REMOTE_LOGIN_SECRET}, name='login-with-token'),
+    path('lwt/', login_with_token, {'key': settings.REMOTE_LOGIN_SECRET}, name='login-with-token'), # request to login from remote app with token
     path('email_exists/', email_exists, name='email_exists'),
-    # request to login from remote app with token
-    # include the router-generated endpoints
+    path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),
+
+
     path('', include(router.urls)),
 ]
