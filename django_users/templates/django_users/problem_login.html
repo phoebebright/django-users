@@ -21,8 +21,8 @@
             <div class="mb-3">
 
                 <div class="form-floating mt-3">
-                    <input id="id_email" type="email" name="email" class="form-control" placeholder="Enter your email" required value="{{ email }}">
-                    <label for="id_email">Email</label>
+                    <input id="entered_email" type="email" name="email" class="form-control" placeholder="Enter your email" required value="{{ email }}">
+                    <label for="entered_email">Email</label>
                     <div class="invalid-feedback">
                         Please enter a valid email address.
                     </div>
@@ -79,7 +79,7 @@
     <script>
 
 
-    let emailInput = $('#id_email');
+    let emailInput = $('#entered_email');
         let submitBtn = $('#submitBtn');
 
         $(document).ready(function () {

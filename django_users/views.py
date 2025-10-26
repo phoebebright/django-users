@@ -1885,22 +1885,6 @@ class UserCountries(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/user_countries.html"
 
 
-class InviteUser2Event(RequiresEventMixin, AddUser):
-
-    template_name = 'admin/users/invite_user_2_event.html'
-
-    def get_form_class(self):
-        return SkorieUserCreationForm
-
-    def get_success_url(self):
-        return HttpResponseRedirect("/")
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['role'] = self.request.GET.get('role', None)
-        return kwargs
-
-
 
 class SubscriptionDataFrameView(TemplateView):
     template_name = 'users/admin/subscribe_list.html'

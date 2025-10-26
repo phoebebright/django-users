@@ -15,6 +15,8 @@ from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 
+from django_users.exceptions import NoEventSpecified
+
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 

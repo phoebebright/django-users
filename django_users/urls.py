@@ -99,14 +99,7 @@ urlpatterns = [
     path('preferences/', SubscriptionPreferencesView.as_view(), name='subscription_preferences'),
     path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
 
-    # these were for the old subscribe field in User
-    # path('subscribe_only/', subscribe_only.as_view(), name="subscribe_only"),
-    # path('unsubscribe_only/', unsubscribe_only.as_view(), name="unsubscribe_only"),
 
-    #TODO
-    #path('anon/<uuid:pk>/', AnonUserView.as_view(), name='anon_user')
-    path('invite_user/<event_ref:event_ref>/', user_passes_test(is_authenticated)(InviteUser2Event.as_view()),
-         name='invite-user2event'),
     path('confirm_account/<int:pk>/', ConfirmAccount.as_view(), name='confirm_account'),
 
     path('contact_list/', SubscriptionDataFrameView.as_view(), name='user_contact_list'),
@@ -115,9 +108,3 @@ urlpatterns = [
         "countries/", UserCountries.as_view(), name="user-countries"
     ),
 ]
-
-'''API urls
-    path('api/v2/toggle_role/', toggle_role, name="toggle_role"),
-    router.register(r'members', MemberViewSet, basename="members")
-    router.register(r'comms_channel', CommsChannelViewSet, basename="commschannel")
-    '''

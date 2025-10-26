@@ -31,8 +31,12 @@ This will run without any additional settings but the following settings can be 
 
 
     USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
+
     LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
     LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
+    # define this url locally in your project
+    LOGIN_REDIRECT_URL = "after_login_redirect" 
+
     VERIFICATION_CODE_EXPIRY_MINUTES = 5
     VERIFY_ONCE = True    # if user is verified in one system sharing a realm  then will be auto everified on a second - if you want each client to verify their users then set to False
 

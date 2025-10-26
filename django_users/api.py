@@ -35,7 +35,8 @@ from django.views.decorators.cache import never_cache
 from rest_framework.permissions import AllowAny
 
 from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
-    SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer
+    SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer, \
+    OrganisationSerializer
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
@@ -869,11 +870,7 @@ class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
     # serializer_class = OrganisationSerializer
     # removing filterset and doing all queries in t get_queryset
     filterset_fields = None
-
-    def get_serializer_class(self):
-        if not hasattr(self, 'serializer_class') or self.serializer_class is None:
-            raise NotImplementedError("Define `serializer_class` in the child class.")
-        return self.serializer_class
+    serializer_class = OrganisationSerializer
 
     def get_queryset(self):
         Organisation = apps.get_model('users', 'Organisation')
