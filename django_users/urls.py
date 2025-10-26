@@ -9,7 +9,7 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
-    ManageUser, InviteUser2Event, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
+    ManageUser,  SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
     ManageUserProfile
 from .keycloak import logout_user_from_keycloak_and_django
 
