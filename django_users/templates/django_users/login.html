@@ -19,7 +19,7 @@
 
 <!-- Signup Link -->
 <div class="text-center mt-3">
-    <p>Don’t have an account? <a href="{% url "users:register" %}" class="text-primary">{{ REGISTER_TERM}}</a></p>
+    <p>Don’t have an account? <a href="{% url REGISTER_URL %}" class="text-primary">{{ REGISTER_TERM}}</a></p>
     <p><a href="#"  class="text-primary goto_problem_login">Problem with {{ LOGIN_TERM}}?</a></p>
     <p> <a class="text-primary" href="{% url "users:problem_register" %}">Help me {{ REGISTER_TERM}}</a> </p>
 </div>

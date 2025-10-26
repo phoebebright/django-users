@@ -210,7 +210,7 @@
                        $('#existing_channels').html(show_channels(d.channels));
 
                 }  else if (d.not_registered) {
-                    $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url "users:signup" %}" class="btn btn-primary-outline">Signup</div>');
+                    $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</div>');
                     $("#result").slideDown();
                     return;
                 } else if (d.user_id && d.django_user ) { // TODO: need to check another way I think

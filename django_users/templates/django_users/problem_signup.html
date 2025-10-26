@@ -233,7 +233,7 @@
 
 
                     }  else if (d.user_id == 0 && d.django_user == 0) {
-                            $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url "users:signup" %}" class="btn btn-primary-outline">Signup</div>');
+                            $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGSITER_TERM}}</div>');
                         $("#result").slideDown();
                         return;
                     } else if (d.user_id && d.django_user ) {
