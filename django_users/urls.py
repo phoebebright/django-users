@@ -13,7 +13,9 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     ManageUserProfile
 from .keycloak import logout_user_from_keycloak_and_django
 
-app_name = 'users'
+# using this seems to cause urls to end up with users:users:url rather than users:url
+# run python manage.py show_urls to see the actual url names
+#app_name = 'users'
 
 register_converter(EventRefConverter, 'event_ref')
 
@@ -74,11 +76,11 @@ urlpatterns = [
     path('lwt/', login_with_token, name='qr-login'),
     path('login/', LoginView.as_view(), name='login'),
 
-    path('login/', LoginView.as_view(), name='signin'),  # deprecated
-    path('login/', LoginView.as_view(), name='user_login'),  # deprecated
+    # path('login/', LoginView.as_view(), name='signin'),  # deprecated
+    # path('login/', LoginView.as_view(), name='user_login'),  # deprecated
 
     path('register/', RegisterView.as_view(), name='register'),
-    path('register/', RegisterView.as_view(), name='signup'),  # deprecated
+    # path('register/', RegisterView.as_view(), name='signup'),  # deprecated
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
     path("change_password/", ChangePasswordView.as_view(), name="change_password"),
     path("change_password_now/", ChangePasswordNowView.as_view(), name="change_password_now"),
