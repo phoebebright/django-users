@@ -57,7 +57,7 @@
 
             $('.resend_verify_code').click(function() {
                 var channel_pk = $(this).data('channel_pk');
-                $.post("{% url 'users:resend_verify_code' %}", {
+                $.post("{% url 'usersapi:resend_verify_code' %}", {
                     channel_pk: channel_pk
                 }).done(function() {
                     clear_header_messages();
