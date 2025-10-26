@@ -288,7 +288,7 @@
 
     $(document).on('click', '#resend-btn', function () {
         const email = emailInput.val();
-        const verify_channels_url = '{% url "verify_channel" 0 %}';
+        const verify_channels_url = '{% url "users:verify_channel" 0 %}';
 
 
         $.ajax({

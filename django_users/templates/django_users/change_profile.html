@@ -107,7 +107,7 @@
                                     <div class="col-6 right-align">{{item.channel_type}}: {{ item.value }}</div>
                                     <div class="col-3 right-align">
                                         {% if not item.is_verified %}
-                                            <a href="{% url "users:verify_channel" item.pk %}?back={{ request.path|urlencode }}" class="verify_channel btn btn-outline-primary btn-sm"><i class="bi bi-check-circle " title="Verify Channel"></i> {% trans "Verify" %}</a>
+                                            <a href=''{% url "users:verify_channel" item.pk %}?back={{ request.path|urlencode }}' class="verify_channel btn btn-outline-primary btn-sm"><i class="bi bi-check-circle " title="Verify Channel"></i> {% trans "Verify" %}</a>
                                         {% endif %}
                                         {% if not user.preferred_channel == item %}
                                             <a href="#" class="delete_channel" data-value="{{ item.value }}" data-pk="{{ item.pk }}"><i class="bi bi-trash " title="Delete Channel"></i></a>
