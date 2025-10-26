@@ -301,7 +301,8 @@
                 if (resp && resp.redirect_url) {
                     window.location.href = resp.redirect_url;
                 } else if (resp && resp.channel_id) {
-                    window.location.href = verify_channels_url.replace('0') resp.channel_id);
+
+                    window.location.href = verify_channels_url.replace('0') + resp.channel_id + '/';
                 } else {
                     // Fallback: honor a Location header if your view sets it
                     const loc = xhr.getResponseHeader('Location');
