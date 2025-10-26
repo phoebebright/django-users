@@ -292,7 +292,7 @@
 
 
         $.ajax({
-            url: '{% url "users:resend_verify_code" %}',
+            url: '{% url "usersapi:resend_verify_code" %}',
             type: 'GET',                      // use 'GET' if your view only accepts GET
             dataType: 'json',
             data: { email: email },
