@@ -36,7 +36,7 @@ from rest_framework.permissions import AllowAny
 
 from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
     SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer, \
-    OrganisationSerializer
+    OrganisationSerializer, UserShortSerializer
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
@@ -230,7 +230,7 @@ class UserListViewset(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
     # queryset = CustomUser.objects.all().exclude(is_active=False).select_related('person',)
-    # serializer_class = UserShortSerializer
+    serializer_class = UserShortSerializer
     http_method_names = ['get', ]
 
     def get_queryset(self):
@@ -241,10 +241,7 @@ class UserListViewset(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
-    def get_serializer_class(self):
-        if not hasattr(self, 'serializer_class') or self.serializer_class is None:
-            raise NotImplementedError("Define `serializer_class` in the child class.")
-        return self.serializer_class
+
 
 # deprecated - use UserListViewset directly
 class UserListViewsetBase(UserListViewset):
