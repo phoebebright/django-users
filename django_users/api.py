@@ -229,7 +229,7 @@ class UserViewsetBase(UserViewset):
 class UserListViewset(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
-    # queryset = CustomUser.objects.all().exclude(is_active=False).select_related('person',)
+    queryset = User.objects.all().exclude(is_active=False).select_related('person',)
     serializer_class = UserShortSerializer
     http_method_names = ['get', ]
 
