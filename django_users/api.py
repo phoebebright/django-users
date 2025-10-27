@@ -236,8 +236,8 @@ class UserListViewset(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = self.queryset
 
-        if not settings.DEBUG:
-            queryset = queryset.exclude(test=True)
+        # if not settings.DEBUG:
+        #     queryset = queryset.exclude(test=True)
 
         return queryset
 
