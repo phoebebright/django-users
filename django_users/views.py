@@ -346,7 +346,7 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
     def get_context_data(self, **kwargs):
         self.user = self.request.user if self.request.user.is_authenticated else None
-        Subscription = apps.get_model('django_news.Subscription')
+        Subscription = apps.get_model('skorie_news.Subscription')
         context = super().get_context_data(**kwargs)
         context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
         if settings.USE_NEWSLETTER:
