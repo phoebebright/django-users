@@ -76,10 +76,11 @@
 {% block js %}
 <script>
 
+            let emailInput = $('#entered_email');
+        let submitBtn = $('#submitBtn');
 
     $(document).ready(function () {
-        let emailInput = $('#entered_email');
-        let submitBtn = $('#submitBtn');
+
         let pin = 0;
 
         checkEmail();
