@@ -204,7 +204,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
     def get_context_data(self):
         context = super().get_context_data()
         if settings.USE_NEWSLETTER:
-            Newsletter = apps.get_model('news', 'Newsletter')
+            Newsletter = apps.get_model('skorie_news', 'Newsletter')
             context['subcribed2newsletter'] = Newsletter.is_subscribed_to_newsletter(self.request.user)
 
         return context
@@ -1341,7 +1341,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
             # # context['newsletters'] = Newsletter.objects.all()
 
             # prefetch subscriptions only for this user
-            Newsletter = apps.get_model('news', 'Newsletter')
+            Newsletter = apps.get_model('skorie_news', 'Newsletter')
             user_subs = context['object'].subscription_set.all()
 
             newsletters = Newsletter.objects.visible().prefetch_related(
