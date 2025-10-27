@@ -25,7 +25,8 @@ from django.views.decorators.cache import never_cache
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactForm as ContactForm, OrganisationForm, CustomUserCreationForm, SubscriptionPreferencesForm, \
-    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm, SkorieUserCreationForm
+    SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm, SkorieUserCreationForm, \
+    ProfileForm
 
 import requests
 
@@ -318,18 +319,12 @@ def after_login_redirect(request):
 
 @method_decorator(never_cache, name='dispatch')
 class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
-    # form_class = ProfileForm
-    # model = CustomUser
+    form_class = ProfileForm
+    model = User
     user = None
 
 
-    def get_form_class(self):
-        if not hasattr(self, 'form_class') or self.form_class is None:
-            raise NotImplementedError("Define `form_class` in the child class.")
-        return self.form_class
-
     def get_template_names(self):
-
         return "django_users/change_profile.html"
 
     def get_initial(self):
