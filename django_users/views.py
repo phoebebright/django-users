@@ -1313,6 +1313,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         Competitor = apps.get_model('web.Competitor')
         Entry = apps.get_model('web.Entry')
         Payment =apps.get_model('skorie_payments.Payment')
+        DirectEmail = apps.get_model('skorie_news.DirectEmail')
         user = None
         # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
         try:
@@ -1371,7 +1372,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
                             ModelRoles.NON_EVENT_CHOICES}
 
-        context['emails'] = context['object'].directemail_set.all().order_by('-id')
+        context['emails'] = DirectEmail.objects.filter(receiver=context['object']).order_by('-id')[:10]
         return context
 
 
