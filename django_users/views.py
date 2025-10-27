@@ -233,6 +233,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
         return super().form_valid(form)
 
+# deprecated - don't use simple subscribe/unsubscribe field
 @never_cache
 def unsubscribe_only(request):
     if request.user.is_authenticated:
