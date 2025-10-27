@@ -119,11 +119,11 @@ class AddUser(generic.CreateView):
 
 
     def get_success_url(self):
-
-        new_user_email_template = getattr(settings, 'NEW_USER_EMAIL_TEMPLATE', None)
-
-        return reverse('news:news-admin-send-from-template',
-                       kwargs={'pk': self.new_user.id, 'template_id': settings.NEW_USER_EMAIL_ID})
+        # get commstemplate pk to use as template
+        new_user_email_template_id = getattr(settings, 'NEW_USER_EMAIL_TEMPLATE', None)
+        if new_user_email_template_id:
+            return reverse('news:news-admin-send-from-template',
+                       kwargs={'pk': self.new_user.id, 'template_id': new_user_email_template_id})
 
     def get_form_class(self):
         return SkorieUserCreationForm
