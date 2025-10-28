@@ -35,7 +35,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
-from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest
+from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -2080,6 +2080,7 @@ class SubscriptionDataFrameView(TemplateView):
     def get_filter_options(self):
         """Get available filter options"""
         # is this used?
+        UserContact = apps.get_model('users.UserContact')
         base_queryset = UserContact.objects.filter(
             Q(method__icontains='subscribe') |
             Q(method__icontains='interest') |
@@ -2100,3 +2101,41 @@ class ConfirmAccount(UserCanAdministerMixin, View):
         user.confirm(request.user)
 
         return redirect(reverse('users:admin_user', kwargs={'pk': kwargs['pk']}))
+
+
+
+class VerifyMagicLinkView(View):
+    """
+    Handle verification links sent by email.
+    Example URL: /users/verify-email-link/?t=<raw_token>
+    """
+
+    def get(self, request):
+        raw_token = request.GET.get("t")
+        if not raw_token:
+            return HttpResponseBadRequest(_("Missing token"))
+
+        VerificationCode = apps.get_model("users", "VerificationCode")
+
+        # Try to validate and consume the token
+        vc = VerificationCode.verify_token(raw_token=raw_token, purpose="email_verify")
+
+        if not vc:
+            messages.error(request, _("Invalid or expired verification link."))
+            return render(request, "django_users/verify_failed.html", status=403)
+
+        # Mark verified — model's verify_token already calls channel.verify()
+        channel = vc.channel
+        user = vc.user
+
+        # Optionally log the user in (if this is part of a sign-up or login flow)
+        auto_login = getattr(settings, "VERIFICATION_AUTO_LOGIN", False)
+        if auto_login:
+            login(request, user)
+            messages.success(request, _("Your email has been verified and you are now logged in."))
+        else:
+            messages.success(request, _("Your email address has been verified."))
+
+        # Redirect to a logical next page
+        next_url = request.GET.get("next") or reverse("users:login")
+        return redirect(next_url)
