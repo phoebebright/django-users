@@ -464,7 +464,7 @@ class SendVerificationCode(APIView):
         Always returns a generic success message to avoid user enumeration.
         """
         data = request.data or {}
-        email = data.get("email")
+        email = data.get("email", None)
         if not email:
             # Keep this generic; don't hint whether an email is required to avoid pattern probing
             return Response({"status": "ok"}, status=status.HTTP_200_OK)
@@ -473,6 +473,7 @@ class SendVerificationCode(APIView):
             email = normalise_email(email)
         except Exception as e:
             # Invalid email format; still respond generically
+            logger.warning("email not supplied to SendVerificationCode")
             return Response({"status": "bad email", 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         User = get_user_model()
@@ -481,33 +482,49 @@ class SendVerificationCode(APIView):
 
         # Wrap in transaction so checks + create are atomic
         with transaction.atomic():
+            channel = None
+            user = None
+
+            # get user from email
             try:
                 user = User.objects.select_for_update().get(email=email)
             except User.DoesNotExist:
+                logger.warning(f"No user for email {email} in SendVerificationCode")
                 # Do not reveal existence; do a fake delay if you like
                 return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
-            # Ensure the email channel exists / is current
-            # If you have user.migrate_channels(), call it safely
-            try:
-                if hasattr(user, "migrate_channels"):
-                    user.migrate_channels()
-            except Exception:
-                pass  # do not block sending
+            channel_pk = data.get('channel_pk', None)
+            if channel_pk:
+                channel = CommsChannel.objects.get(pk=channel_pk)
+                if channel.user != user:
+                    logger.warning(f"User from email {email} does not match channel {channel_pk} user in SendVerificationCode")
+                    return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
-            channel = (user.comms_channels
-                       .filter(channel_type='email')
-                       .order_by('id')
-                       .first())
 
-            if channel is None:
-                # Fallback: create channel for this email
-                channel = CommsChannel.objects.create(
-                    user=user,
-                    channel_type='email',
-                    value=user.email,
-                    verified=False,
-                )
+
+            if not channel:
+                # Ensure the email channel exists / is current
+                # If you have user.migrate_channels(), call it safely
+                try:
+                    if hasattr(user, "migrate_channels"):
+                        user.migrate_channels()
+                except Exception:
+                    pass  # do not block sending
+
+                channel = (user.comms_channels
+                           .filter(channel_type='email')
+                           .order_by('id')
+                           .first())
+
+                if channel is None:
+                    # Fallback: create channel for this email - do we really want to do this?
+                    logger.warning(f"Creating CommsChannel for email {email} in SendVerificationCode")
+                    channel = CommsChannel.objects.create(
+                        user=user,
+                        channel_type='email',
+                        value=user.email,
+                        verified=False,
+                    )
 
             # Cooldown: avoid re-sending too frequently
             too_soon = VerificationCode.objects.filter(

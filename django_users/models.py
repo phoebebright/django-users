@@ -339,7 +339,7 @@ class VerificationCodeBase(models.Model):
 
 
     def magic_link_url(self, token) -> str:
-        return  f"{settings.SITE_URL}/{reverse('users:verify_link')}?t={token}"
+        return  f"{settings.SITE_URL}{reverse('users:verify_link')}?t={token}"
 
     # @classmethod
     # def create_verification_code(cls, user, channel):
@@ -375,45 +375,79 @@ class VerificationCodeBase(models.Model):
     #         return False
 
     @classmethod
-    @transaction.atomic
-    def _delete_active(cls, user, channel, purpose):
-        cls.objects.filter(
-            user=user, channel=channel, purpose=purpose,
-            consumed_at__isnull=True,  #
-            expires_at__gt=timezone.now(),
-        ).delete()
+    def _consume_active(cls, user, channel, purpose: str, reason: str = "superseded") -> int:
+        """
+        Mark any active (unconsumed) records as consumed now, preserving history.
+        Returns the number of rows affected.
+        """
+        now = timezone.now()
+        # Lock matching rows to avoid races with another request doing the same.
+        qs = (cls.objects
+                .select_for_update()
+                .filter(user=user, channel=channel, purpose=purpose, consumed_at__isnull=True))
+        # If you have a JSONField meta, you can annotate a reason here; otherwise just set consumed_at.
+        updated = qs.update(consumed_at=now)
+        return updated
 
     @classmethod
-    def create_for_code(cls, user, channel, purpose="email_verify"):
-        cls._delete_active(user, channel, purpose)
-        expiry_minutes = getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
-        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
-        raw_code = cls._new_code()
+    def _create_code_row(cls, user, channel, purpose, ttl_minutes):
+        expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
+        raw_code = ''.join(random.choices(string.digits, k=6))
         salt = secrets.token_hex(16)
-        code_hash = cls._sha256_hex(salt + raw_code)
+        code_hash = hashlib.sha256((salt + raw_code).encode()).hexdigest()
         obj = cls.objects.create(
             user=user, channel=channel, purpose=purpose,
             code_hash=code_hash, code_salt=salt, token_hash="",
             expires_at=expires_at
         )
-        return obj, {'code': raw_code, 'expiry_minutes': expiry_minutes, 'user': user}
+        return obj, {'code': raw_code, 'expiry_minutes': ttl_minutes, 'user': user}
 
     @classmethod
-    def create_for_magic_link(cls, user, channel, purpose="email_verify"):
-        cls._delete_active(user, channel, purpose)
-        expiry_minutes = getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
-        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
-        raw_token = cls._new_token()
-        token_hash = cls._sha256_hex(raw_token)
+    def _create_token_row(cls, user, channel, purpose, ttl_minutes):
+        expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         obj = cls.objects.create(
             user=user, channel=channel, purpose=purpose,
             token_hash=token_hash, code_hash="", code_salt="",
             expires_at=expires_at
         )
-        return obj, {'token': raw_token, 'expiry_minutes': expiry_minutes, 'user': user,
-                     'verify_url': obj.magic_link_url(raw_token)}
+        return obj, {'token': raw_token, 'expiry_minutes': ttl_minutes, 'user': user,
+                     'magic_link': obj.magic_link_url(raw_token)}
 
-    # ---------- Consumption
+    @classmethod
+    def create_for_code(cls, user, channel, purpose="email_verify", ttl_minutes=None):
+        ttl = ttl_minutes or getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
+        # Two-step with retry handles race: another request might slip in between consume and create.
+        for _ in range(2):
+            try:
+                with transaction.atomic():
+                    cls._consume_active(user, channel, purpose, reason="superseded")
+                    return cls._create_code_row(user, channel, purpose, ttl)
+            except IntegrityError:
+                # Someone else created a fresh active row at the same time; try once more
+                continue
+        # If it still fails, let the IntegrityError bubble up
+        with transaction.atomic():
+            cls._consume_active(user, channel, purpose, reason="superseded")
+            return cls._create_code_row(user, channel, purpose, ttl)
+
+
+
+    @classmethod
+    def create_for_magic_link(cls, user, channel, purpose="email_verify", ttl_minutes=None):
+        ttl = ttl_minutes or getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
+        for _ in range(2):
+            try:
+                with transaction.atomic():
+                    cls._consume_active(user, channel, purpose, reason="superseded")
+                    return cls._create_token_row(user, channel, purpose, ttl)
+            except IntegrityError:
+                continue
+        with transaction.atomic():
+            cls._consume_active(user, channel, purpose, reason="superseded")
+            return cls._create_token_row(user, channel, purpose, ttl)
+
 
     @classmethod
     @transaction.atomic

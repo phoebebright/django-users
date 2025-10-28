@@ -13,24 +13,28 @@
 <h2>{% trans "Verify Your Account" %}</h2>
 
 {% if magic_link %}
-<p>A link has been sent to {{ channel.get_channel_type_display }} {{ channel.value }}.  This link will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes. </p>
+    <p>A link has been sent to {{ channel.get_channel_type_display }} {{ channel.value }}.  This link will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes. </p>
 {% else %}
-<p>A verification code has been sent to {{ channel.get_channel_type_display }} {{ channel.value }}.  This will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes.  Enter the code in the email:</p>
-<form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="next" value="{{ next }}">
+    <p>A verification code has been sent to {{ channel.get_channel_type_display }} {{ channel.value }}.  This will be valid for {{ VERIFICATION_CODE_EXPIRY_MINUTES }} minutes.  Enter the code in the email:</p>
 
-    <input type="text" name="code" class="form-control" id="id_code" placeholder="Verification Code" required>
-    <button class="btn btn-primary w-100 mt-3 " type="submit" id="button-addon2">{% trans "Verify" %}</button>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <input type="hidden" name="channel_value" value="{{ channel.value }}">
+        <input type="hidden" name="channel_pk" value="{{ channel.pk }}">
+
+        <input type="text" name="code" class="form-control" id="id_code" placeholder="Verification Code" required>
+        <button class="btn btn-primary w-100 mt-3 " type="submit" id="button-addon2">{% trans "Verify" %}</button>
 
 
-</form>
+    </form>
 {% endif %}
 <div class="row mt-3">
     <div class="col-12">
 
 
-        <button  class="btn btn-secondary resend_verify_code mt-1" data-channel_pk="{{ item.pk }}">     {% if magic_link %}{% trans "Resend Verification Code to" %}{% else %}{% trans "Resend Verification Code to" %}{% endif %} {{ item.get_channel_type_display }}  {{ item.value }}</button>
+        <a href="#"  class="text-primary resend_verify_code mt-1 text-center" data-channel_pk="{{ item.pk }}">     {% if magic_link %}{% trans "Resend Verification Code" %}{% else %}{% trans "Resend Verification Code" %}{% endif %}</a>
 
         <!--                        {% for item in user2verify.comms_channels.verified %}-->
 
@@ -62,10 +66,12 @@
         $("#id_code").focus();
 
         $('.resend_verify_code').click(function() {
-            var channel_pk = $(this).data('channel_pk');
-            $.post("{% url 'usersapi:resend_verify_code' %}", {
-                channel_pk: channel_pk
-            }).done(function() {
+            const payload = {
+                'channel_pk': $(this).data('channel_pk'),
+                'channel_value': $(this).data('channel_value'),
+            }
+
+            $.post("{% url 'usersapi:resend_verify_code' %}", payload).done(function() {
                 clear_header_messages();
                 console.log("message sent");
             });

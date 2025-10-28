@@ -43,7 +43,6 @@ from django.views import generic, View
 from django.conf import settings
 from django.views.generic import FormView, TemplateView, DetailView, ListView, UpdateView
 
-
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
 
@@ -63,7 +62,8 @@ USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need to change this
-VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE', True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
+VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
+                      True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
 if settings.USE_KEYCLOAK:
     from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
@@ -116,15 +116,14 @@ class AddUser(generic.CreateView):
             template = 'django_users/admin/add_user.html'
         else:
             template = self.template_name
-        return [template,]
-
+        return [template, ]
 
     def get_success_url(self):
         # get commstemplate pk to use as template
         new_user_email_template_id = getattr(settings, 'NEW_USER_EMAIL_TEMPLATE', None)
         if new_user_email_template_id:
             return reverse('news:news-admin-send-from-template',
-                       kwargs={'pk': self.new_user.id, 'template_id': new_user_email_template_id})
+                           kwargs={'pk': self.new_user.id, 'template_id': new_user_email_template_id})
 
     def get_form_class(self):
         return SkorieUserCreationForm
@@ -192,8 +191,6 @@ class AddUser(generic.CreateView):
         return super().form_valid(form)
 
 
-
-
 class SubscribeView(LoginRequiredMixin, FormView):
     template_name = "django_users/subscribe.html"
     form_class = SubscribeForm
@@ -229,9 +226,10 @@ class SubscribeView(LoginRequiredMixin, FormView):
         # add contact note
         notify = getattr(settings, "NOTIFY_NEW_USER_EMAILS", False)
         UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
-                            data=form.cleaned_data, send_mail=notify)
+                        data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)
+
 
 # deprecated - don't use simple subscribe/unsubscribe field
 @never_cache
@@ -241,12 +239,14 @@ def unsubscribe_only(request):
 
     return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
 
+
 @never_cache
 def subscribe_only(request):
     if request.user.is_authenticated:
         request.user.update_subscribed(True)
 
     return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
 
 @login_required()
 def send_test_email(request):
@@ -324,7 +324,6 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
     model = User
     user = None
 
-
     def get_template_names(self):
         return "django_users/change_profile.html"
 
@@ -374,10 +373,10 @@ class Troubleshoot(UserCanAdministerMixin, View):
 
     def post(self, request, *args, **kwargs):
         email = request.POST.get('email')
-        CustomUser = get_user_model()
+
         try:
-            django_user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+            django_user = User.objects.get(email=email)
+        except User.DoesNotExist:
             django_user = None
 
         if django_user:
@@ -606,7 +605,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         else:
             if user:
                 authenticated = True
-                if KEYCLOAK_MIGRATING  and user.activation_code != password:
+                if KEYCLOAK_MIGRATING and user.activation_code != password:
                     user.set_password(password)
                     user.save()
             else:
@@ -699,7 +698,7 @@ class RegisterView(FormView):
                 raise
         else:
             if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
-                #TODO: handle VERIFY_ONCE = False - need to resend verification email and notify user
+                # TODO: handle VERIFY_ONCE = False - need to resend verification email and notify user
                 keycloak_details = get_user_by_id(user.keycloak_id)
                 if keycloak_details['emailVerified']:
 
@@ -834,6 +833,7 @@ def get_current_user(request):
 
     return user, user_login_mode
 
+
 #
 # @method_decorator(never_cache, name='dispatch')
 # class VerifyChannelView(FormView):
@@ -882,7 +882,6 @@ def get_current_user(request):
 #
 
 
-
 @method_decorator(never_cache, name='dispatch')
 class VerifyChannelView(FormView):
     template_name = 'django_users/verify_channel.html'
@@ -913,7 +912,7 @@ class VerifyChannelView(FormView):
         returning a dict for the template context.
         """
         _, VerificationCode = self._get_models()
-        ctx = {"sent": False, "magic_link": False}
+
         USE_MAGIC_LINK = getattr(settings, "VERIFICATION_USE_MAGIC_LINK", False)
 
         if USE_MAGIC_LINK and channel.channel_type == "email":
@@ -926,27 +925,33 @@ class VerifyChannelView(FormView):
             )
 
         sent = vc.send_verification(context)
-        ctx.update({
-                "sent": bool(sent),
-                "magic_link": False,
-                # for admins in DEBUG, show code to ease manual testing
-             })
+        context["sent"] = bool(sent)
 
-        return ctx
+        return context
 
     # GET: show the form (code flow) and send code/link on first load or when ?resend=1
     def get(self, request, channel_id):
+
         channel, _ = self._get_channel(channel_id)
+
+        if channel.is_verified:
+
+            if request.user.is_authenticated:
+                messages.success(request, 'Contact method has already been verified.')
+                return redirect('/')
+            else:
+                return redirect('users:login')
 
         # send on first arrival or explicit resend
         if "resent" not in request.GET or request.GET.get("resend") == "1":
             send_ctx = self._send_code_or_link(channel)
             if not send_ctx["sent"]:
-                messages.error(request, _('Failed to send verification. Check your contact method is correct.'))
+                messages.error(request, 'Failed to send verification. Check your contact method is correct.')
                 return redirect('users:login')
 
             if send_ctx["magic_link"]:
-                messages.info(request, _('We’ve sent you a verification link. Please check your email.'))
+                # don't have user logged in so fails
+                messages.info(request, 'We’ve sent you a verification link. Please check your email.')
                 # For magic-link we don't need to show a code form; still render a page with a resend option.
                 return render(request, self.template_name, {
                     "channel": channel,
@@ -956,9 +961,7 @@ class VerifyChannelView(FormView):
 
         form = self.form_class(initial={'channel': channel})
         context = {"form": form, "channel": channel, "magic_link": False}
-        if settings.DEBUG and getattr(request.user, "is_administrator", False):
-            # Show latest unconsumed code hint if present (only in DEBUG/admin)
-            context["debug_code"] = None  # already included at send-time; keep page clean here
+
         return render(request, self.template_name, context)
 
     # POST: handle 6-digit code submission
@@ -974,12 +977,13 @@ class VerifyChannelView(FormView):
         ok = VerificationCode.verify_code(user=channel.user, channel=channel, code=code, purpose="email_verify")
 
         if ok:
-                messages.success(request, _('Contact method has been verified.'))
-                url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
-                return redirect(url)
+            messages.success(request, _('Contact method has been verified.'))
+            url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
+            return redirect(url)
 
         messages.error(request, _('Invalid or expired verification code.'))
         return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
+
 
 @method_decorator(never_cache, name='dispatch')
 class ManageCommsChannelsView(View):
@@ -997,9 +1001,8 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
     template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
 
-
     def get(self, request, *args, **kwargs):
-        #only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
+        # only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
         if not request.user.is_authenticated:
             return redirect(reverse('users:forgot_password'))
         return super().get(request, *args, **kwargs)
@@ -1047,6 +1050,7 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
 
         messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
+
 
 @method_decorator(never_cache, name='dispatch')
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
@@ -1218,7 +1222,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                         if user == self.request.user:
                             update_session_auth_hash(self.request, user)
 
-                        messages.success(self.request, _('Your password has been reset. You can now login with your new password.'))
+                        messages.success(self.request,
+                                         _('Your password has been reset. You can now login with your new password.'))
                         # Clear session data after success
                         self.request.session.pop('forgot_email', None)
                         self.request.session.pop('forgot_channel', None)
@@ -1245,7 +1250,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
     success_url = reverse_lazy("users:user-profile")
 
     def form_valid(self, form):
-        #TODO: should we check for user still being logged in?
+        # TODO: should we check for user still being logged in?
 
         current_password = form.cleaned_data.get("current_password")
         new_password = form.cleaned_data.get("new_password")
@@ -1362,8 +1367,8 @@ class ManageRoles(UserCanAdministerMixin, TemplateView):
         if 'user_id' in self.kwargs:
             context['user'] = User.objects.get(pk=self.kwargs['user_id'])
 
-
         return context
+
 
 class ManageEventRoles(ManageRoles):
 
@@ -1372,10 +1377,12 @@ class ManageEventRoles(ManageRoles):
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         Role = apps.get_model('users.Role')
 
-        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.EVENT_CHOICES}
-        context['role_list'] = Role.objects.exclude(role_type__in = [ModelRoles.ROLE_DEFAULT,])
+        context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
+                            ModelRoles.EVENT_CHOICES}
+        context['role_list'] = Role.objects.exclude(role_type__in=[ModelRoles.ROLE_DEFAULT, ])
 
         return context
+
 
 class ManageNonEventRoles(ManageRoles):
 
@@ -1384,10 +1391,12 @@ class ManageNonEventRoles(ManageRoles):
         ModelRoles = import_string(settings.MODEL_ROLES_PATH)
         Role = apps.get_model('users.Role')
 
-        context['roles'] = {key: value+" - "+ModelRoles.ROLE_DESCRIPTIONS[key] for key,value in ModelRoles.NON_EVENT_CHOICES}
-        context['role_list'] = Role.objects.exclude(role_type__in = [ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
+        context['roles'] = {key: value + " - " + ModelRoles.ROLE_DESCRIPTIONS[key] for key, value in
+                            ModelRoles.NON_EVENT_CHOICES}
+        context['role_list'] = Role.objects.exclude(role_type__in=[ModelRoles.ROLE_COMPETITOR, ModelRoles.ROLE_DEFAULT])
 
         return context
+
 
 class ManageUsers(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
@@ -1401,8 +1410,6 @@ class ManageUsers(UserCanAdministerMixin, TemplateView):
         return context
 
 
-
-
 @method_decorator(never_cache, name='dispatch')
 class ManageUser(UserCanAdministerMixin, TemplateView):
     # NOTE: getting stack overflow error when toggling roles in pycharm - not tested in production
@@ -1413,7 +1420,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         Competitor = apps.get_model('web.Competitor')
         Entry = apps.get_model('web.Entry')
-        Payment =apps.get_model('skorie_payments.Payment')
+        Payment = apps.get_model('skorie_payments.Payment')
         DirectEmail = apps.get_model('skorie_news.DirectEmail')
         user = None
         # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
@@ -1431,7 +1438,6 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context['object'] = user
 
         context['user_status'] = User.check_register_status(email=context['object'].email, requester=self.request.user)
-
 
         if settings.USE_NEWSLETTER:
             # context['subscriptions'] = Subscription.objects.filter(user=context['object'])
@@ -1451,12 +1457,12 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
                 for nl in newsletters
             ]
 
-
         context['roles4user'] = context['object'].Role.objects.active().filter(user=user).order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
         context['competitors'] = Competitor.objects.filter(user=context['object'])
-        context['entries'] = Entry.objects.my_entries(context['object']).order_by('-created')   # ones created by me - includes ones added for another
+        context['entries'] = Entry.objects.my_entries(context['object']).order_by(
+            '-created')  # ones created by me - includes ones added for another
 
         if settings.USE_PAYMENTS:
             context['payments'] = Payment.objects.filter(payer=context['object']).order_by('-created')
@@ -1483,7 +1489,6 @@ class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
 
     def get_form_class(self):
         return SkorieUserCreationForm
-
 
     def form_valid(self, form):
         # This method is called when valid form data has been POSTed.
@@ -1688,8 +1693,6 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         return context
 
 
-
-
 def login_with_remote_token(request, setting_name):
     token = request.GET.get("token")
     max_age = 120  # seconds (2 minutes)
@@ -1712,6 +1715,7 @@ def login_with_remote_token(request, setting_name):
         return HttpResponse("Invalid token signature", status=403)
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)
+
 
 def login_with_token(request, key=None):
     '''handle being sent a token to log a user in (generated with keycloak.generate_login_token or qr token)
@@ -1897,6 +1901,7 @@ class UnsubscribeTokenView(TemplateView):
         # Return (user_id, subscription_type)
         pass
 
+
 def dedupe_role(request, role_ref):
     '''make role_ref the master for this role type and user and delete all others
     NOTE - ignores organisation
@@ -1930,17 +1935,17 @@ def dedupe_role(request, role_ref):
                 similarity = difflib.SequenceMatcher(None, role.name.lower(), item.name.lower()).ratio()
                 if similarity >= 0.8:
 
-
-                        competitor.role = role
-                        competitor.updated = timezone.now()
-                        competitor.save()
-                        print(f"updating competitor {competitor.id} to {role.name} of type {role.role_type}")
+                    competitor.role = role
+                    competitor.updated = timezone.now()
+                    competitor.save()
+                    print(f"updating competitor {competitor.id} to {role.name} of type {role.role_type}")
 
                 else:
-                    print(f"**ignoring {competitor.name} as not similar enough to {role.name} - similarity {similarity}")
+                    print(
+                        f"**ignoring {competitor.name} as not similar enough to {role.name} - similarity {similarity}")
 
         print(f"deactivating role {item.name} of type {item.role_type} for user {item.user.email}")
-        item.active=False
+        item.active = False
         item.updated = timezone.now()
         item.save()
     return HttpResponse("Done")
@@ -1971,15 +1976,13 @@ class AnonUserView(UserCanAdministerMixin, TemplateView):
         context['role'] = Role.objects.filter(user=self.user)
         context['commslog'] = CommsLog.objects.filter(user=self.user)
         context['verification_code'] = VerificationCode.objects.filter(user=self.user)
-        context['to_anon'] = ['user','person','role']
-        context['to_delete'] = ['commslog','verification_code']
+        context['to_anon'] = ['user', 'person', 'role']
+        context['to_delete'] = ['commslog', 'verification_code']
         return context
-
 
 
 class UserCountries(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/user_countries.html"
-
 
 
 class SubscriptionDataFrameView(TemplateView):
@@ -2050,8 +2053,6 @@ class SubscriptionDataFrameView(TemplateView):
             queryset = queryset.filter(contact_date__date__lte=to_date)
         return queryset.order_by('-contact_date')
 
-
-
     def normalize_value(self, value):
         """Normalize values for consistent display"""
         if value is None or value == '':
@@ -2093,15 +2094,14 @@ class SubscriptionDataFrameView(TemplateView):
             'sites': list(base_queryset.values_list('site', flat=True).distinct().order_by('site')),
         }
 
+
 class ConfirmAccount(UserCanAdministerMixin, View):
 
     def get(self, request, *args, **kwargs):
-
         user = User.objects.get(id=kwargs['pk'])
         user.confirm(request.user)
 
         return redirect(reverse('users:admin_user', kwargs={'pk': kwargs['pk']}))
-
 
 
 class VerifyMagicLinkView(View):
@@ -2131,11 +2131,10 @@ class VerifyMagicLinkView(View):
         # Optionally log the user in (if this is part of a sign-up or login flow)
         auto_login = getattr(settings, "VERIFICATION_AUTO_LOGIN", False)
         if auto_login:
+            user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
             messages.success(request, _("Your email has been verified and you are now logged in."))
+            return redirect(settings.LOGIN_REDIRECT_URL)
         else:
             messages.success(request, _("Your email address has been verified."))
-
-        # Redirect to a logical next page
-        next_url = request.GET.get("next") or reverse("users:login")
-        return redirect(next_url)
+            return redirect(settings.LOGIN_URL)
