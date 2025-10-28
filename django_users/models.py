@@ -1,8 +1,9 @@
 import base64
-import hashlib
+
 import json
 import random
-
+import hashlib
+import secrets
 import string
 import uuid
 
@@ -18,7 +19,7 @@ from django.contrib.flatpages.models import FlatPage
 from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
 from django.core.mail import mail_admins
-
+from django.utils.crypto import constant_time_compare
 from django.conf import settings
 
 import django
@@ -50,13 +51,16 @@ if settings.USE_KEYCLOAK:
     from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, \
         search_user_by_email_in_keycloak
 
-from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code
+from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code, send_email_magic_link
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 Disciplines = import_string(settings.DISCIPLINES_PATH)
 
 CHANNEL_TYPES = getattr(settings, 'CHANNEL_TYPES', ['email', 'sms', 'whatsapp'])
+CODE_LEN = 6
+TOKEN_LEN = 32  # bytes -> urlsafe ~43 chars
+
 
 def get_new_ref(model):
     '''
@@ -226,7 +230,8 @@ class CommsChannelBase(models.Model):
                     'emailVerified': True,
                     "requiredActions": [],
                 }
-                keycloak_id, status_code = create_keycloak_user(payload)
+                # is it safe to assume the verifier is the user?
+                keycloak_id, status_code = create_keycloak_user(payload, self.user)
 
             self.user.is_active = True
             self.user.save()
@@ -259,67 +264,226 @@ class VerificationCodeQuerySet(models.QuerySet):
 
 
 class VerificationCodeBase(models.Model):
+    """
+    Supports:
+      - 6-digit code flow (code_hash + code_salt)
+      - magic-link flow (token_hash)
+    One record can carry either or both, and is bound to a user+channel+purpose.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='verification_codes')
     channel = models.ForeignKey('CommsChannel', on_delete=models.CASCADE)
-    code = models.CharField(max_length=6)
+    #code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=32, default="email_verify")  # e.g. email_verify, login, phone_verify
+
+    # Code-based verification (user types the code)
+    code_hash = models.CharField(max_length=64, blank=True, default="")  # hex sha256
+    code_salt = models.CharField(max_length=32, blank=True, default="")  # hex
+    # Link-based verification (user clicks the email link)
+    token_hash = models.CharField(max_length=64, blank=True, default="")  # hex sha256
+
+    # Lifecycle / limitsexpires_at = models.DateTimeField()
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveIntegerField(default=0)
 
     objects = VerificationCodeQuerySet.as_manager()
 
     def __str__(self):
-        return f"Code for {self.user} via {self.channel}"
+        return f"Verification for {self.user} via {self.channel} [{self.purpose}]"
 
     class Meta:
         abstract = True
+        indexes = [
+            models.Index(fields=["user", "purpose", "expires_at"]),
+            models.Index(fields=["channel", "purpose", "expires_at"]),
+            models.Index(fields=["token_hash"]),
+            models.Index(fields=["code_hash"]),
+        ]
+        constraints = [
+            # Only one active (unconsumed, unexpired) token per (user, channel, purpose)
+            models.UniqueConstraint(
+                fields=["user", "channel", "purpose"],
+                name="uniq_active_user_channel_purpose",
+                condition=models.Q(consumed_at__isnull=True, expires_at__gt=timezone.now())
+            )
+        ]
 
-    @classmethod
-    def create_verification_code(cls, user, channel):
-        code = ''.join(random.choices(string.digits, k=6))
-        expires_at = timezone.now() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
-        obj = cls.objects.create(
-            user=user,
-            channel=channel,
-            code=code,
-            expires_at=expires_at
-        )
-        return obj
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+    # ---------- Helpers
+
+    @staticmethod
+    def _sha256_hex(s: str) -> str:
+        return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _new_code() -> str:
+        return ''.join(random.choices(string.digits, k=CODE_LEN))
+
+    @staticmethod
+    def _new_token() -> str:
+        return secrets.token_urlsafe(TOKEN_LEN)
 
     @property
-    def is_expired(self):
+    def is_expired(self) -> bool:
         return timezone.now() > self.expires_at
 
+    @property
+    def is_consumed(self) -> bool:
+        return self.consumed_at is not None
+
+    @property
+    def magic_link_url(self) -> str:
+        return  f"{settings.SITE_URL}/{reverse('users:verify-email')}?t={self.token}"
+
+    # @classmethod
+    # def create_verification_code(cls, user, channel):
+    #     code = ''.join(random.choices(string.digits, k=6))
+    #     expires_at = timezone.now() + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRY_MINUTES)
+    #     obj = cls.objects.create(
+    #         user=user,
+    #         channel=channel,
+    #         code=code,
+    #         expires_at=expires_at
+    #     )
+    #     return obj
+
+
+    #
+    # @classmethod
+    # def verify_code(cls, code, channel):
+    #
+    #         match = cls.objects.filter(
+    #             channel=channel,
+    #             code=code,
+    #             expires_at__gt=timezone.now()
+    #         )
+    #         if match.exists():
+    #             channel.verify()
+    #
+    #
+    #
+    #             # Delete all verification codes for this channel
+    #             cls.objects.filter(channel=channel).delete()
+    #
+    #             return True
+    #         return False
+
     @classmethod
-    def verify_code(cls, code, channel):
+    @transaction.atomic
+    def _delete_active(cls, user, channel, purpose):
+        cls.objects.filter(
+            user=user, channel=channel, purpose=purpose,
+            consumed_at__isnull=True,  #
+            expires_at__gt=timezone.now(),
+        ).delete()
 
-            match = cls.objects.filter(
-                channel=channel,
-                code=code,
-                expires_at__gt=timezone.now()
-            )
-            if match.exists():
-                channel.verify()
+    @classmethod
+    def create_for_code(cls, user, channel, purpose="email_verify"):
+        cls._delete_active(user, channel, purpose)
+        expiry_minutes = getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
+        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
+        raw_code = cls._new_code()
+        salt = secrets.token_hex(16)
+        code_hash = cls._sha256_hex(salt + raw_code)
+        obj = cls.objects.create(
+            user=user, channel=channel, purpose=purpose,
+            code_hash=code_hash, code_salt=salt, token_hash="",
+            expires_at=expires_at
+        )
+        return obj, {'code': raw_code, 'expiry_minutes': expiry_minutes, 'user': user}
 
+    @classmethod
+    def create_for_magic_link(cls, user, channel, purpose="email_verify"):
+        cls._delete_active(user, channel, purpose)
+        expiry_minutes = getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
+        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
+        raw_token = cls._new_token()
+        token_hash = cls._sha256_hex(raw_token)
+        obj = cls.objects.create(
+            user=user, channel=channel, purpose=purpose,
+            token_hash=token_hash, code_hash="", code_salt="",
+            expires_at=expires_at
+        )
+        return obj, {'token': raw_token, 'expiry_minutes': expiry_minutes, 'user': user}
 
+    # ---------- Consumption
 
-                # Delete all verification codes for this channel
-                cls.objects.filter(channel=channel).delete()
-
-                return True
+    @classmethod
+    @transaction.atomic
+    def verify_code(cls, *, user, channel, code, purpose="email_verify") -> bool:
+        """
+        Constant-time verify of a 6-digit code for this user+channel+purpose.
+        Enforces expiry, single-use, and attempt limits.
+        """
+        now = timezone.now()
+        qs = cls.objects.select_for_update().filter(
+            user=user, channel=channel, purpose=purpose,
+            consumed_at__isnull=True, expires_at__gt=now,
+        )
+        obj = qs.order_by("-created_at").first()
+        if not obj or not obj.code_hash or obj.attempts >= getattr(settings, "VERIFICATION_MAX_ATTEMPTS", 5):
             return False
 
-    def send_verification_code(self)->bool:
+        candidate = cls._sha256_hex(obj.code_salt + code)
+        ok = constant_time_compare(candidate, obj.code_hash)
 
+        obj.attempts = models.F("attempts") + 1
+        if ok:
+            obj.consumed_at = now
+        obj.save(update_fields=["attempts", "consumed_at"])
+
+        if ok:
+            # mark verified + cleanup siblings for same channel/purpose
+            channel.verify()
+            cls.objects.filter(user=user, channel=channel, purpose=purpose).exclude(pk=obj.pk).delete()
+        return bool(ok)
+
+    @classmethod
+    @transaction.atomic
+    def verify_token(cls, *, raw_token: str, purpose="email_verify") -> "VerificationCodeBase|None":
+        """
+        Verify a magic-link token. Returns the object on success, else None.
+        """
+        now = timezone.now()
+        token_hash = cls._sha256_hex(raw_token)
+        try:
+            obj = cls.objects.select_for_update().get(
+                token_hash=token_hash, purpose=purpose,
+                consumed_at__isnull=True, expires_at__gt=now,
+            )
+        except cls.DoesNotExist:
+            return None
+
+        obj.consumed_at = now
+        obj.save(update_fields=["consumed_at"])
+        obj.channel.verify()
+        # Clean up all other outstanding records for same user+channel+purpose
+        cls.objects.filter(user=obj.user, channel=obj.channel, purpose=purpose).exclude(pk=obj.pk).delete()
+        return obj
+
+    # ---------- Sending
+
+    def send_verification(self, context=None) -> bool:
+        """
+        Sends either a code or link depending on which fields are set.
+        optionally include context to pass through to template
+        """
         if self.channel.channel_type == 'email':
-            return send_email_verification_code(self)
+            # Prefer magic-link if token_hash present
+            if self.token_hash:
+                return send_email_magic_link(self, context)  # implement in your mail layer
+
+            return send_email_verification_code(self, context)  # reads self.user, and the raw code you generated at creation time
         elif self.channel.channel_type == 'sms':
-            return send_sms_verification_code(self.channel.value, self.code)
+            return send_sms_verification_code(self.channel.value, "<CODE REDACTED>")
         elif self.channel.channel_type == 'whatsapp':
-            return send_whatsapp_verification_code(self.channel.value, self.code)
-
-
+            return send_whatsapp_verification_code(self.channel.value, "<CODE REDACTED>")
+        return False
 
 class CustomUserQuerySet(models.QuerySet):
 

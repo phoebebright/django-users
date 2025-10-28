@@ -834,52 +834,152 @@ def get_current_user(request):
 
     return user, user_login_mode
 
+#
+# @method_decorator(never_cache, name='dispatch')
+# class VerifyChannelView(FormView):
+#     form_class = VerificationCodeForm
+#
+#
+#     def get(self, request, channel_id):
+#         user, user_login_mode = get_current_user(request)
+#         CommsChannel = apps.get_model('users.CommsChannel')
+#         channel = get_object_or_404(CommsChannel, id=channel_id)
+#
+#         VerificationCode = apps.get_model('users.VerificationCode')
+#         vc = VerificationCode.create_verification_code(user, channel)
+#         success = vc.send_verification_code()
+#
+#         if not success:
+#             messages.error(request, _('Failed to send verification code. Check your contact method is correct.'))
+#             return HttpResponseRedirect('users:login')
+#
+#         form_class = self.get_form_class()
+#         form = form_class(initial={'channel': channel})
+#
+#         next = request.GET.get('next', reverse('users:login'))
+#
+#         context = {'form': form, 'channel': channel}
+#         if request.user.is_authenticated and request.user.is_administrator:
+#             context['verification_code'] = vc.code
+#
+#         return render(request, 'django_users/verify_channel.html', context)
+#
+#     def post(self, request, channel_id):
+#         CommsChannel = apps.get_model('users.CommsChannel')
+#         VerificationCode = apps.get_model('users.VerificationCode')
+#         channel = get_object_or_404(CommsChannel, id=channel_id)
+#         code = request.POST.get('code', None)
+#
+#         if code:
+#             success = VerificationCode.verify_code(code, channel)
+#             if success:
+#                 messages.success(request, _('Contact method has been verified.'))
+#                 url = f"{reverse('users:login')}?" + urlencode({'email': channel.user.email})
+#                 return redirect(url)
+#
+#         messages.error(request, _('Invalid or expired verification code.'))
+#         return render(request, 'django_users/verify_channel.html', {'channel': channel})
+#
+
+
 
 @method_decorator(never_cache, name='dispatch')
 class VerifyChannelView(FormView):
+    template_name = 'django_users/verify_channel.html'
     form_class = VerificationCodeForm
 
+    def _get_models(self):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        VerificationCode = apps.get_model('users', 'VerificationCode')
+        return CommsChannel, VerificationCode
 
+    def _get_channel(self, channel_id):
+        user, user_login_mode = get_current_user(self.request)
+        CommsChannel, _ = self._get_models()
+        channel = get_object_or_404(CommsChannel, id=channel_id)
+
+        # Only the owner or an administrator can verify this channel
+        if self.request.user.is_authenticated and getattr(self.request.user, "is_administrator", False):
+            return channel, user  # admin can act; user returned is current session user (if you need it)
+        # else require the pending-login user (from session helper) to match
+        if user and channel.user_id == getattr(user, "id", None):
+            return channel, user
+        # Hide existence if mismatch
+        raise get_object_or_404(CommsChannel, id=-1)  # forces 404
+
+    def _send_code_or_link(self, channel):
+        """
+        Sends either a magic link (email) or a 6-digit code (email/sms/whatsapp),
+        returning a dict for the template context.
+        """
+        _, VerificationCode = self._get_models()
+        ctx = {"sent": False, "magic_link": False}
+        USE_MAGIC_LINK = getattr(settings, "VERIFICATION_USE_MAGIC_LINK", False)
+
+        if USE_MAGIC_LINK and channel.channel_type == "email":
+            vc, context = VerificationCode.create_for_magic_link(
+                user=channel.user, channel=channel, purpose="email_verify"
+            )
+        else:
+            vc, context = VerificationCode.create_for_code(
+                user=channel.user, channel=channel, purpose="email_verify"
+            )
+
+        sent = vc.send_verification(context)
+        ctx.update({
+                "sent": bool(sent),
+                "magic_link": False,
+                # for admins in DEBUG, show code to ease manual testing
+             })
+
+        return ctx
+
+    # GET: show the form (code flow) and send code/link on first load or when ?resend=1
     def get(self, request, channel_id):
-        user, user_login_mode = get_current_user(request)
-        CommsChannel = apps.get_model('users.CommsChannel')
-        channel = get_object_or_404(CommsChannel, id=channel_id)
+        channel, _ = self._get_channel(channel_id)
 
-        VerificationCode = apps.get_model('users.VerificationCode')
-        vc = VerificationCode.create_verification_code(user, channel)
-        success = vc.send_verification_code()
+        # send on first arrival or explicit resend
+        if "resent" not in request.GET or request.GET.get("resend") == "1":
+            send_ctx = self._send_code_or_link(channel)
+            if not send_ctx["sent"]:
+                messages.error(request, _('Failed to send verification. Check your contact method is correct.'))
+                return redirect('users:login')
 
-        if not success:
-            messages.error(request, _('Failed to send verification code. Check your contact method is correct.'))
-            return HttpResponseRedirect('users:login')
+            if send_ctx["magic_link"]:
+                messages.info(request, _('We’ve sent you a verification link. Please check your email.'))
+                # For magic-link we don't need to show a code form; still render a page with a resend option.
+                return render(request, self.template_name, {
+                    "channel": channel,
+                    "form": None,
+                    "magic_link": True,
+                })
 
-        form_class = self.get_form_class()
-        form = form_class(initial={'channel': channel})
+        form = self.form_class(initial={'channel': channel})
+        context = {"form": form, "channel": channel, "magic_link": False}
+        if settings.DEBUG and getattr(request.user, "is_administrator", False):
+            # Show latest unconsumed code hint if present (only in DEBUG/admin)
+            context["debug_code"] = None  # already included at send-time; keep page clean here
+        return render(request, self.template_name, context)
 
-        next = request.GET.get('next', reverse('users:login'))
-
-        context = {'form': form, 'channel': channel}
-        if request.user.is_authenticated and request.user.is_administrator:
-            context['verification_code'] = vc.code
-
-        return render(request, 'django_users/verify_channel.html', context)
-
+    # POST: handle 6-digit code submission
     def post(self, request, channel_id):
-        CommsChannel = apps.get_model('users.CommsChannel')
-        VerificationCode = apps.get_model('users.VerificationCode')
-        channel = get_object_or_404(CommsChannel, id=channel_id)
-        code = request.POST.get('code', None)
+        channel, _ = self._get_channel(channel_id)
+        code = request.POST.get('code') or request.POST.get('verification_code')
 
-        if code:
-            success = VerificationCode.verify_code(code, channel)
-            if success:
+        if not code:
+            messages.error(request, _('Please enter the verification code.'))
+            return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
+
+        _, VerificationCode = self._get_models()
+        ok = VerificationCode.verify_code(user=channel.user, channel=channel, code=code, purpose="email_verify")
+
+        if ok:
                 messages.success(request, _('Contact method has been verified.'))
-                url = f"{reverse('users:login')}?" + urlencode({'email': channel.user.email})
+                url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
                 return redirect(url)
 
         messages.error(request, _('Invalid or expired verification code.'))
-        return render(request, 'django_users/verify_channel.html', {'channel': channel})
-
+        return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
 
 @method_decorator(never_cache, name='dispatch')
 class ManageCommsChannelsView(View):

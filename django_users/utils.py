@@ -51,9 +51,28 @@ def send_otp(channel, code):
     return True
 
 
-def send_email_verification_code(verificationcode):
+def send_email_verification_code(verificationcode, context={}):
     template = 'email_verification_code'
-    context = {'code': verificationcode.code}
+
+    # we have not fully transitioned to using channels, so fallback to user.email
+    if verificationcode.channel.value <= ' ':
+        to_email = verificationcode.channel.user.email
+        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
+    else:
+        to_email = verificationcode.channel.value
+
+    mail = get_mail_class()
+    mail.send(
+        to_email,
+        settings.DEFAULT_FROM_EMAIL,
+        template=template,
+        context=context,
+        receiver=verificationcode.user,
+    )
+    return True
+
+def send_email_magic_link(verificationcode, context={}):
+    template = 'email_verification_token'
 
     # we have not fully transitioned to using channels, so fallback to user.email
     if verificationcode.channel.value <= ' ':
@@ -234,9 +253,14 @@ def get_subscription_analytics():
         'myevent_rate': round((myevent_subscribers / total_users) * 100, 2) if total_users > 0 else 0,
     }
 
+ALLOWED_FAKE_DOMAINS = {"example.com", "test.com",}
 def normalise_email(addr: str) -> str:
+    domain = addr.split("@")[-1].lower()
     try:
-        v = validate_email(addr, allow_smtputf8=True)
+        v = validate_email(addr,
+                           allow_smtputf8=True,
+                           check_deliverability=domain not in ALLOWED_FAKE_DOMAINS
+                           )
         # v.normalized in v2; v.email in v1 – support both:
         return getattr(v, "normalized", v.email).lower()
     except EmailNotValidError as e:

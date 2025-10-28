@@ -58,9 +58,9 @@ logger = logging.getLogger('django')
 User = get_user_model()
 
 
-
 class CustomAnonRateThrottle(AnonRateThrottle):
     rate = '3/minute'
+
 
 class CheckEmailThrottle(AnonRateThrottle):
     # wanted 3 per 5 mins but too hard
@@ -222,14 +222,16 @@ class UserViewset(viewsets.ModelViewSet):
 
         return Response("OK")
 
+
 # deprecated - call UserViewset directly
 class UserViewsetBase(UserViewset):
     pass
 
+
 class UserListViewset(viewsets.ReadOnlyModelViewSet):
     '''list of users'''
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
-    queryset = User.objects.all().exclude(is_active=False).select_related('person',)
+    queryset = User.objects.all().exclude(is_active=False).select_related('person', )
     serializer_class = UserShortSerializer
     http_method_names = ['get', ]
 
@@ -242,10 +244,10 @@ class UserListViewset(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-
 # deprecated - use UserListViewset directly
 class UserListViewsetBase(UserListViewset):
     pass
+
 
 class SendOTP2User(UserCanAdministerMixin, APIView):
 
@@ -282,8 +284,6 @@ class ChangePassword(APIView):
         request.user.save()
 
         return Response("OK", status=status.HTTP_200_OK)
-
-
 
 
 class CheckActivationBase(APIView):
@@ -383,6 +383,7 @@ class UserProfileUpdate(APIView):
 class UserProfileUpdateBase(UserProfileUpdate):
     pass
 
+
 class CheckEmailInKeycloak(APIView):
     '''
     check if an email has already been registered in the keycloak
@@ -456,48 +457,91 @@ class SendVerificationCode(APIView):
     permission_classes = []
     throttle_classes = [CustomAnonRateThrottle]
 
-    def get(self, request, *args, **kwargs):
-        '''can call with an email to send a new verification code'''
-        User = get_user_model()
-        VerificationCode = apps.get_model('users', 'VerificationCode')
-        email = request.query_params.get('email', None)
-        if email:
-            email = normalise_email(email)
-            user = User.objects.get(email=email)
-
-            if not user.is_active:
-                user.migrate_channels()  # make sure email moved across
-                channel = user.comms_channels.filter(
-                    channel_type='email').first()  # can't remember how to get email channel - in a hurry!
-                set_current_user(user.id, "PROBLEM")  # put user in session so can pick up in channels/verify
-                vc = VerificationCode.create_verification_code(user, channel)
-                success = vc.send_verification_code()
-
-                if success:
-                    return Response({'status': 'success', 'redirect_url': '/channels/verify/' + str(channel.id) + '/'},
-                                    status=200)
-                else:
-                    return Response({'status': 'error'}, status=500)
-            else:
-
-                return Response({'status': 'already verified'}, status=200)
-
-        return Response({'status': 'error - no email supplied'}, status=500)
-
     def post(self, request, *args, **kwargs):
+        """
+        Body: {"email": "<address>"}
+        Sends either a magic link or a 6-digit code to the user's email channel.
+        Always returns a generic success message to avoid user enumeration.
+        """
+        data = request.data or {}
+        email = data.get("email")
+        if not email:
+            # Keep this generic; don't hint whether an email is required to avoid pattern probing
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+        try:
+            email = normalise_email(email)
+        except Exception as e:
+            # Invalid email format; still respond generically
+            return Response({"status": "bad email", 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         User = get_user_model()
         VerificationCode = apps.get_model('users', 'VerificationCode')
-        user_id = request.session.get('user_id')
-        user = User.objects.get(id=user_id)
-        channel = user.comms_channels.get(pk=request.POST.get('channel_pk'))
-        if channel:
-            vc = VerificationCode.create_verification_code(channel)
-            success = vc.send_verification_code()
+        CommsChannel = apps.get_model('users', 'CommsChannel')
 
-        if success:
-            return Response({'status': 'success'}, status=200)
-        else:
-            return Response({'status': 'error'}, status=500)
+        # Wrap in transaction so checks + create are atomic
+        with transaction.atomic():
+            try:
+                user = User.objects.select_for_update().get(email=email)
+            except User.DoesNotExist:
+                # Do not reveal existence; do a fake delay if you like
+                return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+            # Ensure the email channel exists / is current
+            # If you have user.migrate_channels(), call it safely
+            try:
+                if hasattr(user, "migrate_channels"):
+                    user.migrate_channels()
+            except Exception:
+                pass  # do not block sending
+
+            channel = (user.comms_channels
+                       .filter(channel_type='email')
+                       .order_by('id')
+                       .first())
+
+            if channel is None:
+                # Fallback: create channel for this email
+                channel = CommsChannel.objects.create(
+                    user=user,
+                    channel_type='email',
+                    value=user.email,
+                    verified=False,
+                )
+
+            # Cooldown: avoid re-sending too frequently
+            too_soon = VerificationCode.objects.filter(
+                user=user, channel=channel, purpose='email_verify',
+                consumed_at__isnull=True,
+                expires_at__gt=timezone.now(),
+                created_at__gte=timezone.now() - timezone.timedelta(
+                    minutes=getattr(settings, "VERIFICATION_SEND_COOLDOWN_MINUTES", 2))
+            ).exists()
+            if too_soon:
+                return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+            # Create either a magic link token or a 6-digit code
+            if getattr(settings, "VERIFICATION_USE_MAGIC_LINK", True):
+                vc, context = VerificationCode.create_for_magic_link(
+                    user=user, channel=channel, purpose='email_verify'
+                )
+                send_ok = vc.send_verification(context)
+            else:
+                vc, context = VerificationCode.create_for_code(
+                    user=user, channel=channel, purpose='email_verify'
+                )
+
+                send_ok = vc.send_verification(context)
+
+        # Do not reveal success/failure details (avoid enumeration/delivery probing)
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+    # Optional: keep GET for backward-compat, delegate to POST behavior
+    def get(self, request, *args, **kwargs):
+        # Legacy support; mirrors POST but reads from query param
+        email = request.query_params.get('email')
+        request._full_data = {"email": email}  # trick DRF into having .data
+        return self.post(request, *args, **kwargs)
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -627,8 +671,9 @@ class CheckEmailInKeycloakPublic(APIView):
 class EmailExistsSerializer(Serializer):
     email = EmailField(write_only=True)
 
+
 @api_view(["POST"])
-@authentication_classes([])           # allow anonymous without CSRF/session auth
+@authentication_classes([])  # allow anonymous without CSRF/session auth
 @permission_classes([AllowAny])
 @throttle_classes([CheckEmailThrottle])
 def email_exists(request):
@@ -639,6 +684,7 @@ def email_exists(request):
     User = get_user_model()
     exists = User.objects.filter(email__iexact=email).exists()
     return Response({"exists": exists}, status=status.HTTP_200_OK)
+
 
 class CheckEmail(viewsets.ReadOnlyModelViewSet):
     '''
@@ -680,10 +726,10 @@ class CheckEmail(viewsets.ReadOnlyModelViewSet):
 
         return self.list(request, *args, **kwargs)
 
+
 # deprecated for skorie_users - use CheckEmail directly
 class CheckEmailBase(CheckEmail):
     pass
-
 
 
 class CheckUserPublic(CheckEmail):
@@ -741,9 +787,11 @@ class CheckUserPublic(CheckEmail):
                     "channels": channels,
                 })
 
+
 # deprecated use CheckUserPublic directly
 class CheckUserPublicBase(CheckUserPublic):
     pass
+
 
 class SetTemporaryPassword(APIView):
     permission_classes([IsAuthenticated, IsAdministratorPermission])
@@ -858,8 +906,10 @@ class CommsChannelViewSet(viewsets.ModelViewSet):
 
         return Response("OK")
 
+
 class CommsChannelViewSetBase(CommsChannelViewSet):
     pass
+
 
 class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
     '''When filtering on country we include Organisations that have no country (ie. worldwide)'''
@@ -898,8 +948,10 @@ class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
+
 class OrganisationViewSetBase(OrganisationViewSet):
     pass
+
 
 @api_view(['PATCH'])
 @user_passes_test(is_administrator)
@@ -1046,8 +1098,8 @@ class RoleViewSetBase(viewsets.ModelViewSet):
         Role = apps.get_model('users', 'Role')
         return Role.objects.all()
 
-class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
 
+class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
     queryset = None
     serializer_class = RoleSerializer
 
@@ -1064,7 +1116,6 @@ class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
         active.active = True
         active.save()
 
-
         for role in Role.objects.filter(user=active.user, role_type=active.role_type).exclude(pk=active.pk):
             # wrap in a transaction
             with transaction.atomic():
@@ -1079,17 +1130,16 @@ class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
 
                 for ev in queryset:
                     ev.role = active
-                    if ev.user and  ev.user != active.user:
+                    if ev.user and ev.user != active.user:
                         raise ValueError("EventRole user does not match active role user")
                     else:
                         ev.user = active.user
                     ev.save()
 
-
         return Response(status=status.HTTP_200_OK)
 
-class PersonViewSet(viewsets.ModelViewSet):
 
+class PersonViewSet(viewsets.ModelViewSet):
     queryset = None
     lookup_field = 'ref'
     serializer = PersonSerializer
@@ -1098,9 +1148,11 @@ class PersonViewSet(viewsets.ModelViewSet):
         Person = apps.get_model('users', 'Person')
         return Person.objects.all()
 
+
 # deprecated for skorie_users - use PersonViewSet directly
 class PersonViewSetBase(PersonViewSet):
     pass
+
 
 class SubscriptionStatusAPIView(APIView):
     """Get current subscription status"""

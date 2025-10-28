@@ -338,9 +338,9 @@ class CommsChannelAdminBase(admin.ModelAdmin):
 
 
 class VerificationCodeAdminBase(admin.ModelAdmin):
-    list_display = ('user', 'channel', 'code', 'expires_at', 'created_at')
+    list_display = ('user', 'channel', 'expires_at', 'created_at')
     list_filter = ('channel__channel_type',)
-    search_fields = ('user__email', 'channel__value', 'code')
+    search_fields = ('user__email', 'channel__value')
 
     def __init__(self, model, admin_site):
         super().__init__(model, admin_site)
