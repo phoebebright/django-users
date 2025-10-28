@@ -10,7 +10,7 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
     ManageUser,  SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
-    ManageUserProfile
+    ManageUserProfile, VerifyMagicLinkView
 from .keycloak import logout_user_from_keycloak_and_django
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -68,7 +68,8 @@ urlpatterns = [
     path('problem_login/', ProblemLogin.as_view(), name="problem_login"),
     path('migrate_login/', UserMigrationView.as_view(), name='user_login'),
     path('new_users_report/', NewUsers.as_view(), name="new_users_report"),
-    # path('verify_account/<str:code>/', VerifyWithCode.as_view(), name="verify_with_code"),
+    path("verify_link/", VerifyMagicLinkView.as_view(), name="verify_link"),
+
 
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
     path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),

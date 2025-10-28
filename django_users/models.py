@@ -21,6 +21,7 @@ from django.utils.module_loading import import_string
 from django.core.mail import mail_admins
 from django.utils.crypto import constant_time_compare
 from django.conf import settings
+from django.urls import reverse_lazy, reverse
 
 import django
 from django.core.validators import MinLengthValidator, MaxLengthValidator
@@ -336,9 +337,9 @@ class VerificationCodeBase(models.Model):
     def is_consumed(self) -> bool:
         return self.consumed_at is not None
 
-    @property
-    def magic_link_url(self) -> str:
-        return  f"{settings.SITE_URL}/{reverse('users:verify-email')}?t={self.token}"
+
+    def magic_link_url(self, token) -> str:
+        return  f"{settings.SITE_URL}/{reverse('users:verify_link')}?t={token}"
 
     # @classmethod
     # def create_verification_code(cls, user, channel):
@@ -409,7 +410,8 @@ class VerificationCodeBase(models.Model):
             token_hash=token_hash, code_hash="", code_salt="",
             expires_at=expires_at
         )
-        return obj, {'token': raw_token, 'expiry_minutes': expiry_minutes, 'user': user}
+        return obj, {'token': raw_token, 'expiry_minutes': expiry_minutes, 'user': user,
+                     'verify_url': obj.magic_link_url(raw_token)}
 
     # ---------- Consumption
 
