@@ -1158,8 +1158,6 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_unconfirmed(self):
-        '''using keycloak so probably don't need this? '''
-        return False
         return self.status == self.USER_STATUS_UNCONFIRMED
 
     @property
@@ -1527,7 +1525,8 @@ class CustomUserBase(CustomUserBaseBasic):
                                               help_text="use to delete users that are bots")
     # org_types = models.CharField(_("Organisation types involved with"), max_length=50, null=True, blank=True,
     #                              help_text="eg. Pure Dressage, Eventing, Pony Club, Riding Club (Optional)")
-    #
+
+    # deprecated
     subscribed = models.DateTimeField(blank=True, null=True)
     unsubscribed = models.DateTimeField(blank=True, null=True)
 

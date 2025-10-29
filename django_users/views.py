@@ -327,6 +327,18 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
     def get_template_names(self):
         return "django_users/change_profile.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        # If user has not completed profile - bounce them there first
+        # but only if we have the page set
+        goto = getattr(settings, 'CONFIRM_USER_PAGE', None)
+        user = request.user
+        if goto and user.status < user.USER_STATUS_CONFIRMED:
+            # redirect early if user not allowed
+            return redirect(reverse(goto)+"?next="+reverse("users:user-profile"))  # or any URL name/path
+
+        # otherwise, continue normally
+        return super().dispatch(request, *args, **kwargs)
+
     def get_initial(self):
         initial = super().get_initial()
         user = self.user
