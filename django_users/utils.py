@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.apps import apps
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.utils.http import urlencode
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
@@ -30,7 +31,7 @@ def get_mail_class():
 
 def send_otp(channel, code):
     context = {'verification_code': code,
-               'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?email=' + channel.value}
+               'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?email=' + urlencode(channel.value)}
     template = 'send_otp'
     # we have not fully transitioned to using channels, so fallback to user.email
     if channel.value < ' ':
