@@ -123,20 +123,12 @@ class CommsChannelRateThrottle(SimpleRateThrottle):
 class UserViewset(viewsets.ModelViewSet):
     # use this one to retrieve a single user
     permission_classes = (IsAuthenticated, IsAdministratorPermission)
-    # queryset = CustomUser.objects.all().select_related('person','preferred_channel')
-    # serializer_class = UserSerializer
+    queryset = User.objects.all().select_related('person','preferred_channel')
+    serializer_class = UserSerializer
     http_method_names = ['get', ]
     filterset_fields = ('email', 'keycloak_id')
 
-    def get_queryset(self):
-        if not hasattr(self, 'queryset') or self.queryset is None:
-            raise NotImplementedError("Define `queryset` in the child class.")
-        return self.queryset
 
-    def get_serializer_class(self):
-        if not hasattr(self, 'serializer_class') or self.serializer_class is None:
-            raise NotImplementedError("Define `serializer_class` in the child class.")
-        return self.serializer_class
 
     def get_object(self):
         lookup_value = self.kwargs.get(self.lookup_field)

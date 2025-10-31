@@ -1469,7 +1469,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
                 for nl in newsletters
             ]
 
-        context['roles4user'] = context['object'].Role.objects.active().filter(user=user).order_by('role_type')
+        context['roles4user'] = context['object'].Role.objects.filter(user=user).order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
         context['competitors'] = Competitor.objects.filter(user=context['object'])
