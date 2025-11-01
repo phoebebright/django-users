@@ -535,19 +535,21 @@ class SendVerificationCode(APIView):
                 return Response(response_payload, status=HTTP_200_OK)
 
             # Create either a magic link token or a 6-digit code
+            redirect_url = reverse('users:verify_channel', channel.id)
             if getattr(settings, "VERIFICATION_USE_MAGIC_LINK", True):
                 vc, context = VerificationCode.create_for_magic_link(
                     user=user, channel=channel, purpose='email_verify'
                 )
                 send_ok = vc.send_verification(context)
-                response_payload['redirect_url'] = '/channels/verify/' + str(channel.id) + '/';
+
+                response_payload['redirect_url'] = redirect_url
             else:
                 vc, context = VerificationCode.create_for_code(
                     user=user, channel=channel, purpose='email_verify'
                 )
 
                 send_ok = vc.send_verification(context)
-                response_payload['redirect_url'] = '/channels/verify/' + str(channel.id) + '/';
+                response_payload['redirect_url'] = redirect_url
 
 
         return Response(response_payload, status=HTTP_200_OK)
