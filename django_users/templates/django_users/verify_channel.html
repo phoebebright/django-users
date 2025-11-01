@@ -33,8 +33,9 @@
 <div class="row mt-3">
     <div class="col-12">
 
-
-        <a href="#"  class="text-primary resend_verify_code mt-1 text-center" data-channel_pk="{{ item.pk }}">     {% if magic_link %}{% trans "Resend Verification Code" %}{% else %}{% trans "Resend Verification Code" %}{% endif %}</a>
+<p class="text-center">
+        <a href="#"  class="text-primary resend_verify_code mt-1 text-center" data-channel_pk="{{ item.pk }}">     {% if magic_link %}{% trans "Resend Verification Link" %}{% else %}{% trans "Resend Verification Code" %}{% endif %}</a>
+    </p>
 
         <!--                        {% for item in user2verify.comms_channels.verified %}-->
 
@@ -66,15 +67,16 @@
         $("#id_code").focus();
 
         $('.resend_verify_code').click(function() {
-            const payload = {
-                'channel_pk': $(this).data('channel_pk'),
-                'channel_value': $(this).data('channel_value'),
-            }
-
-            $.post("{% url 'usersapi:resend_verify_code' %}", payload).done(function() {
-                clear_header_messages();
-                console.log("message sent");
-            });
+            document.location.reload();
+            // const payload = {
+            //     'channel_pk': $(this).data('channel_pk'),
+            //     'channel_value': $(this).data('channel_value'),
+            // }
+            //
+            // $.post("{% url 'usersapi:resend_verify_code' %}", payload).done(function() {
+            //     clear_header_messages();
+            //     console.log("message sent");
+            // });
         });
         return false;
     });
