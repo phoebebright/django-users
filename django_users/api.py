@@ -457,16 +457,20 @@ class SendVerificationCode(APIView):
         """
         data = request.data or {}
         email = data.get("email", None)
+
+        # Do not reveal success/failure details (avoid enumeration/delivery probing)
+        response_payload = {"status": "ok"}
+
         if not email:
             # Keep this generic; don't hint whether an email is required to avoid pattern probing
-            return Response({"status": "ok"}, status=status.HTTP_200_OK)
+            return Response(response_payload, status=HTTP_200_OK)
 
         try:
             email = normalise_email(email)
         except Exception as e:
             # Invalid email format; still respond generically
             logger.warning("email not supplied to SendVerificationCode")
-            return Response({"status": "bad email", 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": "bad email", 'error': str(e)}, status=HTTP_400_BAD_REQUEST)
 
         User = get_user_model()
         VerificationCode = apps.get_model('users', 'VerificationCode')
@@ -477,20 +481,21 @@ class SendVerificationCode(APIView):
             channel = None
             user = None
 
+
             # get user from email
             try:
                 user = User.objects.select_for_update().get(email=email)
             except User.DoesNotExist:
                 logger.warning(f"No user for email {email} in SendVerificationCode")
                 # Do not reveal existence; do a fake delay if you like
-                return Response({"status": "ok"}, status=status.HTTP_200_OK)
+                return Response(response_payload, status=HTTP_200_OK)
 
             channel_pk = data.get('channel_pk', None)
             if channel_pk:
                 channel = CommsChannel.objects.get(pk=channel_pk)
                 if channel.user != user:
                     logger.warning(f"User from email {email} does not match channel {channel_pk} user in SendVerificationCode")
-                    return Response({"status": "ok"}, status=status.HTTP_200_OK)
+                    return Response(response_payload, status=HTTP_200_OK)
 
 
 
@@ -527,7 +532,7 @@ class SendVerificationCode(APIView):
                     minutes=getattr(settings, "VERIFICATION_SEND_COOLDOWN_MINUTES", 2))
             ).exists()
             if too_soon:
-                return Response({"status": "ok"}, status=status.HTTP_200_OK)
+                return Response(response_payload, status=HTTP_200_OK)
 
             # Create either a magic link token or a 6-digit code
             if getattr(settings, "VERIFICATION_USE_MAGIC_LINK", True):
@@ -535,15 +540,17 @@ class SendVerificationCode(APIView):
                     user=user, channel=channel, purpose='email_verify'
                 )
                 send_ok = vc.send_verification(context)
+                response_payload['redirect_url'] = '/channels/verify/' + str(channel.id) + '/';
             else:
                 vc, context = VerificationCode.create_for_code(
                     user=user, channel=channel, purpose='email_verify'
                 )
 
                 send_ok = vc.send_verification(context)
+                response_payload['redirect_url'] = '/channels/verify/' + str(channel.id) + '/';
 
-        # Do not reveal success/failure details (avoid enumeration/delivery probing)
-        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+        return Response(response_payload, status=HTTP_200_OK)
 
     # Optional: keep GET for backward-compat, delegate to POST behavior
     def get(self, request, *args, **kwargs):
