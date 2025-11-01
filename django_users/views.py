@@ -956,6 +956,7 @@ class VerifyChannelView(FormView):
                 messages.success(request, 'Contact method has already been verified.')
                 return redirect('/')
             else:
+                messages.success(request, f'Your account is already verified, please {settings.LOGIN_TERM}')
                 return redirect('users:login')
 
         # send on first arrival or explicit resend
@@ -993,7 +994,8 @@ class VerifyChannelView(FormView):
         ok = VerificationCode.verify_code(user=channel.user, channel=channel, code=code, purpose="email_verify")
 
         if ok:
-            messages.success(request, _('Contact method has been verified.'))
+            messages.success(request, _('Contact method has been verified. Please log in.'))
+            return redirect('users:login')
             url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
             return redirect(url)
 
