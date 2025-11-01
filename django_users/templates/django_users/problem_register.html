@@ -79,6 +79,7 @@
 
             let emailInput = $('#entered_email');
         let submitBtn = $('#submitBtn');
+    const verify_channel_url = "{% url 'users:verify_channel' 0 %}";
 
     $(document).ready(function () {
 
@@ -285,12 +286,11 @@
         const user_id = $('#user_id').val();
 
         var channel_pk = $(this).data('channel_pk');
-        document.location.href='{% url "users:verify_channel" 0 %}'.replace("0", channel_pk);
+        document.location.href=verify_channel_url.replace("0", channel_pk);
     });
 
     $(document).on('click', '#resend-btn', function () {
         const email = emailInput.val();
-        const verify_channels_url = '{% url "users:verify_channel" 0 %}';
 
 
         $.ajax({
@@ -299,12 +299,17 @@
             dataType: 'json',
             data: { email: email },
             success: function (resp, status, xhr) {
+                const verificationType = encodeURIComponent(resp.verification_type || '');
+                const targetUrl = `${verify_channel_url}/?resend=true&verification_type=${verificationType}`;
+
+
+
                 // Prefer server returning a redirect URL or channel_id
                 if (resp && resp.redirect_url) {
                     window.location.href = resp.redirect_url;
                 } else if (resp && resp.channel_id) {
 
-                    window.location.href = verify_channels_url.replace('0') + resp.channel_id + '/';
+                    window.location.href = targetUrl.replace('0', resp.channel_id);
                 } else {
                     // Fallback: honor a Location header if your view sets it
                     const loc = xhr.getResponseHeader('Location');
