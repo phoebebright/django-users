@@ -42,8 +42,8 @@ urlpatterns = [
     path('user_countries/', UserCountry.as_view(), name='user-country-api'),
     path('ql/', login_with_token, name='qr-login'),  # login to same app, eg. on mobile
     path('lwt/', login_with_token, {'key': settings.REMOTE_LOGIN_SECRET}, name='login-with-token'), # request to login from remote app with token
-    path('email_exists/', email_exists, name='email_exists'),
-    path('check_user/', CheckUserPublic.as_view(), name='check_user'),
+    # path('email_exists/', email_exists, name='email_exists'),
+    path('email_exists/', CheckUserPublic.as_view({'post': 'post'}), name='email_exists'),
     path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),
 
 

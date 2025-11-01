@@ -541,7 +541,7 @@ class SendVerificationCode(APIView):
                     user=user, channel=channel, purpose='email_verify'
                 )
                 send_ok = vc.send_verification(context)
-
+                response_payload['verification_type']   = 'link'
                 response_payload['redirect_url'] = redirect_url
             else:
                 vc, context = VerificationCode.create_for_code(
@@ -549,6 +549,7 @@ class SendVerificationCode(APIView):
                 )
 
                 send_ok = vc.send_verification(context)
+                response_payload['verification_type'] = 'code'
                 response_payload['redirect_url'] = redirect_url
 
 

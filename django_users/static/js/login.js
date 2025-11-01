@@ -17,7 +17,7 @@ $(document).on("blur", "#id_email", function() {
 
         $.ajax({
         url: USERS_API_URL + "email_exists/",
-            type: 'get',
+            type: 'POST',
             data: {'email': $(this).val()},
             error: function (xhr, ajaxOptions, thrownError) {
                 alert(thrownError);
