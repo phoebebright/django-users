@@ -47,7 +47,7 @@ from .utils import send_otp, normalise_email
 from .views import send_sms, set_current_user
 from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
-from web.models import EventRole, Competitor
+
 
 if settings.USE_KEYCLOAK:
     from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
@@ -709,20 +709,12 @@ class CheckEmail(viewsets.ReadOnlyModelViewSet):
     check if an email has already been registered in the users file
     '''
 
-    # serializer_class = EmailExistsSerializer
-    # queryset = CustomUser.objects.none()
+    serializer_class = EmailExistsSerializer
+    queryset = User.objects.none()
     lookup_field = 'email'
     http_method_names = ['post', ]  # using post so we can hide email in request
     filterset_fields = ('email',)
 
-    def get_queryset(self):
-        User = get_user_model()
-        return User.objects.none()
-
-    def get_serializer_class(self):
-        if not hasattr(self, 'serializer_class') or self.serializer_class is None:
-            raise NotImplementedError("Define `serializer_class` in the child class.")
-        return self.serializer_class
 
     def post(self, request, *args, **kwargs):
         User = get_user_model()

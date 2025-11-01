@@ -22,6 +22,7 @@ from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 
+
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactForm as ContactForm, OrganisationForm, CustomUserCreationForm, SubscriptionPreferencesForm, \
@@ -913,10 +914,13 @@ class VerifyChannelView(FormView):
         if self.request.user.is_authenticated and getattr(self.request.user, "is_administrator", False):
             return channel, user  # admin can act; user returned is current session user (if you need it)
         # else require the pending-login user (from session helper) to match
-        if user and channel.user_id == getattr(user, "id", None):
-            return channel, user
-        # Hide existence if mismatch
-        raise get_object_or_404(CommsChannel, id=-1)  # forces 404
+        if user:
+            if channel.user_id == getattr(user, "id", None):
+                return channel, user
+            else:
+                raise get_object_or_404(CommsChannel, id=-1)  # forces 404
+
+        return channel, None
 
     def _send_code_or_link(self, channel):
         """

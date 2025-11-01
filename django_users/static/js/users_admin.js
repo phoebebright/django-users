@@ -85,7 +85,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
         'csv' // Add the CSV export button
     ]
 
-    var csrftoken = $("[name=csrfmiddlewaretoken]").val();
+
     var dt = $(selection).DataTable( table_options );
 
     dt.on( 'draw', function () {
@@ -214,7 +214,7 @@ function show_user_table_paged(selection, page_length, columns, query, panes, co
         'csv' // Add the CSV export button
     ]
 
-    var csrftoken = $("[name=csrfmiddlewaretoken]").val();
+
     var dt = $(selection).DataTable( table_options );
 
     dt.on( 'draw', function () {
@@ -431,15 +431,19 @@ function set_keycloak_password(payload) {
 function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
-        url: USERS_API_URL + "email_exists/",
+        url: USERS_API_URL + "check_user/",
         data: {'email': email},
 
     })
         .done(function (data) {
-            callback(data);
+            if (callback) {
+                callback(data);
+            }
         })
         .fail(function (xhr, status, error) {
-            error_callback(error);
+            if (error_callback) {
+                error_callback(error);
+            }
         });
 }
 
