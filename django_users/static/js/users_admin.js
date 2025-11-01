@@ -431,7 +431,7 @@ function set_keycloak_password(payload) {
 function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
-        url: USERS_API_URL + "check_user/",
+        url: USERS_API_URL + "email_exists/",
         data: {'email': email},
 
     })

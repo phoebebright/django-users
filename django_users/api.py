@@ -36,7 +36,7 @@ from rest_framework.permissions import AllowAny
 
 from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
     SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer, \
-    OrganisationSerializer, UserShortSerializer
+    OrganisationSerializer, UserShortSerializer, EmailExistsSerializer
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
@@ -687,8 +687,6 @@ class CheckEmailInKeycloakPublic(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-class EmailExistsSerializer(Serializer):
-    email = EmailField(write_only=True)
 
 
 @api_view(["POST"])
