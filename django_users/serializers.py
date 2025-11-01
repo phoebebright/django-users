@@ -29,10 +29,10 @@ class DynamicModelSerializer(serializers.ModelSerializer):
             raise ValueError("Meta.model must be defined or dynamically resolved in the derived serializer.")
 
 
-class EmailExistsSerializer(DynamicModelSerializer):
+class EmailExistsSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = None
+        model = User
         fields = ('is_active',  'date_joined',)
 
     def to_representation(self, instance):
