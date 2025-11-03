@@ -52,7 +52,7 @@
             <div class="action_buttons mt-3">
                 <div class="d-grid gap-2 d-md-flex justify-content-md-between">
                     {% if next %}
-                        <a href="{{ next }}"  class="btn btn-primary w-25" >{% trans "Cancel" %}</a>
+                        <a href="{{ next }}"  class="btn btn-outline-secondary w-25" >{% trans "Cancel" %}</a>
                     {% endif %}
                     <button type="submit" class="btn btn-primary  w-25" >{% trans "Send" %}</button>
                 </div>
@@ -74,10 +74,12 @@
             <div id="preview" >       </div>
 
             <div class="action_buttons mt-3">
+        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
                 {% if next %}
-                    <a href="{{ next }}"  class="btn btn-primary w-25" >{% trans "Cancel" %}</a>
+                        <a href="{{ next }}"  class="btn btn-outline-secondary w-25" >{% trans "Cancel" %}</a>
                 {% endif %}
-                <button  class="btn btn-primary send  w-25" >{% trans "Send" %}</button>
+                    <button type="submit" class="btn btn-primary  w-25" >{% trans "Send" %}</button>
+                </div>
 
 
             </div>
