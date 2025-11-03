@@ -2163,12 +2163,12 @@ class VerifyMagicLinkView(View):
 class UserContactBrowse(UserCanAdministerMixin, TemplateView):
     '''this is just looking at the data peole gave when signing up - this should be transferred to the user profile '''
 
-    template_name = "admin/users/usercontact_list.html"
+    template_name = "django_users/admin/users/usercontact_list.html"
 
 
 class SendComms(UserCanAdministerMixin, GoNextTemplateMixin, TemplateView):
 
-    template_name = "admin/send_comms.html"
+    template_name = "django_users/admin/send_comms.html"
     event = None
 
     def get_context_data(self, **kwargs):
