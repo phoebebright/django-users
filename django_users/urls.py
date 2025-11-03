@@ -1,5 +1,5 @@
 # create your own urls.py in your users views app - this is a template
-from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import user_passes_test, login_required
 from django.urls import path, register_converter
 
 from .api import SendVerificationCode
@@ -9,8 +9,8 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
-    ManageUser,  SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
-    ManageUserProfile, VerifyMagicLinkView
+    ManageUser, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
+    ManageUserProfile, VerifyMagicLinkView, SendComms
 from .keycloak import logout_user_from_keycloak_and_django
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -105,7 +105,12 @@ urlpatterns = [
 
     path('contact_list/', SubscriptionDataFrameView.as_view(), name='user_contact_list'),
     path('dedupe_role/<str:role_ref>/', dedupe_role, name='dedupe_role'),
-    path(
-        "countries/", UserCountries.as_view(), name="user-countries"
-    ),
+    path("countries/", UserCountries.as_view(), name="user-countries"),
+
+    path('send_comms/<int:user_id>/', login_required()(SendComms.as_view()),
+         name='comms2user'),    # TODO: convert to keycloak id and uuid:pk
+    path('send_comms/<uuid:pk>/', login_required()(SendComms.as_view()),
+         name='comms2user'),
+    path('send_comms/<int:user_id>/<str:template>/', login_required()(SendComms.as_view()),
+         name='comms2user'), # TODO: convert to keycloak id and uuid:pk
 ]
