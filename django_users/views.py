@@ -2156,3 +2156,60 @@ class VerifyMagicLinkView(View):
         else:
             messages.success(request, _("Your email address has been verified."))
             return redirect(settings.LOGIN_URL)
+
+
+
+
+class UserContactBrowse(UserCanAdministerMixin, TemplateView):
+    '''this is just looking at the data peole gave when signing up - this should be transferred to the user profile '''
+
+    template_name = "admin/users/usercontact_list.html"
+
+
+class SendComms(UserCanAdministerMixin, GoNextTemplateMixin, TemplateView):
+
+    template_name = "admin/send_comms.html"
+    event = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        me = self.request.user
+
+        if 'pk' in self.kwargs:
+            user = User.objects.get(keycloak_id=self.kwargs['pk'])
+        elif 'user_id' in self.kwargs:
+            user = User.objects.get(pk=self.kwargs['user_id'])
+        context['recipient'] = user
+        context['recipient_email'] = context['recipient'].email
+
+        # context['templates'] = CommsTemplate.objects.all()
+        # hacking together template for now
+
+        template = kwargs.get('template', None)
+        context['subject'] = ""
+        context['message'] = ""
+        if template == 'invite':
+            context['subject'] = "Invitation to Skor.ie"
+            context['message'] = f'''Dear {user.first_name},\n\nYou have been signed up with Skor.ie by {me.name}.  Your temporary password is {user.activation_code}.  Please log in at {settings.SITE_URL}/login/ and change your password as soon as possible. \nIf this is a mistake please ignore this email and the account will be deleted after 1 week.\n\nBest wishes,\nSkor.ie
+            '''
+
+
+
+
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        recipient = request.POST.get('recipient', None)
+        recipient = User.objects.get(pk=recipient)
+        subject = request.POST.get('subject', None)
+        message = request.POST.get('message', None)
+
+        mail.send(
+            recipient.email,
+            settings.DEFAULT_FROM_EMAIL,
+            subject=subject,
+            message=message,
+        )
+
+        return HttpResponseRedirect(request.POST.get('next', "/"))

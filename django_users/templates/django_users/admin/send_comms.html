@@ -1,0 +1,101 @@
+{% extends "organiser/organiser_base.html" %}
+{% load static %}
+
+{% load i18n %}
+
+{% block title %}{% blocktrans %}Send eMails{% endblocktrans %}{% endblock %}
+
+{% block extra_head %}
+
+{% endblock %}
+
+{% block page_header %}
+    Send Message
+{% endblock %}
+
+{% block content %}
+
+
+    <div class="container-md">
+        <form id="send_comms" method="post">
+            {% csrf_token %}
+            {% if next %}
+                <input type="hidden" name="next" value="{{ next}}">
+            {% endif %}
+
+            {% if recipient %}
+                <p>Sending email to {{ recipient }} at {{ recipient.email }}</p>
+                <input type="hidden" name="recipient" value="{{ recipient.pk }}">
+                <input type="hidden" name="recipient_email" value="{{ recipient.email }}">
+            {% endif %}
+
+            {#        <h3>Choose Template:</h3>#}
+            {##}
+            {#        <div class="mb-3">#}
+            {#            <select name="template" id="template" class="form-select mt-3" aria-label="template" >#}
+            {#                {% for item in templates %}#}
+            {#                    <option  value="{{ item.pk }}">{{ item.name }} - {{ item.email}}</option>#}
+            {#                {% endfor %}#}
+            {##}
+            {#            </select>#}
+            {#        </div>#}
+
+            <h3>Customise Message:</h3>
+
+            <div class="mb-3">
+                <input class="form-control"  type="text" id="is_subject" name="subject" required placeholder="Subject..." value="{{ subject }}">
+
+                <textarea class="form-control mt-1" id="id_message" rows="10" name="message">{{ message }}</textarea>
+            </div>
+
+
+            <div class="action_buttons mt-3">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                    {% if next %}
+                        <a href="{{ next }}"  class="btn btn-primary w-25" >{% trans "Cancel" %}</a>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary  w-25" >{% trans "Send" %}</button>
+                </div>
+
+
+
+            </div>
+        </form>
+
+        <div id="msg" class="mb-3">
+
+        </div>
+        <div class="preview" class="mb-3" style="display:none;">
+            <h5>Subject</h5>
+            <div id="subject" class="mb-3">       </div>
+
+
+            <h5 >Preview</h5>
+            <div id="preview" >       </div>
+
+            <div class="action_buttons mt-3">
+                {% if next %}
+                    <a href="{{ next }}"  class="btn btn-primary w-25" >{% trans "Cancel" %}</a>
+                {% endif %}
+                <button  class="btn btn-primary send  w-25" >{% trans "Send" %}</button>
+
+
+            </div>
+        </div>
+
+
+    </div>
+
+{% endblock content %}
+
+{% block js %}
+
+
+    <script>
+        $("#loading_animation").slideDown();
+
+
+
+
+    </script>
+{% endblock %}
