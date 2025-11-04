@@ -738,6 +738,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         (USER_STATUS_SUBSCRIBED_LAPSED, "Subscription Lapsed"),
     )
 
+    ALLOWED_PROFILE_FIELDS = [
+        "city", "where_did_you_hear",
+    ]
+
     # deprecated - names being pushed to Person entity.  Requires fix in keycloak authentication
     first_name = models.CharField(_('first name'), max_length=30, null=True, blank=True, db_index=True)
     last_name = models.CharField(_('last name'), max_length=30, null=True, blank=True, db_index=True)
