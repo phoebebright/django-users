@@ -33,6 +33,8 @@ from rest_framework_api_key.permissions import HasAPIKey
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from rest_framework.permissions import AllowAny
+from rest_framework_datatables.filters import DatatablesFilterBackend
+from rest_framework_datatables.pagination import DatatablesPageNumberPagination
 
 from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
     SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer, \
@@ -235,10 +237,30 @@ class UserListViewset(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
-
 # deprecated - use UserListViewset directly
 class UserListViewsetBase(UserListViewset):
     pass
+
+class UserDatatablesPagination(DatatablesPageNumberPagination):
+    page_size = 100
+    page_size_query_param = 'length'   # DataTables sends `length`
+    max_page_size = 1000
+
+class PagedUserListViewset(viewsets.ReadOnlyModelViewSet):
+    """DataTables-ready list of users"""
+    permission_classes = (IsAuthenticated, IsAdministratorPermission)
+    queryset = User.objects.filter(is_active=True).select_related('person')
+    serializer_class = UserShortSerializer
+
+    # DataTables magic:
+    pagination_class = UserDatatablesPagination
+    filter_backends = [DatatablesFilterBackend]
+
+    # What can be searched / ordered from the client:
+    search_fields = ['username', 'email', 'person__first_name', 'person__last_name']
+    ordering_fields = ['username', 'email', 'date_joined', 'last_login', 'id']
+    ordering = ['-date_joined']  # default
+
 
 
 class SendOTP2User(UserCanAdministerMixin, APIView):

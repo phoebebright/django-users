@@ -8,13 +8,14 @@ from django.urls import path, include
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
     UserProfileUpdate, SetTemporaryPassword, toggle_role, CheckEmailInKeycloakPublic, CheckEmailInKeycloak, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
-    email_exists, SendVerificationCode, CheckUserPublic
+    email_exists, SendVerificationCode, CheckUserPublic, PagedUserListViewset
 from django_users.views import login_with_token
 
 # Use DRF's DefaultRouter, not django.db.router
 router = DefaultRouter()
 router.register(r'users', UserViewset, basename="userviewset")  # admins only
 router.register(r'userlist', UserListViewset, basename="userlistviewset")  # admins only
+router.register(r'userlist_paged', PagedUserListViewset, basename="paged_userlistviewset")  # admins only
 # router.register(r'email_exists', CheckEmail, basename='checkemail') . # think this was not used in the end - admins only - returns more info than basic email_exists
 router.register(r'users', UserViewset, basename="users")  # admins only
 router.register(r'comms_channel', CommsChannelViewSet, basename="commschannel")

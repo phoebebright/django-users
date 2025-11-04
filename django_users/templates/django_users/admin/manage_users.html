@@ -13,7 +13,7 @@
 
     <h1>{% trans "Manage Users" %}</h1>
 
-    <a href="{% url "users:add-user" %}" class="btn btn-primary">Add User</a>
+    <a href="{% url 'users:add-user' %}" class="btn btn-primary float-end">Add User</a>
     <div class="row  my-3">
         <div class="col">
 
@@ -53,10 +53,10 @@
     {{ DATATABLES_LOAD|safe}}
 
     {% if not USE_ASSETS %}
-        <script src="{% static "js/administrator.js" %}?v={{ API_VERSION }}">    </script>
-        <script src="{% static "js/users.js" %}?v={{ API_VERSION }}">    </script>
-        <script src="{% static "js/users_admin.js" %}?v={{ API_VERSION }}">    </script>
-        <script src="{% static "js/userbrowser.js" %}?v={{ API_VERSION }}">    </script>
+        <script src='{% static 'js/administrator.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static 'js/users.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static 'js/users_admin.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static 'js/userbrowser.js" %}?v={{ API_VERSION }}'>    </script>
 
     {% else %}
         <script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>

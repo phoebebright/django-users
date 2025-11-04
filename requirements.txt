@@ -5,6 +5,7 @@ nanoid
 qrcode
 djangorestframework
 djangorestframework-api-key
+djangorestframework-datatables
 python-jose
 git+https://github.com/phoebebright/django-docserve
 django_countries

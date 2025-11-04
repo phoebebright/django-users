@@ -156,38 +156,91 @@ function show_user_table_paged(selection, page_length, columns, query, panes, co
     }
 
 
-    var url = USERS_API_URL + "userlist/?"+query;
-    console.log(url);
-    var table_options = {
-        "language": {
-            "processing": "Loading data..."
-        },
-        pageLength: page_length,
-        stateSave: true,
-        responsive: {
-            details: false // so we can click rows
-        } ,
+    const url = USERS_API_URL + "userlist_paged/?"+query;
 
-        "ajax": {
-            url: url,
-            "dataSrc": function ( payload ) {
 
-                for ( var i=0; i<payload.length ; i++ ) {
-                    if (payload[i]['date_joined']) {
-                        payload[i]['date_joined'] = payload[i]['date_joined'].substring(0, 10);
-                    }
-                    if (payload[i]['last_login']) {
-                        payload[i]['last_login'] = payload[i]['last_login'].substring(0, 10);
-                    }
-                }
+const table_options = {
+  language: { processing: "Loading data..." },
+  pageLength: page_length,
+  stateSave: true,
+  responsive: { details: false },
+  serverSide: true,
+  processing: true,
 
-                return payload;
-            }
-        },
-        columns: columns,
-        colReorder: {order: col_reorder},
+  ajax: function (data, callback) {
+    // Map DT -> DRF
+    const page = Math.floor(data.start / data.length) + 1;
+    const page_size = data.length;
 
-    };
+    let ordering = null;
+    if (data.order && data.order.length) {
+      const colIdx = data.order[0].column;
+      const dir = data.order[0].dir; // 'asc'|'desc'
+      const colName = data.columns[colIdx].name || data.columns[colIdx].data;
+      if (colName) ordering = (dir === 'desc' ? '-' : '') + colName;
+    }
+
+    $.getJSON(url, {
+      page,
+      page_size,
+      search: data.search?.value || '',
+      ...(ordering ? { ordering } : {})
+    }, function (resp) {
+      const rows = (resp.results || []).map(r => ({
+        ...r,
+        date_joined: r.date_joined ? r.date_joined.substring(0, 10) : r.date_joined,
+        last_login:  r.last_login  ? r.last_login.substring(0, 10)  : r.last_login
+      }));
+
+      callback({
+        draw: data.draw,
+        recordsTotal: resp.count,
+        recordsFiltered: resp.count, // if server returns a filtered count, use it here
+        data: rows
+      });
+    });
+  },
+
+  columns: columns,
+  colReorder: { order: col_reorder },
+  select: true,
+  dom: 'BPlfrtip',
+  buttons: ['csv'],
+  searchPanes: getSearchPaneConfig(panes),
+};
+
+const dt = $(selection).DataTable(table_options);
+    //
+    // var table_options = {
+    //     "language": {
+    //         "processing": "Loading data..."
+    //     },
+    //     pageLength: page_length,
+    //     stateSave: true,
+    //     responsive: {
+    //         details: false // so we can click rows
+    //     } ,
+    //
+    //     "ajax": {
+    //         url: url,
+    //         "dataSrc": function ( payload ) {
+    //
+    //             for ( var i=0; i<payload.length ; i++ ) {
+    //                 if (payload[i]['date_joined']) {
+    //                     payload[i]['date_joined'] = payload[i]['date_joined'].substring(0, 10);
+    //                 }
+    //                 if (payload[i]['last_login']) {
+    //                     payload[i]['last_login'] = payload[i]['last_login'].substring(0, 10);
+    //                 }
+    //             }
+    //
+    //             return payload;
+    //         }
+    //     },
+    //     columns: columns,
+    //     colReorder: {order: col_reorder},
+    //
+    // };
 
     //     // can block panes, eg. if only a few entries, by settings panes to []
     // if (typeof panes != "undefined" && panes.length > 0) {
@@ -201,21 +254,21 @@ function show_user_table_paged(selection, page_length, columns, query, panes, co
     // }
 
     // Configure SearchPanes if panes are provided
-    const searchPaneConfig = getSearchPaneConfig(panes);
-    if (Object.keys(searchPaneConfig).length > 0) {
-        table_options['searchPanes'] = searchPaneConfig;
-
-    }
-
-    table_options['select'] = true;
-    table_options['dom'] = 'BPlfrtip';
-
-    table_options['buttons'] = [
-        'csv' // Add the CSV export button
-    ]
-
-
-    var dt = $(selection).DataTable( table_options );
+    // const searchPaneConfig = getSearchPaneConfig(panes);
+    // if (Object.keys(searchPaneConfig).length > 0) {
+    //     table_options['searchPanes'] = searchPaneConfig;
+    //
+    // }
+    //
+    // table_options['select'] = true;
+    // table_options['dom'] = 'BPlfrtip';
+    //
+    // table_options['buttons'] = [
+    //     'csv' // Add the CSV export button
+    // ]
+    //
+    //
+    // var dt = $(selection).DataTable( table_options );
 
     dt.on( 'draw', function () {
         let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
