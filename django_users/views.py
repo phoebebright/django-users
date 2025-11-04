@@ -226,7 +226,7 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
         # add contact note
         notify = getattr(settings, "NOTIFY_NEW_USER_EMAILS", False)
-        UserContact.add(user=user, method="Subscribe & Interest Form", notes=json.dumps(form.cleaned_data),
+        UserContact.add(user=user, method="Subscribe & Interest Form",
                         data=form.cleaned_data, send_mail=notify)
 
         return super().form_valid(form)
@@ -332,8 +332,8 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         # If user has not completed profile - bounce them there first
         # but only if we have the page set
         goto = getattr(settings, 'CONFIRM_USER_PAGE', None)
-        user = request.user
-        if goto and user.status < user.USER_STATUS_CONFIRMED:
+        self.user = request.user
+        if goto and self.user.status < self.user.USER_STATUS_CONFIRMED:
             # redirect early if user not allowed
             return redirect(reverse(goto)+"?next="+reverse("users:user-profile"))  # or any URL name/path
 
@@ -345,11 +345,7 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         user = self.user
         if user.is_authenticated:
             initial['country'] = user.country
-            initial['county'] = user.profile['county'] if 'county' in user.profile else ''
-            initial['level'] = user.profile['level'] if 'level' in user.profile else ''
-            initial['where_did_you_hear'] = user.profile[
-                'where_did_you_hear'] if 'where_did_you_hear' in user.profile else ''
-
+            initial['city'] = user.profile['city'] if 'city' in user.profile else ''
         return initial
 
     def get_context_data(self, **kwargs):
@@ -369,9 +365,8 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         form = self.get_form()
         if form.is_valid():
             user = self.user
-            # user.country = form.cleaned_data['country']
-            user.profile['county'] = form.cleaned_data['county']
-            user.profile['level'] = form.cleaned_data['level']
+            user.country = form.cleaned_data['country']
+            user.profile['city'] = form.cleaned_data['city']
 
             user.save()
 
