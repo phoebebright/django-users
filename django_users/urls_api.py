@@ -35,9 +35,9 @@ urlpatterns = [
     # public with throttle
     path('set_temp_password/', SetTemporaryPassword.as_view(), name='set_temp_password'),
     path('toggle_role/', toggle_role, name="toggle_role"),
-    path('userprofile/<str:username>/', UserProfileUpdate.as_view(), name="userprofile_update"),
-    path('userprofile/<uuid:pk>/', UserProfileUpdate.as_view(), name="userprofile_update"),
 
+    path('userprofile/<uuid:pk>/', UserProfileUpdate.as_view({'patch': 'update'}), name="userprofile_update"),
+    path('userprofile/<str:username>/', UserProfileUpdate.as_view({'patch': 'update'}), name="userprofile_update"),
     path('comms_otp/', SendOTP2User.as_view(), name='comms_otp'),
     path('create_user/', CreateUser.as_view(), name='create-user-api'),
     path('user_countries/', UserCountry.as_view(), name='user-country-api'),

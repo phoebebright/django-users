@@ -205,7 +205,7 @@ class TellUsAbout(LoginRequiredMixin, FormView):
         if settings.USE_NEWSLETTER:
             Newsletter = apps.get_model('skorie_news', 'Newsletter')
             context['subcribed2newsletter'] = Newsletter.is_subscribed_to_newsletter(self.request.user)
-
+        context['next'] = "/"
         return context
 
     def form_valid(self, form):

@@ -3,7 +3,7 @@ import random
 import string
 import uuid
 
-from django.db.models import Q
+from django.db.models import Q, prefetch_related_objects
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
@@ -36,7 +36,7 @@ from rest_framework.permissions import AllowAny
 
 from .serializers import UserSerializer, RoleSerializer, PersonSerializer, SubscriptionStatusSerializer, \
     SubscriptionUpdateSerializer, SubscriptionPreferencesSerializer, SubscriptionHistorySerializer, \
-    OrganisationSerializer, UserShortSerializer, EmailExistsSerializer
+    OrganisationSerializer, UserShortSerializer, EmailExistsSerializer, UserProfileSerializer
 from .tools.auth import DeviceKeyAuthentication
 from .tools.exceptions import ChangePasswordException
 from .tools.permission_mixins import UserCanAdministerMixin, IsAdministrator
@@ -341,49 +341,53 @@ def resend_activation(request):
     user.send_activation()
     return Response("OK")
 
-class UserProfileUpdate(APIView):
+
+
+
+class UserProfileUpdate(viewsets.ModelViewSet):
     '''update user profile - only the user can update their own profile'''
 
-    authentication_classes = (SessionAuthentication, )
-    serializer_class = UserSerializer
+    queryset = User.objects.none()
+    serializer_class = UserProfileSerializer
+    http_method_names = ['patch', ]
+    filterset_fields = ('username', 'keycloak_id')
 
 
-
-
-
-class UserProfileUpdate(APIView):
-    '''update user profile - only the user can update their own profile'''
-
-    authentication_classes = (SessionAuthentication,)
-    serializer_class = UserSerializer
 
     def get_object(self,  pk=None, username=None):
         if pk:
-            return User.objects.get(keycloak_id=pk)
+            user = User.objects.get(keycloak_id=pk)
         elif username:
-            return User.objects.get(username=username)
+            user = User.objects.get(username=username)
         else:
             raise ValueError("Must supply username or pk")
 
-
-    def patch(self, request, username=None, pk=None):
-        '''update user profile - only the user can update their own profile'''
-
-
-        user = self.get_object(pk=pk,username=username)
-
-        # can only edit your own
-        if user != request.user:
+        # can change own profile or admin can change
+        if user == self.request.user or self.request.user.is_administrator:
+            return user
+        else:
             raise PermissionDenied()
 
-        # remove username and id
-        serializer = self.get_serializer_class(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
 
-            return Response(serializer.data, status=status.HTTP_206_PARTIAL_CONTENT)
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object(**kwargs)
 
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        queryset = self.filter_queryset(self.get_queryset())
+        if queryset._prefetch_related_lookups:
+            # If 'prefetch_related' has been applied to a queryset, we need to
+            # forcibly invalidate the prefetch cache on the instance,
+            # and then re-prefetch related objects
+            instance._prefetched_objects_cache = {}
+            prefetch_related_objects([instance], *queryset._prefetch_related_lookups)
+
+        return Response(serializer.data)
+
+
 
 
 # deprecated - use UserProfileUpdate directly

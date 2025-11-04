@@ -142,6 +142,12 @@ class UserSerializer(UserShortSerializer):
 
         return ret
 
+
+class UserProfileSerializer(UserSerializer):
+    class Meta:
+        model = User
+        fields = ('id',  'country', 'profile')
+
 class UserSerializerBase(UserSerializer):
     pass
 
