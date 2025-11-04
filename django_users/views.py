@@ -193,7 +193,7 @@ class AddUser(generic.CreateView):
 
 
 class SubscribeView(LoginRequiredMixin, FormView):
-    template_name = "django_users/subscribe.html"
+    template_name = "django_users/user_about.html"
     form_class = SubscribeForm
     success_url = '/'
 

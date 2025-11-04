@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction, IntegrityError
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import JsonResponse, HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -341,21 +341,35 @@ def resend_activation(request):
     user.send_activation()
     return Response("OK")
 
+class UserProfileUpdate(APIView):
+    '''update user profile - only the user can update their own profile'''
+
+    authentication_classes = (SessionAuthentication, )
+    serializer_class = UserSerializer
+
+
+
+
 
 class UserProfileUpdate(APIView):
     '''update user profile - only the user can update their own profile'''
 
     authentication_classes = (SessionAuthentication,)
+    serializer_class = UserSerializer
 
-    def get_serializer_class(self):
-        if not hasattr(self, 'serializer_class') or self.serializer_class is None:
-            raise NotImplementedError("Define `serializer_class` in the child class.")
-        return self.serializer_class
+    def get_object(self,  pk=None, username=None):
+        if pk:
+            return User.objects.get(keycloak_id=pk)
+        elif username:
+            return User.objects.get(username=username)
+        else:
+            raise ValueError("Must supply username or pk")
 
-    def patch(self, request, username):
+    def patch(self, request, username=None, pk=None):
+        '''update user profile - only the user can update their own profile'''
 
-        User = get_user_model()
-        user = User.objects.get(username=username)
+
+        user = self.get_object(pk=pk,username=username)
 
         # can only edit your own
         if user != request.user:
