@@ -17,6 +17,25 @@ from web.models import EventRole
 User = get_user_model()
 
 
+def deep_merge_override(dst, src):
+    """
+    Recursively merge `src` into `dst`.
+    - dict vs dict: recurse per key
+    - otherwise (scalars/lists/type mismatch): src overwrites dst
+    Returns a NEW dict; does not mutate inputs.
+    """
+    if not isinstance(dst, dict) or not isinstance(src, dict):
+        # Any non-dict replaces the old value entirely
+        return src
+
+    out = {**dst}
+    for k, v in src.items():
+        if k in out:
+            out[k] = deep_merge_override(out[k], v)
+        else:
+            out[k] = v
+    return out
+
 
 class DynamicModelSerializer(serializers.ModelSerializer):
     """
@@ -83,6 +102,28 @@ class UserSerializer(UserShortSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'country', 'date_joined', 'last_login', 'is_active',
         'profile','person')
 
+
+    def validate_profile(self, value):
+        # Optional: enforce an allowlist to avoid junk keys
+        allowed = getattr(self.Meta.model, 'ALLOWED_PROFILE_FIELDS', None)
+        if allowed:
+            invalid = set(value.keys()) - set(allowed)
+            if invalid:
+                raise serializers.ValidationError(
+                    f"Invalid profile fields: {', '.join(sorted(invalid))}"
+                )
+        return value
+
+    def update(self, instance, validated_data):
+        incoming_profile = validated_data.pop('profile', None)
+
+        if incoming_profile is not None:
+            current = instance.profile or {}
+            # Deep merge with overwrite-on-conflict (but not replacing whole blob)
+            instance.profile = deep_merge_override(current, incoming_profile)
+
+        # Update non-profile fields normally
+        return super().update(instance, validated_data)
 
     def to_representation(self, instance):
 
