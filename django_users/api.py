@@ -257,7 +257,7 @@ class PagedUserListViewset(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DatatablesFilterBackend]
 
     # What can be searched / ordered from the client:
-    search_fields = ['username', 'email', 'person__first_name', 'person__last_name']
+    search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['username', 'email', 'date_joined', 'last_login', 'id']
     ordering = ['-date_joined']  # default
 
