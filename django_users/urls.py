@@ -4,13 +4,13 @@ from django.urls import path, register_converter
 
 from .api import SendVerificationCode
 from .ref import EventRefConverter
-from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
+from .views import ProblemSignup, NewUsers, UserMigrationView, UserProfileView, \
     RegisterView, AddCommsChannelView, VerifyChannelView, ManageCommsChannelsView, LoginView, \
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
     ManageUser, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
-    ManageUserProfile, VerifyMagicLinkView, SendComms
+    ManageUserProfile, VerifyMagicLinkView, SendComms, TellUsAbout
 from .keycloak import logout_user_from_keycloak_and_django
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -58,7 +58,7 @@ urlpatterns = [
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<uuid:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
-    path('tell_us_about/', SubscribeView.as_view(), name="tell_us_about"),
+    path('tell_us_about/', TellUsAbout.as_view(), name="tell_us_about"),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
 
     path('problem_register/', ProblemSignup.as_view(), name="problem_register"),

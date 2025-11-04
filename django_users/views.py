@@ -192,7 +192,7 @@ class AddUser(generic.CreateView):
         return super().form_valid(form)
 
 
-class SubscribeView(LoginRequiredMixin, FormView):
+class TellUsAbout(LoginRequiredMixin, FormView):
     template_name = "django_users/user_about.html"
     form_class = SubscribeForm
     success_url = '/'
@@ -231,6 +231,9 @@ class SubscribeView(LoginRequiredMixin, FormView):
 
         return super().form_valid(form)
 
+# deprecated - use TellUsAbout
+class SubscribeView(TellUsAbout):
+    pass
 
 # deprecated - don't use simple subscribe/unsubscribe field
 @never_cache
