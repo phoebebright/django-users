@@ -53,10 +53,10 @@
     {{ DATATABLES_LOAD|safe}}
 
     {% if not USE_ASSETS %}
-        <script src='{% static 'js/administrator.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static 'js/users.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static 'js/users_admin.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static 'js/userbrowser.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static "js/administrator.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static "js/users.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static "js/users_admin.js" %}?v={{ API_VERSION }}'>    </script>
+        <script src='{% static "js/userbrowser.js" %}?v={{ API_VERSION }}'>    </script>
 
     {% else %}
         <script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
