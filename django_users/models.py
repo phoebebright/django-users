@@ -509,11 +509,16 @@ class VerificationCodeBase(models.Model):
 
     # ---------- Sending
 
-    def send_verification(self, context=None, purpose=None) -> bool:
+    def send_verification(self, context={}, purpose=None) -> bool:
         """
         Sends either a code or link depending on which fields are set.
         optionally include context to pass through to template
         """
+
+        context['LOGIN_TERM'] = settings.LOGIN_TERM
+        context['REGISTER_TERM'] = settings.REGISTER_TERM
+
+
         if self.channel.channel_type == 'email':
             # Prefer magic-link if token_hash present
             if self.token_hash:

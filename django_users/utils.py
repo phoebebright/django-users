@@ -104,7 +104,7 @@ def send_email_magic_login_link(verificationcode, context={}):
     else:
         to_email = verificationcode.channel.value
 
-    context['reset_password_url'] = settings.SITE_URL + reverse_lazy('users:change_password') + '?email=' + urlencode(verificationcode.channel.value)
+    context['password_reset_link'] = settings.SITE_URL + reverse_lazy('users:change_password') + '?email=' + urlencode({'email': verificationcode.channel.value})
 
     mail = get_mail_class()
     mail.send(
