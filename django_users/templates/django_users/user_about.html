@@ -1,4 +1,4 @@
-{% extends 'competitor/competitor_base.html' %}
+{% extends "django_users/users_narrow_base.html" %}
 {% load i18n %}
 {% load static %}
 {% load bootstrap5 %}
@@ -95,25 +95,24 @@
 <script src="{% static "js/jquery.validate.js" %}"></script>
 <script>
 
-    $(document).on("click", '#submit_profile', function() {
+        $(document).on("click", '#submit_profile', function(e) {
+
+  const form = $('#about_form');
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    e.preventDefault();
+    return false;
+  }
+
         update_profile("{{ user.keycloak_id }}");
         document.location.href = "{{ next }}";
-        return false;
+
     });
 
     $(document).on("change", '.form-control', function() {
         update_profile("{{ user.keycloak_id }}");
     });
 
-    // DOCUMENTATION: https://jqueryvalidation.org/
-    $("form").validate({
-        rules: {
-            email: {
-                required: true,
-                email: true
-            },
-        }
-    });
 
 
     function update_profile(user_pk) {
