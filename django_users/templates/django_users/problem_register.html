@@ -302,7 +302,7 @@
 
     $(document).on('click', '#resend-btn', function () {
         const email = emailInput.val();
-
+$("#resend-btn").html("Resending...").prop("disabled", true);
 
         $.ajax({
             url: '{% url "usersapi:resend_verify_code" %}',
@@ -326,7 +326,7 @@
                     const loc = xhr.getResponseHeader('Location');
                     if (loc) return window.location.assign(loc);
 
-                    alert('Verification email sent, but no redirect information was provided.');
+                    $("#resend-btn").html("Verification email resent").prop("disabled", true);
                 }
             },
             error: function (xhr) {
