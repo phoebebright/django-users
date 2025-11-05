@@ -74,11 +74,11 @@
 {% endblock %}
 
 {% block js %}
-    <script src="{% static 'js/users.js' %}"></script>
+<script src="{% static 'js/users.js' %}"></script>
 <script>
 
-            let emailInput = $('#entered_email');
-        let submitBtn = $('#submitBtn');
+    let emailInput = $('#entered_email');
+    let submitBtn = $('#submitBtn');
     const verify_channel_url = "{% url 'users:verify_channel' 0 %}";
 
     $(document).ready(function () {
@@ -222,11 +222,11 @@
         check_user_exists(email,
             function(d) {
 
-                                $("#result").slideUp();
-                                $("#verify_how").slideUp();
-                                $(".login_form").slideUp();
-                                $('#submitBtn').slideUp();
-                                $("#apiResponse").slideUp();
+                $("#result").slideUp();
+                $("#verify_how").slideUp();
+                $(".login_form").slideUp();
+                $('#submitBtn').slideUp();
+                $("#apiResponse").slideUp();
 
                 const keycloak_id = $('#keycloak_id').val();
                 $("#user_id").val(d.user_id);
@@ -256,7 +256,7 @@
 
                 const encoded_email = encodeURIComponent(email);
                 if (d.is_active) {
-                    $('#submitBtn').slideUp();
+
                     let link = "{{PASSWORD_RESET}}?email=" + encoded_email;
                     $('#result').html(`
   <div class="alert alert-success" role="alert">
@@ -266,13 +266,14 @@
     <a class="btn btn-secondary" href="${link}">Forgot Password?</a>
     <a class="btn btn-primary" href="{% url LOGIN_URL %}?email=${encoded_email}">{{LOGIN_TERM}}</a>
   </div>
-`);
+`).slideDown();
                     $("#id_email").val(email);
                     $("#id_password").focus();
+                    $("#submitBtn").slideDown();
                     $(".login_form").slideDown();
 
                 } else {
-                    $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified.</div>');
+                    $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified.</div>').slideDown();
                     $("#verify_how").slideDown();
 
                 }
@@ -281,14 +282,14 @@
             },
             function(error){
 
-                          $("#result").slideUp();
-                                $("#verify_how").slideUp();
-                                $(".login_form").slideUp();
-                                $('#submitBtn').slideUp();
-                                $("#apiResponse").slideUp();
+                $("#result").slideUp();
+                $("#verify_how").slideUp();
+                $(".login_form").slideUp();
+                $('#submitBtn').slideUp();
+                $("#apiResponse").slideUp();
 
                 // If there's an error, show the error message
-                $('#result').html('<div class="alert alert-warning" role="alert">'+error+'</div>');
+                $('#result').html('<div class="alert alert-warning" role="alert">'+error+'</div>').slideDown();
             });
 
     });
