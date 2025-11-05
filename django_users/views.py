@@ -336,13 +336,13 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         # but only if we have the page set
         self.user = request.user
 
-        goto = getattr(settings, 'CONFIRM_USER_PAGE', "users:tell_us_about")
+        goto = reverse(getattr(settings, 'CONFIRM_USER_PAGE', "users:tell_us_about"))
         if not self.user.is_authenticated:
-            return HttpResponseRedirect(f"{settings.LOGIN_URL}?next={goto}")
+            return HttpResponseRedirect(f"{reverse_lazy(settings.LOGIN_URL)}?next={goto}")
 
         if goto and self.user.status < self.user.USER_STATUS_CONFIRMED:
             # redirect early if user not allowed
-            return redirect(reverse(goto)+"?next="+reverse("users:user-profile"))  # or any URL name/path
+            return redirect(f"{goto}?next={reverse_lazy('users:user-profile')}")  # or any URL name/path
 
         # otherwise, continue normally
         return super().dispatch(request, *args, **kwargs)
