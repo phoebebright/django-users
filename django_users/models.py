@@ -416,6 +416,11 @@ class VerificationCodeBase(models.Model):
                      'magic_link': obj.magic_link_url(raw_token)}
 
     @classmethod
+    def create_verification_code(cls, user, channel, purpose='forgot_password', ttl_minutes=60):
+        obj, info = cls._create_code_row(user, channel, purpose, ttl_minutes)
+        return obj
+
+    @classmethod
     def create_for_code(cls, user, channel, purpose="email_verify", ttl_minutes=None):
         ttl = ttl_minutes or getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
         # Two-step with retry handles race: another request might slip in between consume and create.
