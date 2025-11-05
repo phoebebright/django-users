@@ -26,7 +26,7 @@ from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
-from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED, HTTP_404_NOT_FOUND
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
@@ -736,14 +736,29 @@ class CheckEmailInKeycloakPublic(APIView):
 @permission_classes([AllowAny])
 @throttle_classes([CheckEmailThrottle])
 def email_exists(request):
-    ser = EmailExistsSerializer(data=request.data)
-    ser.is_valid(raise_exception=True)
 
-    email = ser.validated_data["email"]
-    User = get_user_model()
-    exists = User.objects.filter(email__iexact=email).exists()
-    return Response({"exists": exists}, status=status.HTTP_200_OK)
+    try:
+        email = normalise_email(request.POST.get('email'))
+    except Exception as e:
+        logger.warning(f"Call to email exists with bad email {request.POST.get('email')} {str(e)}")  # eg. bad domain
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
+    if not email:
+        logger.warning(f"Call to email exists with email {request.data['email']} that does not validate")
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        logger.warning(f"Call to email exists with email {email} not found")
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.warning(f"Call to email exists with email {email} {str(e)}")
+        return Response(status=status.HTTP_503_SERVER_ERROR)
+    else:
+        return Response({'active': user.is_active}, status=status.HTTP_200_OK)
+
+    return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class CheckEmail(viewsets.ReadOnlyModelViewSet):
     '''

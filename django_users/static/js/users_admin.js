@@ -433,7 +433,7 @@ function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
         url: USERS_API_URL + "email_exists/",
-        data: {'email': email},
+        data: {'email': email.toLowerCase()},
 
     })
         .done(function (data) {
@@ -443,7 +443,7 @@ function check_user_exists(email, callback, error_callback) {
         })
         .fail(function (xhr, status, error) {
             if (error_callback) {
-                error_callback(error);
+                error_callback("Invalid email");
             }
         });
 }

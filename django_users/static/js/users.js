@@ -240,9 +240,13 @@ function check_user_exists(email, callback, error_callback) {
 
     })
         .done(function (data) {
-            callback(data);
+            if (callback) {
+                callback(data);
+            }
         })
         .fail(function (xhr, status, error) {
-            error_callback(error);
+            if (error_callback) {
+                error_callback("Invalid email");
+            }
         });
 }

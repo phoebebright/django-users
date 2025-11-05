@@ -286,18 +286,22 @@ function set_keycloak_password(payload) {
 
 
 
-function check_user_exists(email, callback) {
+function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
         url: USERS_API_URL + "email_exists/",
-        data: {'email': email},
+        data: {'email': email.toLowerCase()},
 
     })
         .done(function (data) {
-            callback(data);
+            if (callback) {
+                callback(data);
+            }
         })
         .fail(function (xhr, status, error) {
-            console.log('failed' + status)
+            if (error_callback) {
+                error_callback("Invalid email");
+            }
         });
 }
 

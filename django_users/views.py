@@ -404,10 +404,14 @@ class ProblemSignup(TemplateView):
     template_name = "django_users/problem_register.html"
     verified = False
 
+    def get(self, request, *args, **kwargs):
+
+        if request.user.is_authenticated:
+            messages.info(request, "You are already signed up and logged in")
+            return HttpResponseRedirect(reverse('users:user-profile'))
+        return super().get(request, *args, **kwargs)
+
     def get_template_names(self):
-        if self.request.user.is_authenticated and self.request.user.is_administrator:
-            return "django_users/admin/problem_register_admin.html"
-        else:
             return "django_users/problem_register.html"
 
     def get_context_data(self, **kwargs):
