@@ -219,8 +219,14 @@
         const email = emailInput.val();
         $('#apiError').html("").hide();
         $('#apiResponse').html("").hide();
-        check_user_exists(email, function(d) {
+        check_user_exists(email,
+            function(d) {
 
+                                $("#result").slideUp();
+                                $("#verify_how").slideUp();
+                                $(".login_form").slideUp();
+                                $('#submitBtn').slideUp();
+                                $("#apiResponse").slideUp();
 
                 const keycloak_id = $('#keycloak_id').val();
                 $("#user_id").val(d.user_id);
@@ -264,6 +270,7 @@
                     $("#id_email").val(email);
                     $("#id_password").focus();
                     $(".login_form").slideDown();
+
                 } else {
                     $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified.</div>');
                     $("#verify_how").slideDown();
@@ -273,9 +280,15 @@
 
             },
             function(error){
+
+                          $("#result").slideUp();
+                                $("#verify_how").slideUp();
+                                $(".login_form").slideUp();
+                                $('#submitBtn').slideUp();
+                                $("#apiResponse").slideUp();
+
                 // If there's an error, show the error message
-                $('#apiError').html(error).slideDown();
-                $('#apiResponse').hide();
+                $('#result').html('<div class="alert alert-warning" role="alert">'+error+'</div>');
             });
 
     });
