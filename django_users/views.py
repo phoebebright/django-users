@@ -1180,22 +1180,17 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             else:
                 self.channel = channel
                 self.request.session['forgot_channel'] = channel_id
-                vc = VerificationCode.create_verification_code(user, channel)
-                vc.send_verification_code()
+
+                vc, context = VerificationCode.create_for_code(
+                    user=user, channel=channel, purpose="forgot_password"
+                )
+
+                sent = vc.send_verification(context)
+                context["sent"] = bool(sent)
+
                 self.request.session['verification_code'] = vc.code
                 self.set_step(3)  # Move to Step 3
 
-            # channel = CommsChannel.objects.filter(id=channel_id, verified_at__isnull=False).first()
-            # if channel:
-            #     self.channel = channel
-            #     self.request.session['forgot_channel'] = channel_id  # Store channel in session
-            #     vc = VerificationCode.create_verification_code(channel)
-            #     vc.send_verification_code()
-            #     self.request.session['verification_code'] = vc.code
-            #     self.set_step(3)  # Move to Step 3
-            # else:
-            #     form.add_error('channel', _('Invalid or unverified channel selected.'))
-            #     return self.form_invalid(form)
 
         elif step == 3:
             # Step 3: Verify the code
