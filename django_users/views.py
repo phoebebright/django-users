@@ -570,7 +570,7 @@ class UserMigrationView(View):
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
             messages.error(self.request, "Authentication failed. Please check your credentials.")
-            return redirect("/")
+            return redirect(LOGIN_URL)
 
 
 def send_sms(recipient_user, message, user=None):
@@ -1000,6 +1000,30 @@ class VerifyChannelView(FormView):
         messages.error(request, _('Invalid or expired verification code.'))
         return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
 
+class VerifyForgotPasswordLinkView(View):
+    def get(self, request):
+        token = request.GET.get("t")
+        next_url = reverse("users:forgot_password")  # route to your stepper page
+
+        if not token:
+            messages.error(request, "Missing token.")
+            return redirect(next_url)
+
+        VerificationCode = apps.get_model('users', 'VerificationCode')
+        vc = VerificationCode.verify_token(raw_token=token, purpose="forgot_password")
+        if not vc:
+            messages.error(request, "Invalid or expired link.")
+            return redirect(next_url)
+
+        # success: remember which email/channel this flow is for
+        request.session[ForgotPassword.SK_EMAIL] = vc.user.email
+        request.session[ForgotPassword.SK_CHANNEL] = str(vc.channel_id)
+        request.session[ForgotPassword.SK_VC_PK] = str(vc.pk)
+        request.session[ForgotPassword.SK_VERIFIED] = True
+        request.session[ForgotPassword.SK_STEP] = 4  # jump to password entry
+
+        messages.success(request, "Your email has been verified. Please set a new password.")
+        return redirect(next_url)
 
 @method_decorator(never_cache, name='dispatch')
 class ManageCommsChannelsView(View):
@@ -1078,177 +1102,231 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     user = None
     channel = None
 
+    # session keys we use
+    SK_STEP = "forgot_password_step"
+    SK_EMAIL = "forgot_email"
+    SK_CHANNEL = "forgot_channel"         # channel id (int/uuid)
+    SK_VC_PK = "forgot_vc_pk"             # verification code pk (uuid)
+    SK_VERIFIED = "forgot_verified"       # bool set by code or magic link
+
     def dispatch(self, request, *args, **kwargs):
         # Ensure user is redirected if already logged in
         if request.user.is_authenticated:
             return redirect(self.success_url)
         return super().dispatch(request, *args, **kwargs)
 
+    # ---------- step helpers
+
+    def get_step(self):
+        return int(self.request.session.get(self.SK_STEP, 1))
+
+    def set_step(self, step):
+        self.request.session[self.SK_STEP] = int(step)
+
+    def reset_flow(self):
+        for k in (self.SK_STEP, self.SK_EMAIL, self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
+            self.request.session.pop(k, None)
+
+    def _models(self):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        VerificationCode = apps.get_model('users', 'VerificationCode')
+        return CommsChannel, VerificationCode
+
+    # ---------- DRF-ish plumbing
+
+    def get(self, request, *args, **kwargs):
+        # Reset flow on GET land (same as your current behavior)
+        self.reset_flow()
+        return super().get(request, *args, **kwargs)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         step = self.get_step()
         kwargs['step'] = step  # Pass the current step to the form
 
-        # Retrieve session values and set them as initial values in the form
+        # set initial values from session
         if step == 1:
-            email = self.request.GET.get('email', self.request.POST.get('email', None))
+            email = self.request.GET.get('email') or self.request.POST.get('email')
             if email:
-                kwargs['initial'] = {
-                    'email': normalise_email(email),
-                }
-        elif step > 1:
-            email = normalise_email(self.request.session.get('forgot_email'))
-            User = get_user_model()
-            self.user = User.objects.filter(email=email).first()
-            if self.user:
-                kwargs['user'] = self.user  # Pass the user to populate channels in step 2
+                kwargs['initial'] = {'email': normalise_email(email)}
+        else:
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, "")) if self.request.session.get(self.SK_EMAIL) else ""
+            kwargs.setdefault('initial', {})
+            kwargs['initial']['email'] = email
 
-            kwargs['initial'] = {
-                'email': email,
-            }
-        if step > 2:
-            kwargs['initial']['channel'] = self.request.session.get('forgot_channel')
+            if step > 2 and self.request.session.get(self.SK_CHANNEL):
+                kwargs['initial']['channel'] = self.request.session.get(self.SK_CHANNEL)
+
+            # You can add 'user' so the form can list channels
+            if email:
+
+                self.user = User.objects.filter(email=email).first()
+                if self.user:
+                    kwargs['user'] = self.user
 
         return kwargs
 
-    def get_step(self):
-        # Determine current step based on session
-        return self.request.session.get('forgot_password_step', 1)
-
-    def set_step(self, step):
-        # Set the current step in session
-        self.request.session['forgot_password_step'] = step
-
-    def get(self, request, *args, **kwargs):
-        # Reset the process if the user starts over
-        self.request.session.pop('forgot_password_step', None)
-        self.request.session.pop('forgot_email', None)
-        self.request.session.pop('verification_code', None)
-        return super().get(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
-
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['step'] = self.get_step()  # Add the current step to the context
-        context['user'] = self.user
-        context['channel'] = self.channel
-        context['verification_code'] = self.request.session.get('verification_code')
-        return context
+        ctx = super().get_context_data(**kwargs)
+        ctx['step'] = self.get_step()
+        ctx['verification_sent'] = bool(self.request.session.get(self.SK_VC_PK))
+        ctx['magic_link'] = bool(settings.USE_MAGIC_LINK_FOR_FORGOT)
+        ctx['user'] = self.user
+        return ctx
+
+    # ---------- main stepper
 
     def form_valid(self, form):
         step = self.get_step()
-        email = normalise_email(form.cleaned_data['email'])
-        User = get_user_model()
-        # we are using the email field to login so need to use that to find the user
-        user = User.objects.filter(email=email).first()
 
         if step == 1:
-            # Step 1: Check if email exists and save it in session
+            # Step 1: verify email exists (no enumeration wording leaked to UI)
             email = normalise_email(form.cleaned_data['email'])
+            user = User.objects.filter(email=email).first()
 
-            if user and not user.is_active and user.last_login:
-                # TODO: need to differentiate between not is_active because not verified email and was active but is not now.
-                form.add_error('email',
-                               _(f'This email does not have an active account.  Please contact the system administrators.'))
-                # TODO: need to provide a link
+            if not user:
+                form.add_error('email', f'Email not found. Please {REGISTER_TERM}.')
                 return self.form_invalid(form)
-            elif user and not user.is_active:
-                # user has not yet verified email but this will cover it
-                self.request.session['forgot_email'] = email
-                self.set_step(2)  # Move to Step 2
-            elif user:
-                self.request.session['forgot_email'] = email
-                self.set_step(2)  # Move to Step 2
-            else:
-                form.add_error('email', _(f'Email not found. Please {settings.REGISTER_TERM}.'))
+
+            if not user.is_active and user.last_login:
+                # previously active but now disabled — escalate
+                form.add_error('email', 'This email does not have an active account. Please contact the administrators.')
                 return self.form_invalid(form)
+
+            # Persist email and continue
+            self.request.session[self.SK_EMAIL] = email
+            self.set_step(2)
 
         elif step == 2:
-            # Step 2: Send a verification code to selected channel
+            # Step 2: choose channel and send code or magic link
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            user = User.objects.filter(email=email).first()
+            if not user:
+                form.add_error('email', 'Email not found.')
+                return self.form_invalid(form)
+
             channel_id = form.cleaned_data['channel']
-            CommsChannel = apps.get_model('users', 'CommsChannel')
-            VerificationCode = apps.get_model('users', 'VerificationCode')
+            CommsChannel, VerificationCode = self._models()
 
-            # going to allow unverified channels
             try:
-                channel = CommsChannel.objects.get(id=channel_id)
-            except Exception as e:
-                logger.warning(f"Channel {channel_id} not found: {e}")
-                form.add_error('channel', _('Invalid or unverified channel selected.'))
+                channel = CommsChannel.objects.get(id=channel_id, user=user)
+            except CommsChannel.DoesNotExist:
+                form.add_error('channel', 'Invalid or unverified channel selected.')
+                return self.form_invalid(form)
+
+            # Store channel id
+            self.request.session[self.SK_CHANNEL] = str(channel_id)
+
+            # Create verification (purpose = forgot_password). Preserve history by consuming actives internally.
+            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+                vc, context = VerificationCode.create_for_magic_link(user=user, channel=channel, purpose="forgot_password")
             else:
-                self.channel = channel
-                self.request.session['forgot_channel'] = channel_id
+                vc, context = VerificationCode.create_for_code(user=user, channel=channel, purpose="forgot_password")
 
-                vc, context = VerificationCode.create_for_code(
-                    user=user, channel=channel, purpose="forgot_password"
-                )
+            # Send (your model uses vc.send_verification(context))
+            sent = vc.send_verification(context)
+            if not sent:
+                form.add_error(None, 'Failed to send verification. Please check your contact method.')
+                return self.form_invalid(form)
 
-                sent = vc.send_verification(context)
-                context["sent"] = bool(sent)
+            # Store vc pk (NOT the raw code)
+            self.request.session[self.SK_VC_PK] = str(vc.pk)
 
-                self.request.session['verification_code'] = vc.code
-                self.set_step(3)  # Move to Step 3
-
+            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+                # For magic link, go straight to step 3 page that waits for link or offers "enter code" fallback if you want.
+                messages.info(self.request, 'We’ve sent you a verification link. Please check your email.')
+                # Optionally you could allow a fallback code entry if your email also includes the code.
+                self.set_step(3)
+            else:
+                # Code flow: proceed to code entry step
+                self.set_step(3)
 
         elif step == 3:
-            # Step 3: Verify the code
-            input_code = form.cleaned_data['verification_code']
-            if input_code == self.request.session.get('verification_code'):
-                self.set_step(4)  # Move to Step 4
-            else:
-                form.add_error('verification_code', _('Invalid verification code.'))
+            # Step 3: verify the code (code flow) OR accept magic-link completion
+            CommsChannel, VerificationCode = self._models()
+
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            user = User.objects.filter(email=email).first()
+            if not user:
+                form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
+
+            # If magic link was used and already verified, skip code entry
+            if self.request.session.get(self.SK_VERIFIED):
+                self.set_step(4)
+                return self._render_next_step(form)
+
+            # Otherwise verify typed code
+            code = form.cleaned_data.get('verification_code')
+            channel_id = self.request.session.get(self.SK_CHANNEL)
+            try:
+                channel = CommsChannel.objects.get(id=channel_id, user=user)
+            except CommsChannel.DoesNotExist:
+                form.add_error('channel', 'Invalid channel. Please start again.')
+                return self.form_invalid(form)
+
+            ok = VerificationCode.verify_code(user=user, channel=channel, code=code, purpose="forgot_password")
+            if not ok:
+                form.add_error('verification_code', 'Invalid or expired verification code.')
+                return self.form_invalid(form)
+
+            # Mark as verified for this flow
+            self.request.session[self.SK_VERIFIED] = True
+            self.set_step(4)
 
         elif step == 4:
-            # Step 4: Set the new password
-            new_password = form.cleaned_data['new_password']
-            confirm_password = form.cleaned_data['confirm_password']
-            if new_password == confirm_password:
-                email = normalise_email(self.request.session.get('forgot_email'))
-
-                if user:
-                    if settings.USE_KEYCLOAK:
-                        if not user.keycloak_id:
-                            logger.error(f"User {user.pk} does not have a keycloak_id.")
-                            form.add_error('confirm_password',
-                                           _('There is an issue with your account.  The administrator has been notified.'))
-                            return self.form_invalid(form)
-
-                        success = update_password_keycloak(user.keycloak_id, new_password)
-
-                        if KEYCLOAK_MIGRATING:
-                            update_password_django(user, new_password)
-                    else:
-                        update_password_django(user, new_password)
-                        user.save()
-
-                        success = True
-
-                    # TODO: if channel was not verified set it to verified now
-                    if success:
-
-                        # if user changing own password here, then need to stop them being logged out
-                        if user == self.request.user:
-                            update_session_auth_hash(self.request, user)
-
-                        messages.success(self.request,
-                                         _('Your password has been reset. You can now login with your new password.'))
-                        # Clear session data after success
-                        self.request.session.pop('forgot_email', None)
-                        self.request.session.pop('forgot_channel', None)
-                        self.request.session.pop('verification_code', None)
-                        return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
-                    else:
-                        form.add_error('confirm_password',
-                                       _('Unable to reset password.  Please try a different password.'))
-                        return self.form_invalid(form)
-
-            else:
-                form.add_error('confirm_password', _('Passwords do not match.'))
+            # Step 4: set the new password
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            user = User.objects.filter(email=email).first()
+            if not user:
+                form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
 
+            if not self.request.session.get(self.SK_VERIFIED):
+                form.add_error(None, 'Please verify your contact method before changing password.')
+                self.set_step(3)
+                return self.form_invalid(form)
+
+            new_password = form.cleaned_data['new_password']
+            confirm_password = form.cleaned_data['confirm_password']
+            if new_password != confirm_password:
+                form.add_error('confirm_password', 'Passwords do not match.')
+                return self.form_invalid(form)
+
+            # ---- your password update logic ----
+            success = True
+            if getattr(settings, "USE_KEYCLOAK", False):
+                if not getattr(user, "keycloak_id", None):
+                    logger.error("User %s does not have a keycloak_id.", user.pk)
+                    form.add_error('confirm_password', 'There is an issue with your account.')
+                    return self.form_invalid(form)
+                success = update_password_keycloak(user.keycloak_id, new_password)
+                if getattr(settings, "KEYCLOAK_MIGRATING", False):
+                    update_password_django(user, new_password)
+            else:
+                update_password_django(user, new_password)
+                user.save()
+                success = True
+
+            if success:
+                # Keep user logged-in if they're changing their own password while authenticated (rare in this flow)
+                if user == self.request.user and self.request.user.is_authenticated:
+                    update_session_auth_hash(self.request, user)
+
+                messages.success(self.request,
+                                 'Your password has been reset. You can now log in with your new password.')
+                # clear flow
+                self.reset_flow()
+                return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
+
+            form.add_error('confirm_password', 'Unable to reset password. Please try a different password.')
+            return self.form_invalid(form)
+
+            # Re-render with next step’s empty form
+        return self._render_next_step(form)
+
+    def _render_next_step(self, form):
+        # Rebuild a fresh form for the new step
         newform = self.get_form()
         # Redirect back to form to display the next step
         return self.render_to_response(self.get_context_data(form=newform))

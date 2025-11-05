@@ -138,71 +138,122 @@ class ForgotPasswordForm(forms.Form):
                                  "spellcheck": "false",
                              }))
     channel = forms.ChoiceField(label=_('Channel to use'), required=False)
-    verification_code = forms.CharField(label=_('Verification Code'), required=False)    # verifications codes are for verifying comms channels NOT for activing the user account
+    verification_code = forms.CharField(label=_('Verification Code'), required=False)
     new_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'New Password'}),
-        label="New Password",
+        widget=forms.PasswordInput(attrs={'placeholder': _('New Password')}),
+        label=_("New Password"),
         required=False
     )
     confirm_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password'}),
-        label="Confirm Password",
+        widget=forms.PasswordInput(attrs={'placeholder': _('Confirm Password')}),
+        label=_("Confirm Password"),
         required=False
     )
 
     def __init__(self, *args, **kwargs):
-        # Get the step from kwargs and remove it to avoid errors in parent init
-        step = kwargs.pop('step', 1)
-        user = kwargs.pop('user', None)  # Optional user to populate channels in step 2
+        self.step = kwargs.pop('step', 1)
+        self.user_for_channels = kwargs.pop('user', None)  # user used to populate channels in step 2
         super().__init__(*args, **kwargs)
 
+        # Build the field set for this step
         required_fields = {}
-        # Set the fields required for the current step
-        if step >= 1:
-            # Step 1: Only the email field is required and visible
+
+        # Step 1: email
+        if self.step >= 1:
             required_fields['email'] = self.fields['email']
             required_fields['email'].required = True
 
-
-        if step >= 2 and user:
-            # Step 2: Show channel choices based on verified channels
+        # Step 2: channel
+        if self.step >= 2:
             required_fields['channel'] = self.fields['channel']
             required_fields['channel'].required = True
+            # Show all channels (verified/unverified) — you verify by receiving the code
+            choices = []
+            if self.user_for_channels:
+                for ch in self.user_for_channels.comms_channels.all():
+                    choices.append((str(ch.id), f"{ch.channel_type}: {ch.value}"))
+            required_fields['channel'].choices = choices
 
-            # Was going to allow only verified channels but if they receive the message then that
-            # effectively verifies the channel so gong to allow all
-
-
-            required_fields['channel'].choices = [
-                (channel.id, f"{channel.channel_type}: {channel.value}")
-                for channel in user.comms_channels.all()
-            ]
-
-        if step >= 3:
-            # Step 3: Only the verification code field is required and visible
-
+        # Step 3: code entry
+        if self.step == 3:
             required_fields['verification_code'] = self.fields['verification_code']
             required_fields['verification_code'].required = True
 
-        if step >= 4:
-            # Step 4: Show new password and confirm password fields
+        # Step 4: new password
+        if self.step == 4:
             required_fields['new_password'] = self.fields['new_password']
             required_fields['confirm_password'] = self.fields['confirm_password']
             required_fields['new_password'].required = True
             required_fields['confirm_password'].required = True
 
 
+        # Only keep fields relevant to the current step
         self.fields = required_fields
 
+    # -------- per-field cleans (only run if field is present in current step) --------
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').strip()
+        if not email:
+            return email
+        try:
+            email = normalise_email(email)
+        except Exception as e:
+            raise forms.ValidationError(str(e))
+        return email
+
+    def clean_channel(self):
+        if 'channel' not in self.fields:
+            return self.cleaned_data.get('channel')
+
+        value = self.cleaned_data.get('channel')
+        if value is None or value == '':
+            raise forms.ValidationError(_('Please select a contact method.'))
+
+        # Ensure it’s a valid choice for this user (prevents tampering)
+        valid_ids = {k for k, _ in self.fields['channel'].choices}
+        if str(value) not in valid_ids:
+            raise forms.ValidationError(_('Invalid or unverified channel selected.'))
+
+        return value
+
+    def clean_verification_code(self):
+        if 'verification_code' not in self.fields:
+            return self.cleaned_data.get('verification_code')
+
+        code = (self.cleaned_data.get('verification_code') or '').strip().replace(' ', '').replace('-', '')
+        if not len(code) == 6:
+            raise forms.ValidationError(_('Invalid verification code.'))
+        # If your codes are strictly digits:
+        if not code.isdigit():
+            raise forms.ValidationError(_('Verification code must be numeric.'))
+        return code
+
+    def clean_new_password(self):
+        if 'new_password' not in self.fields:
+            return self.cleaned_data.get('new_password')
+
+        pw = self.cleaned_data.get('new_password')
+        # Run Django’s strong password validators (uses AUTH_PASSWORD_VALIDATORS)
+        # Pass a user if you can (helps with similarity checks); fall back to None
+        user = getattr(self, 'user_for_channels', None)
+        try:
+            password_validation.validate_password(pw, user=user)
+        except forms.ValidationError as e:
+            raise forms.ValidationError(e.messages)
+        return pw
+
     def clean(self):
-        # Additional validation logic based on the step (e.g., password match in Step 4)
-        cleaned_data = super().clean()
+        cleaned = super().clean()
+
+        # Step 4: confirm matches
         if 'new_password' in self.fields and 'confirm_password' in self.fields:
-            new_password = cleaned_data.get("new_password")
-            confirm_password = cleaned_data.get("confirm_password")
-            if new_password and confirm_password and new_password != confirm_password:
+            pw = cleaned.get('new_password')
+            cpw = cleaned.get('confirm_password')
+            if pw and cpw and pw != cpw:
                 self.add_error('confirm_password', _('Passwords do not match.'))
-        return cleaned_data
+
+        return cleaned
 
 class ChangePasswordNowCurrentForm(forms.Form):
 
