@@ -334,7 +334,9 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         # If user has not completed profile - bounce them there first
         # but only if we have the page set
-        goto = getattr(settings, 'CONFIRM_USER_PAGE', None)
+        goto = getattr(settings, 'CONFIRM_USER_PAGE', "users:tell_us_about")
+        if not self.user.is_authenticated:
+            return HttpResponseRedirect(f"{settings.LOGIN_URL}?next={goto}")
         self.user = request.user
         if goto and self.user.status < self.user.USER_STATUS_CONFIRMED:
             # redirect early if user not allowed
