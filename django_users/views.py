@@ -2231,7 +2231,10 @@ class VerifyMagicLinkView(View):
             user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
             messages.success(request, _(f"Your link has been verified and you are now logged in."))
-            return redirect(settings.LOGIN_REDIRECT_URL)
+
+            # do we have a next url?
+            next = request.GET.get("next", settings.LOGIN_REDIRECT_URL)
+            return redirect(next)
         else:
             messages.success(request, _("Your link has been verified."))
             return redirect(settings.LOGIN_URL)
