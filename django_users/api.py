@@ -756,7 +756,8 @@ def email_exists(request):
         logger.warning(f"Call to email exists with email {email} {str(e)}")
         return Response(status=status.HTTP_503_SERVER_ERROR)
     else:
-        return Response({'active': user.is_active}, status=status.HTTP_200_OK)
+        # historical confusing use of active - for the moment just provide both
+        return Response({'active': user.is_active, 'is_active': user.is_active}, status=status.HTTP_200_OK)
 
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
