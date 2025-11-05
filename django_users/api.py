@@ -17,7 +17,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action, throttle_classes
 from rest_framework.exceptions import PermissionDenied
@@ -254,7 +254,8 @@ class PagedUserListViewset(viewsets.ReadOnlyModelViewSet):
 
     # DataTables magic:
     pagination_class = UserDatatablesPagination
-    filter_backends = [DatatablesFilterBackend]
+    filter_backends = [DatatablesFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
 
     # What can be searched / ordered from the client:
     search_fields = ['username', 'email', 'first_name', 'last_name']
