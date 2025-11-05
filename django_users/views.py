@@ -21,7 +21,7 @@ from django.template.loader import get_template
 from django.utils.decorators import method_decorator
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
-
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 
 from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
@@ -594,7 +594,7 @@ def send_sms(recipient_user, message, user=None):
     return message.sid
 
 
-@method_decorator(never_cache, name='dispatch')
+@method_decorator([never_cache, ensure_csrf_cookie, csrf_protect], name='dispatch')
 class LoginView(GoNextTemplateMixin, TemplateView):
     template = "django_users/login.html"
 
