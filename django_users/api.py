@@ -243,7 +243,7 @@ class UserListViewsetBase(UserListViewset):
 
 class UserDatatablesPagination(DatatablesPageNumberPagination):
     page_size = 100
-    page_size_query_param = 'length'   # DataTables sends `length`
+    page_size_query_param = 'page_size'
     max_page_size = 1000
 
 class PagedUserListViewset(viewsets.ReadOnlyModelViewSet):

@@ -158,9 +158,7 @@ function show_user_table_paged(selection, page_length, columns, query, panes, co
 const table_options = {
   language: { processing: "Loading data..." },
   pageLength: page_length,
-    lengthMenu: [
-    [100, 500, 1000],
-  ],
+    lengthMenu: [[100, 500, 1000], [100, 500, 1000]],
   stateSave: true,
   responsive: { details: false },
   serverSide: true,
