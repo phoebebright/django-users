@@ -1221,14 +1221,15 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Store channel id
             self.request.session[self.SK_CHANNEL] = str(channel_id)
 
-            # Create verification (purpose = forgot_password). Preserve history by consuming actives internally.
+            # Create verification
+            purpose = "forgot_password"
             if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
-                vc, context = VerificationCode.create_for_magic_link(user=user, channel=channel, purpose="forgot_password")
+                vc, context = VerificationCode.create_for_magic_link(user=user, channel=channel, purpose=purpose)
             else:
-                vc, context = VerificationCode.create_for_code(user=user, channel=channel, purpose="forgot_password")
+                vc, context = VerificationCode.create_for_code(user=user, channel=channel, purpose=purpose)
 
             # Send (your model uses vc.send_verification(context))
-            sent = vc.send_verification(context)
+            sent = vc.send_verification(context, purpose)
             if not sent:
                 form.add_error(None, 'Failed to send verification. Please check your contact method.')
                 return self.form_invalid(form)
@@ -1243,6 +1244,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 self.set_step(3)
             else:
                 # Code flow: proceed to code entry step
+                messages.info(self.request, 'We’ve sent you a verification code. Please check your email.')
                 self.set_step(3)
 
         elif step == 3:

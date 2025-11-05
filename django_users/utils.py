@@ -93,6 +93,30 @@ def send_email_magic_link(verificationcode, context={}):
     return True
 
 
+def send_email_magic_login_link(verificationcode, context={}):
+    '''this will auto login and not ask for password reset'''
+    template = 'email_login_token'
+
+    # we have not fully transitioned to using channels, so fallback to user.email
+    if verificationcode.channel.value <= ' ':
+        to_email = verificationcode.channel.user.email
+        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
+    else:
+        to_email = verificationcode.channel.value
+
+    context['reset_password_url'] = settings.SITE_URL + reverse_lazy('users:change_password') + '?email=' + urlencode(verificationcode.channel.value)
+
+    mail = get_mail_class()
+    mail.send(
+        to_email,
+        settings.DEFAULT_FROM_EMAIL,
+        template=template,
+        context=context,
+        receiver=verificationcode.user,
+    )
+    return True
+
+
 def send_sms_verification_code(phone_number, code):
     client = Client(settings.TWILIO_ACCOUNT_ID, settings.TWILIO_AUTH_TOKEN)
     message = _('Your verification code is: {code}').format(code=code)

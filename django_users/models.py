@@ -42,7 +42,7 @@ from django.db import IntegrityError, models, transaction
 
 from django.utils.translation import gettext_lazy as _
 
-from .utils import get_mail_class
+from .utils import get_mail_class, send_email_magic_login_link
 
 mail = get_mail_class()
 
@@ -509,7 +509,7 @@ class VerificationCodeBase(models.Model):
 
     # ---------- Sending
 
-    def send_verification(self, context=None) -> bool:
+    def send_verification(self, context=None, purpose=None) -> bool:
         """
         Sends either a code or link depending on which fields are set.
         optionally include context to pass through to template
@@ -517,7 +517,10 @@ class VerificationCodeBase(models.Model):
         if self.channel.channel_type == 'email':
             # Prefer magic-link if token_hash present
             if self.token_hash:
-                return send_email_magic_link(self, context)  # implement in your mail layer
+                if purpose == 'email_verify':
+                    return send_email_magic_link(self, context)
+                elif purpose == 'forgot_password':
+                    return send_email_magic_login_link(self, context)
 
             return send_email_verification_code(self, context)  # reads self.user, and the raw code you generated at creation time
         elif self.channel.channel_type == 'sms':
