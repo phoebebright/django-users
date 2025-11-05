@@ -17,7 +17,7 @@
     <div class="col">
 
 
-        <table id="users" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
+        <table id="users{% if USERS_BIG %}_big{%else%}_list{%endif%}" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
             <thead>
 
             <th>Name</th>
@@ -138,10 +138,10 @@
 
         {% if USERS_BIG %}
         // for total users > 3000
-        show_user_table_paged("#users", 100, columns, query, panes, col_reorder);
+        show_user_table_paged("#users_big", 100, columns, query, panes, col_reorder);
         {% else %}
         // for total users < 3000
-        show_user_table("#users", 100, columns, query, panes, col_reorder);
+        show_user_table("#users_list", 100, columns, query, panes, col_reorder);
         {% endif %}
 
         loading_off();
