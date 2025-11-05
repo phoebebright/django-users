@@ -8,40 +8,39 @@
 
 {% block title %}{% trans "Manage Users" %}{% endblock %}
 
+{% block page_header %}{% trans "Manage Users" %}{% endblock %}
+
 {% block main %}
 
 
-    <h1>{% trans "Manage Users" %}</h1>
+<div class="row  my-3">
+    <div class="col">
 
-    <a href="{% url 'users:add-user' %}" class="btn btn-primary float-end">Add User</a>
-    <div class="row  my-3">
-        <div class="col">
 
-            {#        <table id="entries" class="table table-sm table-dashboard fs--1  border-bottom  no-footer hover">#}
-            <table id="users" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
-                <thead>
+        <table id="users" class="table table-sm table-dashboard fs--1  border-bottom  no-footer table-hover w-100 dt-responsive nowrap">
+            <thead>
 
-                <th>Name</th>
-                <th>Friendly Name</th>
-                <th>Email</th>
-                <th>Joined</th>
-                <th>Last Login</th>
-                <th>Country</th>
-                <th>City</th>
-                <th>Where did you hear?</th>
-                <th>Active</th>
+            <th>Name</th>
+            <th>Friendly Name</th>
+            <th>Email</th>
+            <th>Joined</th>
+            <th>Last Login</th>
+            <th>Country</th>
+            <th>City</th>
+            <th>Where did you hear?</th>
+            <th>Active</th>
 
 
 
-                </thead>
-                <tbody>
+            </thead>
+            <tbody>
 
-                </tbody>
-            </table>
-        </div>
-
+            </tbody>
+        </table>
     </div>
-    {#    </div>#}
+
+</div>
+{#    </div>#}
 
 
 
@@ -50,104 +49,105 @@
 {% block js %}
 
 
-    {{ DATATABLES_LOAD|safe}}
+{{ DATATABLES_LOAD|safe}}
 
-    {% if not USE_ASSETS %}
-        <script src='{% static "js/administrator.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static "js/users.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static "js/users_admin.js" %}?v={{ API_VERSION }}'>    </script>
-        <script src='{% static "js/userbrowser.js" %}?v={{ API_VERSION }}'>    </script>
+{% if not USE_ASSETS %}
+<script src='{% static "js/administrator.js" %}?v={{ API_VERSION }}'>    </script>
+<script src='{% static "js/users.js" %}?v={{ API_VERSION }}'>    </script>
+<script src='{% static "js/users_admin.js" %}?v={{ API_VERSION }}'>    </script>
 
-    {% else %}
-        <script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
-    {% endif %}
+{% else %}
+<script src="/assets/js/administrator.min.js?v={{ API_VERSION }}"></script>
+{% endif %}
 
-    <script>
+<script>
 
-        // after page load
-
-
-            var panes = [3, 5];
-            var counter = 0;
+    // after page load
 
 
-            // define columns to display
-            var columns = [];
-            columns = columns.concat([
-
-                {data: "formal_name", responsivePriority: 2},
-                {data: "friendly_name", responsivePriority: 2},
-                {data: "email", responsivePriority: 4},
-                {
-                    data: 'date_joined',
-                    title: 'Date Joined',
-                    render: function (data) {
-                        return DateTime.fromISO(data).toFormat('yyyy-MM');
-
-                    }
-                },
-                {data: "last_login", responsivePriority: 4},
-                {data: "country", responsivePriority: 4},
-                {
-                    data: "city", responsivePriority: 4,
-                    "render": function (data, type, row, meta) {
-                        return row.profile?.city ?? '';
-                    }
-                },
-                {
-                    data: "hear", responsivePriority: 4,
-
-                    "render": function (data, type, row, meta) {
-
-                        return row.profile?.where_did_you_hear ?? '';
-
-                    }
-                },
-                {data: "is_active", responsivePriority: 4},
+    var panes = [3, 5];
+    var counter = 0;
 
 
-            ]);
+    // define columns to display
+    var columns = [];
+    columns = columns.concat([
 
+        {data: "formal_name", responsivePriority: 2},
+        {data: "friendly_name", responsivePriority: 2},
+        {data: "email", responsivePriority: 4},
+        {
+            data: 'date_joined',
+            title: 'Date Joined',
+            render: function (data) {
+                return DateTime.fromISO(data).toFormat('yyyy-MM');
 
-            function loaded() {
-                loading_off();
             }
+        },
+        {data: "last_login", responsivePriority: 4},
+        {data: "country", responsivePriority: 4},
+        {
+            data: "city", responsivePriority: 4,
+            "render": function (data, type, row, meta) {
+                return row.profile?.city ?? '';
+            }
+        },
+        {
+            data: "hear", responsivePriority: 4,
 
-            put_in_header("{{event.name}}");
+            "render": function (data, type, row, meta) {
 
-            var EVENT_REF = "";
+                return row.profile?.where_did_you_hear ?? '';
 
-
-
-
-
-            $(document).on("click", "#clear", function(e) {
-
-                {#$("#competitor-auto").val("");#}
-                {#$("#partner-auto").val("");#}
-                $("#entry_wrapper").slideUp();
-                load_all();
-
-            });
-
-
-
-
-            $(document).ready(function(){
-                var query="all";
-                {% if event %}
-                    query='event_ref={{ event.ref }}';
-                {% endif %}
-
-                var col_reorder = [1,0]
+            }
+        },
+        {data: "is_active", responsivePriority: 4},
 
 
-                show_user_table_paged("#users", 100, columns, query, panes, col_reorder);
+    ]);
 
-                loading_off();
-            });
+
+    function loaded() {
+        loading_off();
+    }
+
+    put_in_header("{{event.name}}");
+
+    var EVENT_REF = "";
 
 
 
-    </script>
+
+
+    $(document).on("click", "#clear", function(e) {
+
+        {#$("#competitor-auto").val("");#}
+        {#$("#partner-auto").val("");#}
+        $("#entry_wrapper").slideUp();
+        load_all();
+
+    });
+
+
+
+
+    $(document).ready(function(){
+        var query="all";
+
+        var col_reorder = [1,0]
+
+        {% if USERS_BIG %}
+        // for total users > 3000
+        show_user_table_paged("#users", 100, columns, query, panes, col_reorder);
+        {% else %}
+        // for total users < 3000
+        show_user_table("#users", 100, columns, query, panes, col_reorder);
+        {% endif %}
+
+        loading_off();
+    });
+
+
+
+</script>
 {% endblock %}

@@ -132,11 +132,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
 
 
 function show_user_table_paged(selection, page_length, columns, query, panes, col_reorder) {
-
-
-    // https://datatables.net/
-
-
+    // use for larger number of users - paged, no panes.  Use for > 3000
 
     if (typeof elements == "undefined") {
         elements = 'ftr';   // remove header and footer blocks
@@ -162,6 +158,9 @@ function show_user_table_paged(selection, page_length, columns, query, panes, co
 const table_options = {
   language: { processing: "Loading data..." },
   pageLength: page_length,
+    lengthMenu: [
+    [100, 500, 1000],
+  ],
   stateSave: true,
   responsive: { details: false },
   serverSide: true,
@@ -204,71 +203,22 @@ const table_options = {
   columns: columns,
   colReorder: { order: col_reorder },
   select: true,
-  dom: 'BPlfrtip',
-  buttons: ['csv'],
-  searchPanes: getSearchPaneConfig(panes),
+  dom: 'Blfrtip',
+buttons: [
+  {
+    text: '<i class="bi bi-person-plus"></i> Add User',
+    className: 'btn btn-primary',
+    action: function (e, dt, node, config) {
+      // what happens when the button is clicked
+      window.location.href = '/users/add_user/';
+    }
+  },
+  'csv'
+],
+
 };
 
 const dt = $(selection).DataTable(table_options);
-    //
-    // var table_options = {
-    //     "language": {
-    //         "processing": "Loading data..."
-    //     },
-    //     pageLength: page_length,
-    //     stateSave: true,
-    //     responsive: {
-    //         details: false // so we can click rows
-    //     } ,
-    //
-    //     "ajax": {
-    //         url: url,
-    //         "dataSrc": function ( payload ) {
-    //
-    //             for ( var i=0; i<payload.length ; i++ ) {
-    //                 if (payload[i]['date_joined']) {
-    //                     payload[i]['date_joined'] = payload[i]['date_joined'].substring(0, 10);
-    //                 }
-    //                 if (payload[i]['last_login']) {
-    //                     payload[i]['last_login'] = payload[i]['last_login'].substring(0, 10);
-    //                 }
-    //             }
-    //
-    //             return payload;
-    //         }
-    //     },
-    //     columns: columns,
-    //     colReorder: {order: col_reorder},
-    //
-    // };
-
-    //     // can block panes, eg. if only a few entries, by settings panes to []
-    // if (typeof panes != "undefined" && panes.length > 0) {
-    //     table_options['searchPanes'] =  {
-    //         viewTotal: true,
-    //         columns: panes,
-    //     };
-    //     table_options['select'] = true;
-    //     table_options['dom'] = 'Plfrtip';
-    //
-    // }
-
-    // Configure SearchPanes if panes are provided
-    // const searchPaneConfig = getSearchPaneConfig(panes);
-    // if (Object.keys(searchPaneConfig).length > 0) {
-    //     table_options['searchPanes'] = searchPaneConfig;
-    //
-    // }
-    //
-    // table_options['select'] = true;
-    // table_options['dom'] = 'BPlfrtip';
-    //
-    // table_options['buttons'] = [
-    //     'csv' // Add the CSV export button
-    // ]
-    //
-    //
-    // var dt = $(selection).DataTable( table_options );
 
     dt.on( 'draw', function () {
         let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
