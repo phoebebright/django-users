@@ -27,11 +27,11 @@ class SubscribeForm(forms.Form):
     '''
     # subscribe = forms.CharField(widget=forms.HiddenInput())
     subscribe = forms.BooleanField(initial=False, required=False)
-    country = CountryField().formfield(required=False)
-    city = forms.CharField(max_length=50,  label=_("Nearest City or Town"), required=False)
+    country = CountryField().formfield(required=True)
+    city = forms.CharField(max_length=50,  label=_("Nearest City or Town"), required=True)
     where_did_you_hear = forms.CharField(max_length=60, label=_(
         "Where did you hear about us? (Please name any organisation, magazines or websites)"), help_text=_(
-        "It really helps us if you tell us the full names of how you found us!"), required=False)
+        "It really helps us if you tell us the full names of how you found us!"), required=True)
 
     # mobile =  forms.CharField(max_length=20,  label=_("Mobile Number"), required=False)
     # whatsapp = forms.BooleanField(required=False, label="Whatsapp - Only for Events you are attending or for support")
