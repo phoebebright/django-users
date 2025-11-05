@@ -1189,7 +1189,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             user = User.objects.filter(email=email).first()
 
             if not user:
-                form.add_error('email', f'Email not found. Please {REGISTER_TERM}.')
+                form.add_error('email', f'Email not found. Please {settings.REGISTER_TERM}.')
                 return self.form_invalid(form)
 
             if not user.is_active and user.last_login:
