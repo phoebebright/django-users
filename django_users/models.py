@@ -339,7 +339,7 @@ class VerificationCodeBase(models.Model):
 
 
     def magic_link_url(self, token) -> str:
-        return  f"{settings.SITE_URL}{reverse('users:verify_link')}?t={token}"
+        return  f"{settings.SITE_URL}{reverse('users:verify_link', args=[self.purpose])}?t={token}"
 
     # @classmethod
     # def create_verification_code(cls, user, channel):

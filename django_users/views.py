@@ -2199,7 +2199,9 @@ class VerifyMagicLinkView(View):
     Example URL: /users/verify-email-link/?t=<raw_token>
     """
 
-    def get(self, request):
+
+    def get(self, request, purpose):
+
         raw_token = request.GET.get("t")
         if not raw_token:
             return HttpResponseBadRequest(_("Missing token"))
@@ -2207,7 +2209,7 @@ class VerifyMagicLinkView(View):
         VerificationCode = apps.get_model("users", "VerificationCode")
 
         # Try to validate and consume the token
-        vc = VerificationCode.verify_token(raw_token=raw_token, purpose="email_verify")
+        vc = VerificationCode.verify_token(raw_token=raw_token, purpose=purpose)
 
         if not vc:
             messages.error(request, _("Invalid or expired verification link."))
@@ -2222,10 +2224,10 @@ class VerifyMagicLinkView(View):
         if auto_login:
             user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
-            messages.success(request, _("Your email has been verified and you are now logged in."))
+            messages.success(request, _(f"Your link has been verified and you are now logged in."))
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
-            messages.success(request, _("Your email address has been verified."))
+            messages.success(request, _("Your link has been verified."))
             return redirect(settings.LOGIN_URL)
 
 

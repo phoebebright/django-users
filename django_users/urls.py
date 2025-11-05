@@ -68,7 +68,7 @@ urlpatterns = [
     path('problem_login/', ProblemLogin.as_view(), name="problem_login"),
     path('migrate_login/', UserMigrationView.as_view(), name='user_login'),
     path('new_users_report/', NewUsers.as_view(), name="new_users_report"),
-    path("verify_link/", VerifyMagicLinkView.as_view(), name="verify_link"),
+    path("verify_link/<str:purpose>/", VerifyMagicLinkView.as_view(), name="verify_link"),
 
 
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
