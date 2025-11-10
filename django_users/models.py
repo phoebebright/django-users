@@ -42,7 +42,8 @@ from django.db import IntegrityError, models, transaction
 
 from django.utils.translation import gettext_lazy as _
 
-from .utils import get_mail_class, send_email_magic_login_link
+from .utils import get_mail_class, send_email_magic_login_link, send_email_verification_code, send_forgot_password, \
+    send_sms_verification_code, send_whatsapp_verification_code, send_email_magic_link
 
 mail = get_mail_class()
 
@@ -52,7 +53,6 @@ if settings.USE_KEYCLOAK:
     from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, \
         search_user_by_email_in_keycloak
 
-from .utils import send_email_verification_code, send_sms_verification_code, send_whatsapp_verification_code, send_email_magic_link
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -526,8 +526,14 @@ class VerificationCodeBase(models.Model):
                     return send_email_magic_link(self, context)
                 elif purpose == 'forgot_password':
                     return send_email_magic_login_link(self, context)
+                logger.error(f"Unknown purpose with token_hash in send_verification: {purpose}")
+            else:
+                if purpose == 'email_verify':
+                    return send_email_verification_code(self, context)
+                elif purpose == 'forgot_password':
+                    return send_forgot_password(self, context)
+                logger.error(f"Unknown purpose with code in send_verification: {purpose}")
 
-            return send_email_magic_link(self, context)  # reads self.user, and the raw code you generated at creation time
         elif self.channel.channel_type == 'sms':
             return send_sms_verification_code(self.channel.value, "<CODE REDACTED>")
         elif self.channel.channel_type == 'whatsapp':

@@ -92,6 +92,25 @@ def send_email_magic_link(verificationcode, context={}):
     )
     return True
 
+def send_forgot_password(verificationcode, context={}):
+    template = 'forgot_password_code'
+
+    # we have not fully transitioned to using channels, so fallback to user.email
+    if verificationcode.channel.value <= ' ':
+        to_email = verificationcode.channel.user.email
+        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
+    else:
+        to_email = verificationcode.channel.value
+
+    mail = get_mail_class()
+    mail.send(
+        to_email,
+        settings.DEFAULT_FROM_EMAIL,
+        template=template,
+        context=context,
+        receiver=verificationcode.user,
+    )
+    return True
 
 def send_email_magic_login_link(verificationcode, context={}):
     '''this will auto login and not ask for password reset'''
