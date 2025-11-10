@@ -56,8 +56,8 @@ urlpatterns = [
 
     path('manage_users/', user_passes_test(has_role_administrator)(ManageUsers.as_view()), name="manage_users"),
     path('admin_user/<int:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
-    path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
     path('admin_user/<uuid:pk>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),
+    path('admin_user/<str:email>/', user_passes_test(has_role_administrator)(ManageUser.as_view()), name="admin_user"),  # deprecated
     path('tell_us_about/', TellUsAbout.as_view(), name="tell_us_about"),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
 

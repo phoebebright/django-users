@@ -1538,6 +1538,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
                 except:
                     user = User.objects.get(id=kwargs['pk'])  # don;t use id
             elif 'email' in kwargs:
+                logger.warning(f"Using email to call Manage User - deprecated")
                 user = User.objects.get(email=kwargs['email'])
         except User.DoesNotExist:
             raise Http404(_("No user found"))
