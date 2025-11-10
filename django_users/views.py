@@ -500,6 +500,12 @@ class UserMigrationView(View):
     http_method_names = ['post', ]
 
     def authenticate_old_keycloak(self, email, password):
+        try:
+            assert settings.OLD_KEYCLOAK_URL and settings.OLD_REALM and settings.OLD_CLIENT_ID and settings.OLD_CLIENT_SECRET
+        except AssertionError:
+            logger.error("Old Keycloak URL, realm, client ID, or client secret not set.")
+            return False
+
         token_url = f"{settings.OLD_KEYCLOAK_URL}/realms/{settings.OLD_REALM}/protocol/openid-connect/token"
         data = {
             'client_id': settings.OLD_CLIENT_ID,
@@ -558,15 +564,17 @@ class UserMigrationView(View):
             # Need to redirect to register page - email already filled in
             user = None
         else:
-            if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
+            do_migration = getattr(settings, 'USER_MIGRATION_DATE', None)
+            if do_migration:
+                if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
 
-                # try authenticating with old keycloak
-                if self.authenticate_old_keycloak(email, password):
-                    if self.update_password_new_keycloak(email, password):
-                        logger.info(f"User {email} has been migrated successfully.")
-                    else:
-                        logger.info(f"User {email} Failed to update password in the new system.")
-                        return redirect(settings.FORGOT_PASSWORD_URL)
+                    # try authenticating with old keycloak
+                    if self.authenticate_old_keycloak(email, password):
+                        if self.update_password_new_keycloak(email, password):
+                            logger.info(f"User {email} has been migrated successfully.")
+                        else:
+                            logger.info(f"User {email} Failed to update password in the new system.")
+                            return redirect(settings.FORGOT_PASSWORD_URL)
 
         # need to sign in user with new keycloak
         backend = KeycloakPasswordCredentialsBackend()
