@@ -527,7 +527,7 @@ class VerificationCodeBase(models.Model):
                 elif purpose == 'forgot_password':
                     return send_email_magic_login_link(self, context)
 
-                return send_email_magic_link(self, context)  # reads self.user, and the raw code you generated at creation time
+            return send_email_magic_link(self, context)  # reads self.user, and the raw code you generated at creation time
         elif self.channel.channel_type == 'sms':
             return send_sms_verification_code(self.channel.value, "<CODE REDACTED>")
         elif self.channel.channel_type == 'whatsapp':
