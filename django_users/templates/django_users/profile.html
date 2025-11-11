@@ -42,13 +42,7 @@
         </div>
     {% else %}
 
-        {% if user.is_unconfirmed %}
-            <div class="card-panel warning">
-                <p>Your account is not currently confirmed - Please check your email for a message from us and click on the Confirm email to validate your email.</p>
 
-
-
-                {% else %}
                 <div class="row">
 
                     <div class="col-12 col-md-6">
@@ -62,106 +56,22 @@
                                     <div class="col-7 right-align">
                                         {{ user.full_name }}
                                     </div>
-                                    {#                                    <div class="col-1 right-align">#}
-                                    {#                                        <i class="bi bi-pencil-fill go_account"></i>#}
-                                    {#                                    </div>#}
-                                </div>
-                            </li>
-                            {#                            <li class="list-group-item">#}
-                            {#                                <div class="row">#}
-                            {#                                    <div class="col-4">#}
-                            {#                                        <i class="bi bi-clock-fill"></i> {% trans "Timezone" %}</div>#}
-                            {#                                    <div class="col-7 right-align">#}
-                            {##}
-                            {#                                        <select name="timezone" class="form-select update"  id="id_timezone" required>#}
-                            {#                                            <option selected disabled value="">Choose...</option>#}
-                            {#                                            {% for k,v in timezone_list %}#}
-                            {#                                                <option value="{{ k}}">{{ v }}</option>#}
-                            {#                                            {% endfor %}#}
-                            {##}
-                            {#                                        </select>#}
-                            {#                                    </div>#}
-                            {##}
-                            {#                                </div>#}
-                            {#                            </li>#}
-                            {#                            <li class="list-group-item">#}
-                            {#                                <div class="row">#}
-                            {#                                    <div class="input-field col">#}
-                            {#                                        <h5>I am interested in:</h5>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="score" type="checkbox" class="profile_info"/>#}
-                            {#                                                <span>Scoring Dressage Tests for an event</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="score_mine" type="checkbox" class="profile_info"/>#}
-                            {#                                                <span>Checking my scores at an event</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="store" type="checkbox" class="profile_info"/>#}
-                            {#                                                <span>Saving my Dressage Tests</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="analyse" type="checkbox" class="profile_info" />#}
-                            {#                                                <span>Analysing my Dressage Tests</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="analyse_students" type="checkbox" class="profile_info" />#}
-                            {#                                                <span>Analysing my Students Dressage Tests</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="organise" type="checkbox" class="profile_info" />#}
-                            {#                                                <span>Running Dressage Shows</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="judge" type="checkbox" class="profile_info" />#}
-                            {#                                                <span>Analysing my Judging</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                    </div>#}
-                            {#                                </div>#}
-                            {##}
-                            {##}
-                            {#                                <div class="row">#}
-                            {#                                    <div class="input-field col">#}
-                            {#                                        <h5>Early Access:</h5>#}
-                            {#                                        <p>#}
-                            {#                                            <label>#}
-                            {#                                                <input name="early_access" type="checkbox" class="profile_info"/>#}
-                            {#                                                <span>I would be interested in having access to early releases and helping to test DressageCalculator.com and Skor.ie.</span>#}
-                            {#                                            </label>#}
-                            {#                                        </p>#}
-                            {#                                    </div>#}
-                            {#                                </div>#}
-                            {##}
-                            {##}
-                            {#                            </li>#}
-                            <li class="list-group-item">
-                                <div class="row">
-                                    <div class="col-4">
-                                        {% trans "Username" %}</div>
-                                    <div class="col-7 right-align">{{ user.email }}</div>
-                                    {#                                    <div class="col-1 right-align">#}
-                                    {#                                        <i class="bi bi-pencil-fill go_account"></i>#}
-                                    {#                                    </div>#}
+
                                 </div>
                             </li>
 
                             <li class="list-group-item">
                                 <div class="row">
-                                    <a class="btn btn-primary" href="{% url "users:change-password" %}?next=profile">{% trans "Change Password" %}</a>
+                                    <div class="col-4">
+                                        {% trans "Username" %}</div>
+                                    <div class="col-7 right-align">{{ user.email }}</div>
+
+                                </div>
+                            </li>
+
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <a class="btn btn-primary" href="{% url 'users:change-password' %}?next=profile">{% trans "Change Password" %}</a>
                                 </div>
                             </li>
 
@@ -246,20 +156,7 @@
                                 </div>
                             </li>
 
-                            {#                        <li class="list-group-item">#}
-                            {#                            <div class="row">#}
-                            {#                                <div class="col col-sm-5">#}
-                            {#                                    <i class="material-icons left">lock</i> {% blocktrans %}Update Profile / Password{% endblocktrans %}#}
-                            {#                                </div>#}
-                            {#                             <div class="col col-sm-7 right-align">#}
-                            {#                                    {% comment %}TODO: update for new list of user access flags{% endcomment %}#}
-                            {#                                    {% if object.is_default %}#}
-                            {#                                        <a href="{% url "signup_as_rider" %}" class="btn upgrade after_upgrade right btn-flat">{% trans "Upgrade..." %}</a>#}
-                            {#                                    {% endif %}#}
-                            {#                                </div>#}
-                            {##}
-                            {#                            </div>#}
-                            {#                        </li>#}
+
 
 {% if USE_NEWSLETTER %}
 
@@ -272,10 +169,10 @@
                                     <div class="d-grid gap-2 col-6 mx-auto">
                                         {% if user.subscribed %}
 
-                                            <a class="btn btn-primary" href="{% url "unsubscribe" user.email  %}" >{% trans "Click to Unsubscribe" %}</a>
+                                            <a class="btn btn-primary" href="{% url 'unsubscribe' user.email  %}" >{% trans "Click to Unsubscribe" %}</a>
 
                                         {% else %}
-                                            <a class="btn btn-primary" href="{% url "subscribe" user.email  %}">{% trans "Click to Subscribe" %}</a>
+                                            <a class="btn btn-primary" href="{% url 'subscribe' user.email  %}">{% trans "Click to Subscribe" %}</a>
                                         {% endif %}
                                     </div>
 
@@ -294,36 +191,15 @@
                             </li>
                         </ul>
 
-                        <a class="btn btn-primary mt-3" href="{% url "what-next" %}">{% trans "Home" %}...</a>
-                        <a href="{%  url "contact" %}" class="btn btn-primary mt-3" >Contact us...</a>
+                        <a class="btn btn-primary mt-3" href="{% url 'what-next' %}">{% trans "Home" %}...</a>
+                        <a href="{%  url 'contact' %}" class="btn btn-primary mt-3" >Contact us...</a>
                     </div>
-
-                    {#                <div class="col-12 col-md-6">#}
-                    {#                    <h3>{% blocktrans %}Tests Scored{% endblocktrans %}</h3>#}
-                    {##}
-                    {#                    <svg id="scored" width="100%" height="300"></svg>#}
-                    {##}
-                    {#                </div>#}
-
-
-                    {% comment %}
-                        TODO: profile template
-                    Includes for each mode
-                    - events organised
-                    - events scored
-                    - events writer
-                    - events rider
-                    - events judged
-                    Close Account
-                {% endcomment %}
-
 
                 </div>
 
 
-            </div>
 
-        {% endif %}
+
     {% endif %}
 
 
@@ -335,8 +211,8 @@
 
 
 
-    <script src="{% static "js/d3.v5.min.js" %}"></script>
-    <script src="{% static "js/inplace.js" %}?v={{ API_VERSION }}"></script>
+    <script src="{% static 'js/d3.v5.min.js' %}"></script>
+    <script src="{% static 'js/inplace.js' %}?v={{ API_VERSION }}"></script>
 
     {% if not USE_ASSETS %}
 
