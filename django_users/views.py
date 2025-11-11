@@ -942,7 +942,7 @@ class VerifyChannelView(FormView):
         returning a dict for the template context.
         """
         _, VerificationCode = self._get_models()
-
+        purpose = "email_verify"
         USE_MAGIC_LINK = getattr(settings, "VERIFICATION_USE_MAGIC_LINK", False)
 
         if USE_MAGIC_LINK and channel.channel_type == "email":
@@ -954,7 +954,7 @@ class VerifyChannelView(FormView):
                 user=channel.user, channel=channel, purpose="email_verify"
             )
 
-        sent = vc.send_verification(context)
+        sent = vc.send_verification(context, purpose)
         context["sent"] = bool(sent)
 
         return context

@@ -499,6 +499,7 @@ class SendVerificationCode(APIView):
         """
         data = request.data or {}
         email = data.get("email", None)
+        purpose = "email_verify"
 
         # Do not reveal success/failure details (avoid enumeration/delivery probing)
         response_payload = {"status": "ok"}
@@ -567,7 +568,7 @@ class SendVerificationCode(APIView):
 
             # Cooldown: avoid re-sending too frequently
             too_soon = VerificationCode.objects.filter(
-                user=user, channel=channel, purpose='email_verify',
+                user=user, channel=channel, purpose=purpose,
                 consumed_at__isnull=True,
                 expires_at__gt=timezone.now(),
                 created_at__gte=timezone.now() - timezone.timedelta(
@@ -580,17 +581,17 @@ class SendVerificationCode(APIView):
             redirect_url = reverse('users:verify_channel', args=[channel.id])
             if getattr(settings, "VERIFICATION_USE_MAGIC_LINK", True):
                 vc, context = VerificationCode.create_for_magic_link(
-                    user=user, channel=channel, purpose='email_verify'
+                    user=user, channel=channel, purpose=purpose,
                 )
-                send_ok = vc.send_verification(context)
+                send_ok = vc.send_verification(context, purpose)
                 response_payload['verification_type']   = 'link'
                 response_payload['redirect_url'] = redirect_url
             else:
                 vc, context = VerificationCode.create_for_code(
-                    user=user, channel=channel, purpose='email_verify'
+                    user=user, channel=channel, purpose=purpose
                 )
 
-                send_ok = vc.send_verification(context)
+                send_ok = vc.send_verification(context, purpose)
                 response_payload['verification_type'] = 'code'
                 response_payload['redirect_url'] = redirect_url
 
