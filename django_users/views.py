@@ -980,7 +980,7 @@ class VerifyChannelView(FormView):
                 messages.error(request, 'Failed to send verification. Check your contact method is correct.')
                 return redirect('users:login')
 
-            if send_ctx["magic_link"]:
+            if "magic_link" in send_ctx and send_ctx["magic_link"]:
                 # don't have user logged in so fails
                 messages.info(request, 'We’ve sent you a verification link. Please check your email.')
                 # For magic-link we don't need to show a code form; still render a page with a resend option.
