@@ -978,8 +978,8 @@ class CommsChannelViewSet(viewsets.ModelViewSet):
 class CommsChannelViewSetBase(CommsChannelViewSet):
     pass
 
-
-class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
+#TODO: this should be in users as refers to custom field default_authority
+class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
     '''When filtering on country we include Organisations that have no country (ie. worldwide)'''
 
     # serializer_class = OrganisationSerializer
@@ -997,17 +997,17 @@ class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
         # Create a mutable copy of request.query_params
         query_params = self.request.query_params.copy()
 
-        # Ignore default_authority=0
-        default_authority = query_params.get('default_authority', None)
-        default_authority_id = 0
-        if default_authority:
-            try:
-                default_authority_id = int(default_authority)
-            except ValueError:
-                default_authority = None
-
-        if default_authority_id > 0:
-            queryset = queryset.filter(default_authority=default_authority_id)
+        # # Ignore default_authority=0
+        # default_authority = query_params.get('default_authority', None)
+        # default_authority_id = 0
+        # if default_authority:
+        #     try:
+        #         default_authority_id = int(default_authority)
+        #     except ValueError:
+        #         default_authority = None
+        #
+        # if default_authority_id > 0:
+        #     queryset = queryset.filter(default_authority=default_authority_id)
 
         # Filter by country if provided
         country = query_params.get('country', None)
@@ -1017,8 +1017,7 @@ class OrganisationViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class OrganisationViewSetBase(OrganisationViewSet):
-    pass
+
 
 
 @api_view(['PATCH'])

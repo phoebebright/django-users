@@ -10,7 +10,7 @@ from .views import ProblemSignup, NewUsers, UserMigrationView, UserProfileView, 
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
     ManageUser, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
-    ManageUserProfile, VerifyMagicLinkView, SendComms, TellUsAbout, after_login_redirect
+    ManageUserProfile, VerifyMagicLinkView, SendComms, TellUsAbout, after_login_redirect, OrganisationListView
 from .keycloak import logout_user_from_keycloak_and_django
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -114,4 +114,6 @@ urlpatterns = [
          name='comms2user'),
     path('send_comms/<int:user_id>/<str:template>/', login_required()(SendComms.as_view()),
          name='comms2user'), # TODO: convert to keycloak id and uuid:pk
+
+    path('org_list/', OrganisationListView.as_view(), name='org_list'),
 ]
