@@ -67,9 +67,8 @@ VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
                       True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
 if settings.USE_KEYCLOAK:
-    from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password_keycloak, \
-        is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
+    from .keycloak import KeycloakAdmin, KeycloakGetError, create_keycloak_user, \
+    verify_login, update_password_keycloak, get_user_by_id, get_keycloak_admin
 else:
     from .no_keycloak import verify_login
 
@@ -518,6 +517,12 @@ class UserMigrationView(View):
         return response.status_code == 200
 
     def update_password_new_keycloak(self, email, password):
+
+        admin = get_keycloak_admin()
+        if admin is None:
+            # Keycloak disabled – either skip or raise a clear error
+            return
+
         try:
             # Initialize KeycloakAdmin for the new Keycloak instance
             new_keycloak_admin = KeycloakAdmin(
@@ -1412,9 +1417,14 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 def update_users(request):
     # temporary function to update all users with keycloak_id - comment out once used
     User = get_user_model()
+    admin = get_keycloak_admin()
+    if admin is None:
+        # Keycloak disabled – either skip or raise a clear error
+        return
+
     for user in User.objects.filter(keycloak_id__isnull=True):
         try:
-            user.keycloak_id = keycloak_admin.get_user_id(user.email)
+            user.keycloak_id = admin.get_user_id(user.email)
         except Exception as e:
             print(e)
         else:
@@ -1755,7 +1765,26 @@ class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
 class OrganisationListView(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/organisation_list.html"
 
+class OrganisationDetailView(UserCanAdministerMixin, DetailView):
+    template_name = "django_users/admin/organisation_detail.html"
+    context_object_name = "organisation"
+    slug_field = "code"
+    slug_url_kwarg = "code"
 
+    def get_object(self, queryset=None):
+        Organisation = apps.get_model("users", "Organisation")
+        if queryset is None:
+            queryset = Organisation.objects.all()
+        return super().get_object(queryset=queryset)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        PersonOrganisation = apps.get_model("users", "PersonOrganisation")
+        Role = apps.get_model("users", "Role")
+        org = self.object
+        context["member_count"] = PersonOrganisation.objects.filter(organisation=org).count()
+        context["role_count"] = Role.objects.filter(organisation=org).count()
+        return context
 
 @login_required
 def qr_login_token(request):

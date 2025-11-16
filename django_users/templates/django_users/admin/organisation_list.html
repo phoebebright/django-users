@@ -31,7 +31,7 @@
 {% block js %}
 <script>
     $(function () {
-        const detailUrlTemplate = "{% url 'example_app:organisation_detail' 'ORG_CODE_PLACEHOLDER' %}";
+        const detailUrlTemplate = "{% url 'users:organisation_detail' 'ORG_CODE_PLACEHOLDER' %}";
         const url = "{% url 'usersapi:organisation-ro' %}";
 
         $('#org-table').DataTable({
