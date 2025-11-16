@@ -1752,10 +1752,9 @@ class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
         return self.get(request, *args, **kwargs)
 
 
-class OrganisationListView(ListView):
-    model = None
+class OrganisationListView(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/organisation_list.html"
-    context_object_name = "organisations"
+
 
 
 @login_required

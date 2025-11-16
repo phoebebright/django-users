@@ -10,3 +10,118 @@
 {% block page_header %}{% trans "Organisations" %}{% endblock %}
 
 {% block content %}
+
+
+<table id="org-table" class="table table-striped table-bordered table-sm align-middle">
+    <thead>
+    <tr>
+        <th>Code</th>
+        <th>Name</th>
+        <th>Country</th>
+        <th>Scoring Type</th>
+        <th>Active</th>
+        <th>Test</th>
+        <th>Payments</th>
+    </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+{% endblock %}
+{% block js %}
+<script>
+    $(function () {
+        const detailUrlTemplate = "{% url 'example_app:organisation_detail' 'ORG_CODE_PLACEHOLDER' %}";
+        const url = "{% url 'usersapi:organisation-ro' %}";
+
+        $('#org-table').DataTable({
+            processing: true,
+            serverSide: true,
+            pageLength: 25,
+            ordering: true,
+            order: [[1, 'asc']],  // by name
+
+            ajax: function (data, callback, settings) {
+                const page = (data.start / data.length) + 1;
+
+                const params = {
+                    page: page,
+                    page_size: data.length,
+                };
+
+                // simple search mapping -> you'll need to handle this in the viewset if you want it to work
+                if (data.search && data.search.value) {
+                    params.search = data.search.value;
+                }
+
+                // basic ordering: map DataTables column index -> DRF ordering param
+                if (data.order && data.order.length > 0) {
+                    const order = data.order[0];
+                    const columns = ['code', 'name', 'country', 'scoring_type', 'active', 'test', 'has_payment_gateway'];
+                    const colName = columns[order.column] || 'name';
+                    params.ordering = (order.dir === 'desc' ? '-' : '') + colName;
+                }
+
+                $.getJSON(url, params, function (json) {
+                    callback({
+                        data: json.results || [],
+                        recordsTotal: json.count || 0,
+                        recordsFiltered: json.count || 0
+                    });
+                });
+            },
+
+            columns: [
+                {
+                    data: 'code',
+                    render: function (data, type, row, meta) {
+                        if (!data) return '';
+                        const url = detailUrlTemplate.replace('ORG_CODE_PLACEHOLDER', encodeURIComponent(data));
+                        return '<a href="' + url + '">' + data + '</a>';
+                    }
+                },
+                {data: 'name'},
+                {data: 'country'},
+                {
+                    data: 'scoring_type',
+                    render: function (data, type, row, meta) {
+                        if (data === 'D') return 'Dressage';
+                        if (data === 'E') return 'Eventing';
+                        if (data === 'C') return 'Combined Training';
+                        return data || '';
+                    }
+                },
+                {
+                    data: 'active',
+                    render: function (data, type, row, meta) {
+                        if (data) {
+                            return '<span class="badge bg-success">Active</span>';
+                        } else {
+                            return '<span class="badge bg-secondary">Inactive</span>';
+                        }
+                    }
+                },
+                {
+                    data: 'test',
+                    render: function (data) {
+                        if (data) {
+                            return '<span class="badge bg-warning text-dark">Test</span>';
+                        }
+                        return '';
+                    }
+                },
+                {
+                    data: 'has_payment_gateway',
+                    render: function (data) {
+                        if (data) {
+                            return '<span class="badge bg-info text-dark">Configured</span>';
+                        }
+                        return '<span class="badge bg-light text-dark">None</span>';
+                    }
+                },
+            ]
+        });
+    });
+</script>
+
+{% endblock %}

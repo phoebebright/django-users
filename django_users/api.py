@@ -1016,7 +1016,8 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
-
+class OrganisationViewSet(OrganisationViewSetBase):
+    pass
 
 
 

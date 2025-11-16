@@ -53,5 +53,7 @@ urlpatterns = [
     path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),
 
 
+
+
     path('', include(router.urls)),
 ]
