@@ -24,6 +24,9 @@ then update TEMPLTES
 Can be run with or without keycloak
 
 
+## Testing 
+
+As we don't have the final models in django_users we have created an example app to run the tests so we have the final models.  There might be a better way...
 
 ## Settings
 
@@ -131,3 +134,194 @@ By default users are USER_STATUS_UNCONFIRMED (3) and then they become USER_STATU
        # confirm once profile complete (ie. country is set)
         if self.country and self.status == self.USER_STATUS_UNCONFIRMED:
             self.confirm()
+
+
+
+# Data Structures
+
+
+## 1. Person – the real-world human
+
+1. **Person represents a real person, not a login.**
+
+   * A `Person` is the canonical identity object.
+
+2. **A Person may exist with no User.**
+
+   * e.g. historic competitors, riders imported from results.
+
+3. **A Person may be linked to multiple Users.**
+
+   * This covers “I want a separate admin login and competitor login”.
+
+4. **Person has its own stable key and identifier.**
+
+   * `ref` is a generated, stable ID (`Pxxxxx`).
+   * `identifier_type` + `identifier` can be used (email/phone) when you want uniqueness at the identity level.
+
+5. **Person’s name is the canonical name.**
+
+   * `formal_name` is the primary name.
+   * `sortable_name` and `friendly_name` are derived from it if missing.
+   * `Person.save()` calls `change_name_globally()`, which pushes the name out to:
+
+     * related `Role.name`
+     * related `Competitor.name`
+     * related `EventRole.name`
+
+6. **Person↔Organisation membership is via PersonOrganisation.**
+
+   * Many-to-many: `Person.organisation` through `PersonOrganisation`.
+   * `PersonOrganisation` carries membership data: id, start/end, type, etc.
+
+---
+
+## 2. User (CustomUser) – the login account
+
+1. **User is a login, not the identity.**
+
+   * A `CustomUser` represents how someone signs in (email + password, etc.).
+
+2. **Every User must be linked to a Person (canonical identity).**
+
+   * Long-term invariant: `user.person` should always be set.
+   * Current behaviour supports this:
+
+     * In `CustomUserBaseBasic.save()`, if `person` is missing:
+
+       * `self.person = Person.create_from_user(self)` is called.
+   * Cleanup work is about enforcing this for legacy users.
+
+3. **A Person can have multiple Users.**
+
+   * Many Users may reference the same `Person` via `CustomUser.person`.
+   * This is how you support “separate admin login vs competitor login”.
+
+4. **User may have a default Organisation.**
+
+   * `CustomUser.organisation` is a FK to a single `Organisation`.
+   * This is the “default organisation context” for that login (e.g. the club they manage).
+   * **the link to a person and organisation is via Role so consider removing Organisation from User?**
+
+5. **User status models lifecycle of signup/subscription.**
+
+   * Status values: TEMPORARY, UNCONFIRMED, CONFIRMED, TRIAL, SUBSCRIBED, etc.
+   * `is_temporary`, `is_unconfirmed`, `is_confirmed`, `is_member` etc. wrap these.
+
+6. **User uses Person for names.**
+
+   * Properties like `name`, `friendly_name`, `formal_name`, `full_name` all fall back to the linked `Person` where possible.
+   * When a User’s names/email change, `change_names_email()` pushes those updates to:
+
+     * Person
+     * Competitor
+     * EventTeam
+     * EventRole
+     * Role
+
+7. **User is the fast access point for runtime checks.**
+
+   * Queries like “is this user a judge/manager/etc.?” are done via `Role` filtered by `user`.
+
+---
+
+## 3. Organisation
+
+1. **Organisation represents an organising body / club / federation.**
+
+   * `Organisation` holds name, scoring type, country, logos, etc.
+
+2. **Organisation membership lives on Person and Role, not directly on User.**
+
+   * Long-lived membership: `PersonOrganisation (Person ↔ Organisation)`.
+   * Role-based capacity (judge, organiser, manager): `Role (Person ↔ Organisation ↔ User)`.
+
+3. **User.organisation is a default/primary org for that login.**
+
+   * Used as a convenient default when creating Roles, etc.
+
+4. **Organisation may have settings / payment configuration.**
+
+   * `Organisation.settings` (JSON) includes payment setups, Stripe account, etc.
+
+---
+
+## 4. Role – the glue between Person, User, Organisation
+
+1. **Every Role belongs to a Person. (Required)**
+
+   * `Role.person` is the canonical identity for the role.
+   * This is the “who is this judge/organiser/manager really?”.
+
+2. **Every Role also references a User.**
+
+   * `Role.user` is which **login** they use for this role.
+   * This is correct and desired because a Person may use different logins for different capacities.
+
+3. **Consistency rule: Role.user must belong to Role.person.**
+
+   * Invariants you want:
+
+     * If both `role.person` and `role.user` are set, then:
+
+       * `role.user.person == role.person`
+   * That enforces: the login attached to this role is one of the person’s logins.
+
+4. **Role should normally be linked to an Organisation.**
+
+   * `Role.organisation` identifies for *which* organisation this role is exercised:
+
+     * judge for Org A
+     * organiser for Org B
+   * If missing, it should be inferred where possible (from `user.organisation` or `PersonOrganisation`).
+
+5. **Role reflects the capacity, not just membership.**
+
+   * `role_type` expresses what they are: administrator, manager, judge, organiser, competitor, etc.
+   * Each Person can have many Roles of different types and organisations.
+
+6. **Role is the main source for permission checks.**
+
+   * “Is this user an admin/manager/judge/competitor?” is determined via `Role` filtered by `user` and `role_type`.
+   * Methods like `is_administrator`, `is_manager`, `is_judge`, `is_scorer`, etc. query `Role.objects.active().filter(user=self, ...)`.
+
+7. **Role ties into organisation membership metadata via OrgMembershipMixin.**
+
+   * A Role can also carry membership info (registration id, start/end, type), in addition to `PersonOrganisation`.
+
+---
+
+## 5. Relationship rules (summary)
+
+Putting it all together:
+
+1. **Person ↔ User**
+
+   * One Person **can have many Users**.
+   * One User **must have exactly one Person** (after cleanup).
+   * `user.person` is the canonical identity link for that login.
+   * `person.customuser_set.all()` gives all logins for that person.
+
+2. **Person ↔ Organisation**
+
+   * Connected via `PersonOrganisation` (many-to-many).
+   * Stores membership details independent of how the person logs in.
+
+3. **User ↔ Organisation**
+
+   * `user.organisation` is a single “default” organisation, mainly for convenience and defaults.
+   * It can be used to auto-fill `Role.organisation` where unambiguous.
+
+4. **Person ↔ User ↔ Organisation via Role**
+
+   * `Role.person` = real person.
+   * `Role.user` = specific login used.
+   * `Role.organisation` = organisation in which this role is held.
+   * Invariant: if `Role.user` is set, that user must belong to `Role.person`.
+
+---
+
+If you’d like, next we can turn these rules into:
+
+* a short **developer-facing docstring / README section** to live alongside the models, and/or
+* **model-level assertions** (in `save()` or custom validators) that enforce the key invariants while still letting you clean legacy data.

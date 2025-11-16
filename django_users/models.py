@@ -15,7 +15,7 @@ from django.apps import apps
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
-from django.contrib.flatpages.models import FlatPage
+
 from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
 from django.core.mail import mail_admins
@@ -25,7 +25,7 @@ from django.urls import reverse_lazy, reverse
 
 import django
 from django.core.validators import MinLengthValidator, MaxLengthValidator
-from django.utils.dateparse import parse_time
+
 from django.utils.functional import cached_property
 
 from django.utils import timezone
@@ -602,24 +602,18 @@ class CustomUserManager(BaseUserManager):
         '''note that extra_fields only used in creating person not user'''
         is_active = True
         user_extras = {}
+
+        # --- split out fields that belong on the user ---
         if 'first_name' in extra_fields:
             user_extras['first_name'] = extra_fields['first_name']
             user_extras['last_name'] = extra_fields['last_name']
             extra_fields.pop('first_name')
             extra_fields.pop('last_name')
 
-        # person needs a name
-        if not 'formal_name' in extra_fields:
-            if 'first_name' in user_extras and 'last_name' in user_extras:
-                extra_fields['formal_name'] = f"{user_extras['first_name']} {user_extras['last_name']}"
-            else:
-                extra_fields['formal_name'] = email.split("@")[0]
-
-        if not 'friendly_name' in extra_fields and 'first_name' in user_extras:
-            extra_fields['friendly_name'] = user_extras['first_name']
-
-        if not 'sortable_name' in extra_fields and 'first_name' in user_extras:
-            extra_fields['sortable_name'] = f"{user_extras['last_name'].lower()} {user_extras['first_name'].lower()}"
+        # this is the organisation for the *user* FK
+        organisation = extra_fields.pop('organisation', None)
+        if organisation is not None:
+            user_extras['organisation'] = organisation
 
         if 'username' in extra_fields:
             extra_fields.pop('username')
@@ -630,7 +624,23 @@ class CustomUserManager(BaseUserManager):
         if 'activation_code' in extra_fields:
             user_extras['activation_code'] = extra_fields.pop('activation_code')
 
+        # person needs a name
+        if 'formal_name' not in extra_fields:
+            if 'first_name' in user_extras and 'last_name' in user_extras:
+                extra_fields['formal_name'] = f"{user_extras['first_name']} {user_extras['last_name']}"
+            else:
+                extra_fields['formal_name'] = email.split("@")[0]
 
+        if 'friendly_name' not in extra_fields and 'first_name' in user_extras:
+            extra_fields['friendly_name'] = user_extras['first_name']
+
+        if 'sortable_name' not in extra_fields and 'first_name' in user_extras:
+            extra_fields['sortable_name'] = f"{user_extras['last_name'].lower()} {user_extras['first_name'].lower()}"
+
+        # --- create Person WITHOUT the m2m organisation field ---
+
+        # ensure every user has a person record
+        #TODO: add option to attach to an existing person record - in reality will usually merge after creating
         person = self.Person.objects.create(**extra_fields)
 
         user_extras['person'] = person
@@ -638,10 +648,19 @@ class CustomUserManager(BaseUserManager):
 
         if not is_active:
             user.is_active = False
-            user.quick_save(update_fields=['is_active', ])
+            user.quick_save(update_fields=['is_active'])
 
+        # link person to organisation via M2M if provided
+        if organisation is not None:
+            # accept a single org or an iterable
+            if isinstance(organisation, (list, tuple, set)):
+                person.organisation.add(*organisation)
+            else:
+                person.organisation.add(organisation)
+
+        # keep the back-link in sync (if you rely on it)
         person.user = user
-        person.save()
+        person.save(update_fields=['user'])
 
         return user
 
@@ -855,9 +874,6 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
                                                                   value=self.email)
             self.preferred_channel = email_channel
             self.quick_save(update_fields=['preferred_channel', ])
-
-
-
 
 
         # Person has link to user, so can't create until user is saved
@@ -2091,7 +2107,7 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
     )
     DEFAULT_IDENTIFIER_TYPE = "E"
 
-    # ? should there be an email or mobile in here as a key to identifying a unique Person?
+    # ? should there be an email or mobile in here as a key to identifying a unique Person who might have the same name as another Person
     ref = models.CharField(max_length=6, primary_key=True)
 
     formal_name = models.CharField(_('formal name'), max_length=50,
@@ -2343,6 +2359,7 @@ class RoleBase(CreatedUpdatedMixin):
         abstract = True
         indexes = [
             models.Index(fields=['user', 'active','role_type']),
+            models.Index(fields=['user', 'organisation', 'role_type']),
         ]
 
     def save(self, *args, **kwargs):
@@ -2350,18 +2367,32 @@ class RoleBase(CreatedUpdatedMixin):
         if not self.ref:
             self.ref = get_new_ref("role")
 
-        # Ensure consistency between user and person
-        if self.person and self.person.user and self.person.user != self.user:
-            self.user = self.person.user
-        elif self.user and self.user.person and self.user.person != self.person:
-            self.person = self.user.person
+        # 1. If user is set but person is missing, derive person from user
+        if self.user and not self.person:
+            if getattr(self.user, "person_id", None):
+                self.person = self.user.person
 
-        if self.user and self.user.person and self.person != self.user.person:
+        # 2. If person is set but user is missing, we *may* infer a user
+        #    BUT only when there is exactly one user for this person.
+        if self.person and not self.user:
+            # multiple logins are allowed, so be conservative
+            CustomUser = apps.get_model("users", "CustomUser")
+            qs = CustomUser.objects.filter(person=self.person)
+            if qs.count() == 1:
+                self.user = qs.first()
+            # else: leave user=None; you’ll fill it via admin/cleanup
+
+        # 3. If both are set, they must be consistent
+        if self.user and self.person and self.user.person_id != self.person_id:
             raise ValidationError(
-                f"User and Person have a one to one link - user is linked to {self.user.person} and trying to save with link to person {self.person}")
+                f"Role.user ({self.user}) must belong to Role.person ({self.person})"
+            )
 
-        if self.user and self.organisation and self.organisation != self.user.organisation:
-            self.organisation = self.user.organisation
+        # 4. Organisation convenience – only default if missing
+        if not self.organisation:
+            # prefer the organisation on the user, if present
+            if self.user and getattr(self.user, "organisation_id", None):
+                self.organisation = self.user.organisation
 
         if not self.name and self.person:
             self.name = self.person.formal_name

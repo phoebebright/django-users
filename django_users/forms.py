@@ -15,8 +15,8 @@ from django_countries.fields import CountryField
 from phonenumber_field.formfields import PhoneNumberField
 
 from django_users.utils import normalise_email
-# we assume that models have been subclassed in users app in target system to allow for customisation
-from users.models import Organisation, CommsChannel, Person, Role, HelpDeskTicket
+
+
 
 User = get_user_model()
 
@@ -398,7 +398,7 @@ class SkorieUserCreationForm(CustomUserCreationForm):
 
 class OrganisationForm(ModelForm):
     class Meta:
-        model = Organisation
+        model = apps.get_model('users', 'Organisation')
         fields = '__all__'
 
 class CommsChannelForm(forms.ModelForm):
@@ -413,7 +413,7 @@ class CommsChannelForm(forms.ModelForm):
     )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     class Meta:
-        model = CommsChannel
+        model = apps.get_model('users', 'CommsChannel')
         fields = ['channel_type', 'email', 'mobile']
 
 class AddCommsChannelForm(forms.ModelForm):
@@ -432,7 +432,7 @@ class AddCommsChannelForm(forms.ModelForm):
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
-        model = CommsChannel
+        model = apps.get_model('users', 'CommsChannel')
         fields = ['channel_type', 'email', 'mobile']
 
     def clean(self):
@@ -466,48 +466,48 @@ class PersonForm(forms.ModelForm):
 
 
     class Meta:
-        model = Person
+        model = apps.get_model('users', 'Person')
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
-
-class SupportTicketForm(forms.ModelForm):
-
-
-    class Meta:
-        model = HelpDeskTicket
-        fields = ['title', 'notes', 'priority', 'site']
-        widgets = {
-            'title': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Brief description of your issue',
-                'required': True
-            }),
-            'notes': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 6,
-                'placeholder': 'Please provide detailed information about your issue...',
-                'required': True
-            }),
-            'priority': forms.Select(attrs={
-                'class': 'form-control'
-            }),
-            'site': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Site or location (optional)'
-            })
-        }
-
-    def clean_title(self):
-        title = self.cleaned_data.get('title', '').strip()
-        if len(title) < 5:
-            raise forms.ValidationError("Title must be at least 5 characters long.")
-        return title
-
-    def clean_notes(self):
-        notes = self.cleaned_data.get('notes', '').strip()
-        if len(notes) < 20:
-            raise forms.ValidationError("Please provide more detailed information (at least 20 characters).")
-        return notes
+#
+# class SupportTicketForm(forms.ModelForm):
+#
+#
+#     class Meta:
+#         model = HelpDeskTicket
+#         fields = ['title', 'notes', 'priority', 'site']
+#         widgets = {
+#             'title': forms.TextInput(attrs={
+#                 'class': 'form-control',
+#                 'placeholder': 'Brief description of your issue',
+#                 'required': True
+#             }),
+#             'notes': forms.Textarea(attrs={
+#                 'class': 'form-control',
+#                 'rows': 6,
+#                 'placeholder': 'Please provide detailed information about your issue...',
+#                 'required': True
+#             }),
+#             'priority': forms.Select(attrs={
+#                 'class': 'form-control'
+#             }),
+#             'site': forms.TextInput(attrs={
+#                 'class': 'form-control',
+#                 'placeholder': 'Site or location (optional)'
+#             })
+#         }
+#
+#     def clean_title(self):
+#         title = self.cleaned_data.get('title', '').strip()
+#         if len(title) < 5:
+#             raise forms.ValidationError("Title must be at least 5 characters long.")
+#         return title
+#
+#     def clean_notes(self):
+#         notes = self.cleaned_data.get('notes', '').strip()
+#         if len(notes) < 20:
+#             raise forms.ValidationError("Please provide more detailed information (at least 20 characters).")
+#         return notes
 
 
 class SubscriptionPreferencesForm(forms.ModelForm):

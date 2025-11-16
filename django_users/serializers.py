@@ -11,8 +11,8 @@ from django_countries.serializers import CountryFieldMixin
 from rest_framework import serializers
 
 # assume that all user models have been subclass in users app in target system to allow for customisation
-from users.models import Person, Role, Organisation
-from web.models import EventRole
+# from users.models import Person, Role, Organisation
+
 
 User = get_user_model()
 
@@ -226,7 +226,7 @@ class UserSyncSerializer(DynamicModelSerializer):
 class OrganisationSerializer(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
-        model = Organisation
+        model = apps.get_model('users', 'Organisation')
         fields = '__all__'
 
 class OrganisationSerializerBase(OrganisationSerializer):
@@ -247,14 +247,14 @@ class CommsChannelSerializerBase(DynamicModelSerializer):
 class RoleShortSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = Role
+        model = apps.get_model('users', 'Role')
         fields = ['id','name','ref']
 
 
 class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = Role
+        model = apps.get_model('users', 'Role')
         fields = ['id','name','ref','person','user','organisation']
 
     def to_representation(self, instance):
@@ -268,7 +268,7 @@ class RoleSerializer(serializers.ModelSerializer):
 
 class PersonSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Person
+        model = apps.get_model('users', 'Person')
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 

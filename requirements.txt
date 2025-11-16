@@ -16,3 +16,10 @@ git+https://github.com/phoebebright/django-yamlfield
 django-timezone-field
 django_countries
 nanoid
+cryptography
+django-phonenumber-field[phonenumbers]
+python-keycloak==4.0.0
+pillow
+
+# for testing
+arrow
