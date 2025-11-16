@@ -1,0 +1,100 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+
+
+{% block title %} {{ organisation.name }}{% endblock %}
+{% block page_header %} {{ organisation.name }}{% endblock %}
+
+{% block content %}
+
+
+
+    {% if organisation.test %}
+        <span class="badge bg-warning text-dark me-2">Test Organisation</span>
+    {% endif %}
+
+    {% if organisation.active %}
+        <span class="badge bg-success">Active</span>
+    {% else %}
+        <span class="badge bg-secondary">Inactive</span>
+    {% endif %}
+
+    <hr>
+
+    <dl class="row">
+        <dt class="col-sm-3">Code</dt>
+        <dd class="col-sm-9">{{ organisation.code }}</dd>
+
+        <dt class="col-sm-3">Country</dt>
+        <dd class="col-sm-9">{{ organisation.country|default:"-" }}</dd>
+
+        <dt class="col-sm-3">Scoring type</dt>
+        <dd class="col-sm-9">
+            {% if organisation.scoring_type == "D" %}Dressage
+            {% elif organisation.scoring_type == "E" %}Eventing
+            {% elif organisation.scoring_type == "C" %}Combined Training
+            {% else %}{{ organisation.scoring_type }}{% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Home page</dt>
+        <dd class="col-sm-9">
+            {% if organisation.home_page %}
+                <a href="{{ organisation.home_page }}" target="_blank">{{ organisation.home_page }}</a>
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Default authority</dt>
+        <dd class="col-sm-9">
+            {% if organisation.default_authority %}
+                {{ organisation.default_authority }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Seller</dt>
+        <dd class="col-sm-9">
+            {% if organisation.seller %}
+                {{ organisation.seller }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Stripe account</dt>
+        <dd class="col-sm-9">
+            {% if organisation.stripe_account_id %}
+                {{ organisation.stripe_account_id }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Members</dt>
+        <dd class="col-sm-9">
+            {{ member_count }}
+        </dd>
+
+        <dt class="col-sm-3">Roles</dt>
+        <dd class="col-sm-9">
+            {{ role_count }}
+        </dd>
+    </dl>
+
+    {% if organisation.logo_link_large %}
+        <h3 class="mt-4">Logo (large)</h3>
+        <img src="{{ organisation.logo_link_large.url }}" class="img-fluid mb-3" alt="Large logo">
+    {% endif %}
+
+    {% if organisation.logo_link_small %}
+        <h3 class="mt-4">Logo (small)</h3>
+        <img src="{{ organisation.logo_link_small.url }}" class="img-fluid mb-3" alt="Small logo">
+    {% endif %}
+
+{% endblock %}
