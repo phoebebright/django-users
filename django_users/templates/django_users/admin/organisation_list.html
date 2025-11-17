@@ -5,7 +5,6 @@
 {% load bootstrap5 %}
 
 
-
 {% block title %}{% trans "Organisations" %}{% endblock %}
 {% block page_header %}{% trans "Organisations" %}{% endblock %}
 
@@ -29,10 +28,12 @@
 </table>
 {% endblock %}
 {% block js %}
+    {{DATATABLES_LOAD|safe}}
 <script>
+
     $(function () {
         const detailUrlTemplate = "{% url 'users:organisation_detail' 'ORG_CODE_PLACEHOLDER' %}";
-        const url = "{% url 'usersapi:organisation-ro' %}";
+        const url = "{% url 'usersapi:organisation-ro-list' %}";
 
         $('#org-table').DataTable({
             processing: true,

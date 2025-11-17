@@ -311,7 +311,13 @@ def signup_redirect(request):
 
 
 def after_login_redirect(request):
-    # using skor.ie emails as temporary emails so don't want subscirbe form displayed
+
+    # set current organisation if needed
+    if getattr(settings, "USE_CURRENT_ORGANISATION", False) and request.user.is_authenticated:
+        org = request.user.get_current_organisation(request)
+        if not org:
+            request.user.set_current_organisation(request, None)
+
     User = get_user_model()
     if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")

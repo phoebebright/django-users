@@ -2,8 +2,8 @@
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from users.models import Role, Person, CommsChannel, VerificationCode
-from web.models import *
+from ..models import Role, Person, CommsChannel, VerificationCode
+
 
 User = get_user_model()
 
@@ -11,7 +11,7 @@ class RoleModelTest(TestCase):
     def setUp(self):
         self.user = User.objects.create(username='testuser')
         self.person = Person.objects.create(name='John Doe', user=self.user)
-        self.event = Event.objects.create(name='Test Event')
+
 
     def test_create_role(self):
         role, created = Role.get_or_create(role_type='A', user=self.user, person=self.person, name='Admin Role')
@@ -27,19 +27,6 @@ class RoleModelTest(TestCase):
         with self.assertRaises(Role.DoesNotExist):
             Role.objects.get(id=role_id)
 
-    def test_role_deletion_with_eventrole(self):
-        role, _ = Role.get_or_create(role_type='A', user=self.user, person=self.person, name='Admin Role')
-        EventRole.objects.create(event=self.event, role=role)
-        with self.assertRaises(ValidationError):
-            role.delete()
-
-    def test_set_role_inactive(self):
-        role, _ = Role.get_or_create(role_type='A', user=self.user, person=self.person, name='Admin Role')
-        EventRole.objects.create(event=self.event, role=role)
-        role.active = False
-        role.save()
-        updated_role = Role.objects.get(id=role.id)
-        self.assertFalse(updated_role.active)
 
     def test_reactivate_role(self):
         role, _ = Role.get_or_create(role_type='A', user=self.user, person=self.person, name='Admin Role', active=False)

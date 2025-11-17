@@ -1016,9 +1016,11 @@ class OrganisationViewSetBase(viewsets.ReadOnlyModelViewSet):
 
         return queryset
 
-class OrganisationViewSet(OrganisationViewSetBase):
-    pass
 
+class OrganisationViewSet(UserCanAdministerMixin, OrganisationViewSetBase):
+    # paged - for admins only
+    pagination_class = UserDatatablesPagination
+    filter_backends = [DatatablesFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
 
 @api_view(['PATCH'])

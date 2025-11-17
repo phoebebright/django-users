@@ -681,6 +681,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     # Private attributes for lazy-loaded models
 
 
+    SESSION_KEY_CURRENT_ORG = "current_org_code"
 
     _system_user = None
     #I don't think this works as it needs to be a class property
@@ -1538,6 +1539,71 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
                 self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
                                                         mobile=self.profile['mobile'])
 
+
+    @property
+    def organisations(self):
+        """
+        A human is represented by Person.
+        A Person can belong to many organisations (via PersonOrganisation).
+        A CustomUser is a login account for a (usually single) Person.
+        A CustomUser therefore can operate in any org their Person belongs to, but at any given time your UI uses a current_org stored in the session.
+        """
+        if self.person_id:
+            return self.person.organisation.all()
+        Organisation = apps.get_model("users", "Organisation")
+        return Organisation.objects.none()
+
+    def get_default_organisation(self):
+        """
+        A sensible default organisation:
+        - if user has a FK organisation, prefer that
+        - else if they only belong to one organisation via M2M, use that
+        - else None
+        """
+        if self.organisation_id:
+            return self.organisation
+
+        orgs = list(self.organisations[:2])
+        if len(orgs) == 1:
+            return orgs[0]
+        return None
+
+
+    def get_current_organisation(self, request):
+        """
+        Returns the 'current' organisation from the session, or
+        falls back to default logic if not set / invalid.
+        """
+        Organisation = apps.get_model("users", "Organisation")
+
+        # 1. Try session
+        code = request.session.get(self.SESSION_KEY_CURRENT_ORG)
+        if code:
+            try:
+                org = Organisation.objects.get(code=code)
+                # sanity check: user actually belongs to this org?
+                if self.person_id and org in self.organisations:
+                    return org
+            except Organisation.DoesNotExist:
+                pass
+
+        # 2. Fallback to default org
+        org = self.get_default_organisation()
+        if org:
+            self.set_current_organisation(request, org)
+            return org
+
+        # 3. No org
+        return None
+
+    def set_current_organisation(self, request, organisation):
+        """
+        Set the current organisation in the session.
+        """
+        if organisation is None:
+            request.session.pop(self.SESSION_KEY_CURRENT_ORG, None)
+        else:
+            request.session[self.SESSION_KEY_CURRENT_ORG] = organisation.code
 
 class CustomUserBase(CustomUserBaseBasic):
 

@@ -146,3 +146,5 @@ KEYCLOAK_CLIENTS = {
         "CLIENT_SECRET": "xyz",
     },
 }
+
+USE_CURRENT_ORGANISATION = True   # on login users are attached to a default organisation if there are any in the Roles

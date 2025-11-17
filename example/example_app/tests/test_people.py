@@ -1,6 +1,7 @@
 # users/tests/test_user_person_role.py
-
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import TestCase, RequestFactory
 from django.core.exceptions import ValidationError
 from django.apps import apps
 from django.conf import settings
@@ -8,6 +9,184 @@ from django.utils.module_loading import import_string
 
 from ..models import Person, CustomUser, Role, Organisation, PersonOrganisation
 
+
+class CurrentOrganisationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.User = get_user_model()
+        cls.Person = apps.get_model("users", "Person")
+        cls.Organisation = apps.get_model("users", "Organisation")
+        cls.PersonOrganisation = apps.get_model("users", "PersonOrganisation")
+
+        # Organisations
+        cls.org1 = cls.Organisation.objects.create(code="ORG1", name="Org One")
+        cls.org2 = cls.Organisation.objects.create(code="ORG2", name="Org Two")
+        cls.org3 = cls.Organisation.objects.create(code="ORG3", name="Org Three")
+
+        # User with a single org membership (org1)
+        cls.user_single = cls.User.objects.create_user(
+            email="single@example.com",
+            password="testpass123",
+        )
+        # Make sure we have a Person instance
+        person_single = cls.user_single.person
+        cls.PersonOrganisation.objects.create(person=person_single, organisation=cls.org1)
+
+        # User with two org memberships (org1, org2)
+        cls.user_multi = cls.User.objects.create_user(
+            email="multi@example.com",
+            password="testpass123",
+        )
+        person_multi = cls.user_multi.person
+        cls.PersonOrganisation.objects.create(person=person_multi, organisation=cls.org1)
+        cls.PersonOrganisation.objects.create(person=person_multi, organisation=cls.org2)
+
+        # User with no org memberships
+        cls.user_none = cls.User.objects.create_user(
+            email="none@example.com",
+            password="testpass123",
+        )
+
+        cls.factory = RequestFactory()
+
+    # ----- helpers ----------------------------------------------------------
+
+    def _request_with_session_for_user(self, user):
+        """
+        Build a request with a working session and attached user.
+        """
+        request = self.factory.get("/")
+        # Attach session
+        middleware = SessionMiddleware(lambda r: None)
+        middleware.process_request(request)
+        request.session.save()
+
+        request.user = user
+        return request
+
+    # ----- organisations property ------------------------------------------
+
+    def test_organisations_property_single(self):
+        """User with one membership should see exactly one organisation."""
+        orgs = list(self.user_single.organisations)
+        self.assertEqual(len(orgs), 1)
+        self.assertEqual(orgs[0], self.org1)
+
+    def test_organisations_property_multiple(self):
+        """User with multiple memberships should see all of them."""
+        orgs = list(self.user_multi.organisations.order_by("code"))
+        self.assertEqual(orgs, [self.org1, self.org2])
+
+    def test_organisations_property_none(self):
+        """User with no memberships should return an empty queryset."""
+        orgs = list(self.user_none.organisations)
+        self.assertEqual(orgs, [])
+
+    # ----- get_current_organisation: default behaviour ---------------------
+
+    def test_get_current_org_single_user_auto_sets_session(self):
+        """
+        For a user with a single organisation and no session set, get_current_organisation
+        should return that org and populate the session.
+        """
+        user = self.user_single
+        request = self._request_with_session_for_user(user)
+
+        org = user.get_current_organisation(request)
+
+        self.assertEqual(org, self.org1)
+        # Session should now contain the org code
+        self.assertEqual(
+            request.session[user.SESSION_KEY_CURRENT_ORG],
+            self.org1.code,
+        )
+
+    def test_get_current_org_multi_user_without_session_uses_default(self):
+        """
+        For a user with multiple orgs and no session:
+        - get_current_organisation should fall back to get_default_organisation()
+        - by default we expect None (since there is no single obvious org)
+        """
+        user = self.user_multi
+        request = self._request_with_session_for_user(user)
+
+        org = user.get_current_organisation(request)
+
+        # With the default implementation we discussed, multi-org users have no clear default.
+        # If you later change get_default_organisation to prefer org1, you'll update this assert.
+        self.assertIsNone(org)
+        self.assertNotIn(user.SESSION_KEY_CURRENT_ORG, request.session)
+
+    def test_get_current_org_no_memberships_returns_none(self):
+        """User with no memberships should get None and no session key."""
+        user = self.user_none
+        request = self._request_with_session_for_user(user)
+
+        org = user.get_current_organisation(request)
+
+        self.assertIsNone(org)
+        self.assertNotIn(user.SESSION_KEY_CURRENT_ORG, request.session)
+
+    # ----- set_current_organisation + read-back ----------------------------
+
+    def test_set_and_get_current_org_for_multi_user(self):
+        """
+        Explicitly setting current org should store it in the session and
+        get_current_organisation should return it.
+        """
+        user = self.user_multi
+        request = self._request_with_session_for_user(user)
+
+        # Precondition: user belongs to org2
+        self.assertIn(self.org2, list(user.organisations))
+
+        user.set_current_organisation(request, self.org2)
+
+        # Session should now have org2
+        self.assertEqual(
+            request.session[user.SESSION_KEY_CURRENT_ORG],
+            self.org2.code,
+        )
+
+        org = user.get_current_organisation(request)
+        self.assertEqual(org, self.org2)
+
+    def test_set_current_org_clears_when_none(self):
+        """
+        Setting current organisation to None should remove the key from session.
+        """
+        user = self.user_single
+        request = self._request_with_session_for_user(user)
+
+        # Set a current org first
+        user.set_current_organisation(request, self.org1)
+        self.assertIn(user.SESSION_KEY_CURRENT_ORG, request.session)
+
+        # Now clear it
+        user.set_current_organisation(request, None)
+        self.assertNotIn(user.SESSION_KEY_CURRENT_ORG, request.session)
+
+    # ----- invalid / non-member org in session -----------------------------
+
+    def test_get_current_org_ignores_session_org_user_does_not_belong_to(self):
+        """
+        If the session holds an org code that the user is not a member of,
+        get_current_organisation should ignore it and fall back to default logic.
+        """
+        user = self.user_single
+        request = self._request_with_session_for_user(user)
+
+        # Put an invalid org code into the session
+        request.session[user.SESSION_KEY_CURRENT_ORG] = self.org3.code  # user_single not a member of org3
+
+        org = user.get_current_organisation(request)
+
+        # Should ignore org3 and fall back to default (org1 for single-org user)
+        self.assertEqual(org, self.org1)
+        self.assertEqual(
+            request.session[user.SESSION_KEY_CURRENT_ORG],
+            self.org1.code,
+        )
 
 class UserPersonRoleRulesTests(TestCase):
 
