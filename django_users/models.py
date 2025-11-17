@@ -15,6 +15,7 @@ from django.apps import apps
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.contrib.postgres.indexes import GinIndex
 
 from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
@@ -850,6 +851,24 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = _('users')
         abstract = True
         app_label = 'django_users'
+        # add once up to date
+        # indexes = [
+        #     GinIndex(
+        #         fields=["email"],
+        #         name="member_email_trgm_idx",
+        #         opclasses=["gin_trgm_ops"],
+        #     ),
+        #     GinIndex(
+        #         fields=["first_name"],
+        #         name="member_first_name_trgm_idx",
+        #         opclasses=["gin_trgm_ops"],
+        #     ),
+        #     GinIndex(
+        #         fields=["last_name"],
+        #         name="member_last_name_trgm_idx",
+        #         opclasses=["gin_trgm_ops"],
+        #     ),
+        # ]
 
     def save(self, *args, **kwargs):
 
@@ -2207,7 +2226,14 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
         verbose_name_plural = _('people')
         ordering = ['sortable_name', ]
         abstract = True
-
+        # add once up to date - speeds searching
+        # indexes = [
+        #     GinIndex(
+        #         fields=["format_name"],
+        #         name="person_format_name_trgm_idx",
+        #         opclasses=["gin_trgm_ops"],
+        #     ),
+        # ]
 
     def save(self, *args, **kwargs):
 
