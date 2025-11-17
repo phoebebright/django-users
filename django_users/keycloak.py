@@ -28,11 +28,6 @@ def get_keycloak_admin():
     if not getattr(settings, "USE_KEYCLOAK", False):
         return None
 
-    keycloak_url = settings.KEYCLOAK_URL
-    keycloak_realm = settings.KEYCLOAK_REALM
-    client_id = settings.KEYCLOAK_CLIENT_ID
-    client_secret = settings.KEYCLOAK_CLIENT_SECRET
-
     return KeycloakAdmin(
         server_url=f"{keycloak_url}/",
         realm_name=keycloak_realm,
@@ -47,11 +42,6 @@ def get_keycloak_openid():
     """Return a cached KeycloakOpenID instance, or None if disabled."""
     if not getattr(settings, "USE_KEYCLOAK", False):
         return None
-
-    keycloak_url = settings.KEYCLOAK_URL
-    keycloak_realm = settings.KEYCLOAK_REALM
-    client_id = settings.KEYCLOAK_CLIENT_ID
-    client_secret = settings.KEYCLOAK_CLIENT_SECRET
 
     return KeycloakOpenID(
         server_url=f"{keycloak_url}/",
