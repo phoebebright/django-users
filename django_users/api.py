@@ -18,14 +18,13 @@ from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status, viewsets, filters
-from rest_framework.authentication import SessionAuthentication
+
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action, throttle_classes
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.fields import EmailField, SearchFilter
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.serializers import Serializer
+
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK, HTTP_201_CREATED, HTTP_208_ALREADY_REPORTED, HTTP_404_NOT_FOUND
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
@@ -1133,7 +1132,7 @@ class CreateUser(APIView):
             logger.error(f"Failed to create keycloak user for {data['email']}")
             return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
 
-class QSearchFilter(SearchFilter):
+class QSearchFilter(filters.SearchFilter):
     search_param = 'q'
 class MemberViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
