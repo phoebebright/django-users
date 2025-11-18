@@ -21,7 +21,7 @@ from rest_framework import status, viewsets, filters
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, action, throttle_classes
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.fields import EmailField
+from rest_framework.fields import EmailField, SearchFilter
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -1133,31 +1133,19 @@ class CreateUser(APIView):
             logger.error(f"Failed to create keycloak user for {data['email']}")
             return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
 
-
-class MemberViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.none()
+class QSearchFilter(SearchFilter):
+    search_param = 'q'
+class MemberViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
     serializer_class = UserSerializer
 
-    def get_queryset(self):
-        # TODO: can only access people if you are an organiser (?) and they have been on a team for an event organised
-        # by your organisation
-        # THIS API should only return a list of emails to match a query OR a single entry to match a full email
-        queryset = User.objects.icansee(self.request.user).select_related('person')
-        q = self.request.query_params.get('q', None)
-
-        if q is not None:
-            return queryset.filter(
-                Q(email__icontains=q) |
-                Q(first_name__icontains=q) |
-                Q(last_name__icontains=q) |
-                Q(person__formal_name__icontains=q)
-            )
-
-        q = self.request.query_params.get('email', None)
-        if q is not None:
-            return queryset.filter(email=q)
-
-        return User.objects.none()
+    filter_backends = [QSearchFilter]
+    search_fields = [
+        'email',
+        'first_name',
+        'last_name',
+        'person__formal_name',
+    ]
 
 
 class RoleViewSetBase(viewsets.ModelViewSet):
