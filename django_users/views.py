@@ -222,7 +222,7 @@ class TellUsAbout(LoginRequiredMixin, FormView):
         user.save()
 
         # this will set status to at least Confirmed
-        user.update_subscribed(form.cleaned_data['subscribe'])
+        user.confirm()
 
         # add contact note
         notify = getattr(settings, "NOTIFY_NEW_USER_EMAILS", False)
