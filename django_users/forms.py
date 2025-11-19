@@ -400,7 +400,7 @@ class SkorieUserCreationForm(CustomUserCreationForm):
             mail.send(
                 obj.email,
                 template='new_user',
-                context={'user': self.obj, 'otp_code': self.cleaned_data["password"]},
+                context={'user': obj, 'otp_code': self.cleaned_data["password"]},
                 receiver=self.user,
             )
             #self.request.messages.add(self, f'Sent user welcome email to: {obj.email}')
