@@ -16,9 +16,12 @@ from phonenumber_field.formfields import PhoneNumberField
 
 from django_users.utils import normalise_email
 # we assume that models have been subclassed in users app in target system to allow for customisation
+from django_users.utils import normalise_email, get_mail_class
+
+# we assume that models have been subclassed in users app in target system to allow for customisation
 
 User = get_user_model()
-
+mail = get_mail_class()
 
 class SubscribeForm(forms.Form):
     '''
@@ -390,6 +393,17 @@ class SkorieUserCreationForm(CustomUserCreationForm):
         obj.password = None
         obj.save()
 
+
+        #self.request.messages.add(self, f'User created: {self.new_user.email}')
+
+        if self.cleaned_data.get('send_welcome_email'):
+            mail.send(
+                obj.email,
+                template='new_user',
+                context={'user': self.obj, 'otp_code': self.cleaned_data["password"]},
+                receiver=self.user,
+            )
+            #self.request.messages.add(self, f'Sent user welcome email to: {obj.email}')
 
         #obj.confirm() # may not want to do this as will prevent about screen on first login
         return self
