@@ -48,8 +48,8 @@ urlpatterns = [
 
     # these two calls do very similar things - at some point combine
     path('email_exists_or_404/', email_exists_or_404, name='email_exists_or_404'),
-    path('email_exists/', CheckEmail.as_view(), name='email_exists'),  # depreacated use check_email or emails_exists_or_404
-    path('email_exists/', CheckEmail.as_view(), name='check_email'),
+    path('email_exists/', CheckEmail.as_view({'post':'post'}), name='email_exists'),  # depreacated use check_email or emails_exists_or_404
+    path('email_exists/', CheckEmail.as_view({'post':'post'}), name='check_email'),
     path('check_user/', CheckUserPublic.as_view({'post': 'post'}), name='check_user'),
 
     path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),

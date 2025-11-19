@@ -104,6 +104,7 @@ class AddUser(generic.CreateView):
     Define success url that may pass on to a send message to user - this only creates the user
     '''
     new_user = None
+    otp_code = None
 
     template_name = 'django_users/admin/add_user.html'
 
@@ -120,11 +121,12 @@ class AddUser(generic.CreateView):
         return [template, ]
 
     def get_success_url(self):
-        # get commstemplate pk to use as template
-        new_user_email_template_id = getattr(settings, 'NEW_USER_EMAIL_TEMPLATE', None)
-        if new_user_email_template_id:
-            return reverse('news:news-admin-send-from-template',
-                           kwargs={'pk': self.new_user.id, 'template_id': new_user_email_template_id})
+        mail.send(
+            self.user.email,
+            template='new_user',
+            context={'user': self.new_user, 'otp_code': self.otp_code},
+            receiver=self.user,
+        )
 
     def get_form_class(self):
         return SkorieUserCreationForm
@@ -178,10 +180,9 @@ class AddUser(generic.CreateView):
                 user = user.instance
 
             user.keycloak_id = keycloak_id
-            user.attributes = {'temporary_password': form.cleaned_data[
-                'password']}  # lets use activation code (or verification code) to store the temporary password
-            user.activation_code = form.cleaned_data[
-                'password']  # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
+            self.otp_code = form.cleaned_data['password']
+            user.attributes = {'temporary_password': self.otp_code }  # lets use activation code (or verification code) to store the temporary password
+            user.activation_code = self.otp_code   # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
             user.creator = me
             if not user.username:
                 user.username = user.email
