@@ -8,7 +8,7 @@ from django.urls import path, include
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
     UserProfileUpdate, SetTemporaryPassword, toggle_role, CheckEmailInKeycloakPublic, CheckEmailInKeycloak, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
-    email_exists, SendVerificationCode, CheckUserPublic, PagedUserListViewset
+     SendVerificationCode, CheckUserPublic, PagedUserListViewset, email_exists_or_404
 from django_users.views import login_with_token
 
 # Use DRF's DefaultRouter, not django.db.router
@@ -47,7 +47,9 @@ urlpatterns = [
     # path('email_exists/', email_exists, name='email_exists'),
 
     # these two calls do very similar things - at some point combine
-    path('email_exists/', email_exists, name='email_exists'),
+    path('email_exists_or_404/', email_exists_or_404, name='email_exists_or_404'),
+    path('email_exists/', CheckEmail.as_view(), name='email_exists'),  # depreacated use check_email or emails_exists_or_404
+    path('email_exists/', CheckEmail.as_view(), name='check_email'),
     path('check_user/', CheckUserPublic.as_view({'post': 'post'}), name='check_user'),
 
     path('resend_verify_code/', SendVerificationCode.as_view(), name='resend_verify_code'),

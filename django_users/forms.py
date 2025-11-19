@@ -469,16 +469,13 @@ class PersonForm(forms.ModelForm):
         model = apps.get_model('users', 'Person')
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
-#TODO: need to reimplement
-class HelpDeskTicket:
-    pass
 
 
 class SupportTicketForm(forms.ModelForm):
 
 
     class Meta:
-        model = HelpDeskTicket
+        model = None
         fields = ['title', 'notes', 'priority', 'site']
         widgets = {
             'title': forms.TextInput(attrs={
