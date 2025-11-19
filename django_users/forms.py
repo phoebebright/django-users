@@ -16,7 +16,6 @@ from phonenumber_field.formfields import PhoneNumberField
 
 from django_users.utils import normalise_email
 # we assume that models have been subclassed in users app in target system to allow for customisation
-from users.models import Organisation, CommsChannel, Person, Role, HelpDeskTicket
 
 User = get_user_model()
 
@@ -213,7 +212,7 @@ class ForgotPasswordForm(forms.Form):
         # Ensure it’s a valid choice for this user (prevents tampering)
         valid_ids = {k for k, _ in self.fields['channel'].choices}
         if str(value) not in valid_ids:
-            raise forms.ValidationError(_('Invalid or unverified channel selected.'))
+            raise forms.ValidationError('Invalid or unverified channel selected.')
 
         return value
 
@@ -398,7 +397,7 @@ class SkorieUserCreationForm(CustomUserCreationForm):
 
 class OrganisationForm(ModelForm):
     class Meta:
-        model = Organisation
+        model = apps.get_model('users', 'Organisation')
         fields = '__all__'
 
 class CommsChannelForm(forms.ModelForm):
@@ -413,7 +412,7 @@ class CommsChannelForm(forms.ModelForm):
     )
     mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
     class Meta:
-        model = CommsChannel
+        model = apps.get_model('users', 'CommsChannel')
         fields = ['channel_type', 'email', 'mobile']
 
 class AddCommsChannelForm(forms.ModelForm):
@@ -432,7 +431,7 @@ class AddCommsChannelForm(forms.ModelForm):
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
-        model = CommsChannel
+        model = apps.get_model('users', 'CommsChannel')
         fields = ['channel_type', 'email', 'mobile']
 
     def clean(self):
@@ -466,7 +465,7 @@ class PersonForm(forms.ModelForm):
 
 
     class Meta:
-        model = Person
+        model = apps.get_model('users', 'Person')
         fields = ['formal_name', 'friendly_name', 'sortable_name']
 
 
@@ -474,7 +473,7 @@ class SupportTicketForm(forms.ModelForm):
 
 
     class Meta:
-        model = HelpDeskTicket
+        model = None
         fields = ['title', 'notes', 'priority', 'site']
         widgets = {
             'title': forms.TextInput(attrs={

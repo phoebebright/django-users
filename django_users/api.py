@@ -736,7 +736,7 @@ class CheckEmailInKeycloakPublic(APIView):
 @authentication_classes([])  # allow anonymous without CSRF/session auth
 @permission_classes([AllowAny])
 @throttle_classes([CheckEmailThrottle])
-def email_exists(request):
+def email_exists_or_404(request):
 
     try:
         email = normalise_email(request.POST.get('email'))
