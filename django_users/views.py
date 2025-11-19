@@ -566,7 +566,7 @@ class UserMigrationView(View):
             user = None
         else:
             do_migration = getattr(settings, 'USER_MIGRATION_DATE', None)
-            if do_migration:
+            if do_migration and user.last_login:
                 if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
 
                     # try authenticating with old keycloak
