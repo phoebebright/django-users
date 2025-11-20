@@ -17,7 +17,7 @@
     <div class="col-12 col-md-8 col-lg-6">
 
         <p>This password can be used only once.</p>
-        <p class="fs-3">To {{ recipient }} at {{ recipient.email }}:         <button type="button" class="btn btn-outline-secondary"
+        <p class="fs-3">To {{ recipient.formal_name }} ({{ receipient.friendly_name }} at {{ recipient.email }}:         <button type="button" class="btn btn-outline-secondary"
                         onclick="navigator.clipboard.writeText('{{ recipient.email }}')
                                  .then(() => {
                                      const alertDiv = document.createElement('div');
