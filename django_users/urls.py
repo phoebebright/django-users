@@ -66,7 +66,7 @@ urlpatterns = [
          name="problem_register_admin"),
     path('troubleshoot/', user_passes_test(has_role_administrator)(Troubleshoot.as_view()), name="troubleshoot"),
     path('problem_login/', ProblemLogin.as_view(), name="problem_login"),
-    path('migrate_login/', UserMigrationView.as_view(), name='user_login'),
+    # path('migrate_login/', UserMigrationView.as_view(), name='user_login'),   # turning off migration view by default
     path('new_users_report/', NewUsers.as_view(), name="new_users_report"),
     path("verify_link/<str:purpose>/", VerifyMagicLinkView.as_view(), name="verify_link"),
 
@@ -79,7 +79,7 @@ urlpatterns = [
     path('after_login_redirect/', after_login_redirect, name='after_login_redirect'),
 
     # path('login/', LoginView.as_view(), name='signin'),  # deprecated
-    # path('login/', LoginView.as_view(), name='user_login'),  # deprecated
+    path('login/', LoginView.as_view(), name='user_login'),    # switching back to no-migration as default 20nov25
 
     path('register/', RegisterView.as_view(), name='register'),
     # path('register/', RegisterView.as_view(), name='signup'),  # deprecated
