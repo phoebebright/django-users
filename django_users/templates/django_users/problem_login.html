@@ -67,10 +67,10 @@
 
 
     {% endif %}
-{#       <div class="mt-3">#}
-{#        <a href="{% url LOGIN_URL %}" class="text-primary">{{ LOGIN_TERM }}</a>#}
-{#        <a href="{% url REGISTER_URL %}" class="text-primary float-end">{{ REGISTER_TERM }}</a>#}
-{#    </div>#}
+    {#       <div class="mt-3">#}
+    {#        <a href="{% url LOGIN_URL %}" class="text-primary">{{ LOGIN_TERM }}</a>#}
+    {#        <a href="{% url REGISTER_URL %}" class="text-primary float-end">{{ REGISTER_TERM }}</a>#}
+    {#    </div>#}
 {% endblock %}
 
 {% block js %}
@@ -79,7 +79,7 @@
     <script>
 
 
-    let emailInput = $('#entered_email');
+        let emailInput = $('#entered_email');
         let submitBtn = $('#submitBtn');
 
         $(document).ready(function () {
@@ -121,9 +121,9 @@
         $(document).on('submit', '#emailForm', function (e) {
             e.preventDefault();
             e.stopPropagation();
-clear_feedback();
-            const email = $('#id_email').val();
-            problem_login(email);
+            clear_feedback();
+
+            problem_login(emailInput.val());
 
         });
 
@@ -135,7 +135,7 @@ clear_feedback();
         });
 
         $(document).on("click", ".change_password_now", function(){
-            document.location.href = '{% url "users:change_password_now" %}?id_email=' + $("#email").val();
+            document.location.href = '{% url "users:change_password_now" %}?id_email=' + encodeURIComponent(emailInput.val());
         })
 
     </script>
