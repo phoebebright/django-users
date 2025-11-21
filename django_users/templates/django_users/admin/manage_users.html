@@ -29,9 +29,9 @@
             <th>City</th>
             <th>Where did you hear?</th>
             <th>Active</th>
-
-
-
+{% if USE_NEWSLETTER %}
+<th>Subscribed</th>
+{% endif %}
             </thead>
             <tbody>
 
@@ -102,7 +102,9 @@
             }
         },
         {data: "is_active", responsivePriority: 4},
-
+{% if USE_NEWSLETTER %}
+        {data: "subscribed", responsivePriority: 4},
+{% endif %}
 
     ]);
 

@@ -94,8 +94,10 @@ class UserShortSerializer(CountryFieldMixin, DynamicModelSerializer):
             ret['sortable_name'] = instance.last_name + instance.first_name
 
         if settings.USE_NEWSLETTER:
-            ret['subscribed'] = instance.newsletter_subscribed and not instance.newsletter_unsubscribed
+            ret['subscribed'] = 'Y' if instance.subscribe_news and not instance.unsubscribe_news else 'N'
+
         ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
+        ret['is_active'] = 'Y' if instance.is_active else 'N'
         return ret
 
 class UserSerializer(UserShortSerializer):
