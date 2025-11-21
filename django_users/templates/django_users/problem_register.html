@@ -13,7 +13,7 @@
 
 <p>In order to make sure we can send you notifications, we send you an email with a verificiation link.  Clicking the link confirms you can received the emails from us.  While this usually works, there can be problems with some email providers, particularly bigpond, that can be too enthusiastic in labeling emails as spam and may put the verification email in your spam folder or not deliver them at all.  </p>
 
-<p>Start by checking your status:</p>
+<p>Start by entering the email you used to {{ REGISTER_TERM }}:</p>
 
 
 
@@ -21,13 +21,13 @@
     <div class="mb-3">
         <input type="hidden" id="keycloak_id" value="">
         <input type="hidden" id="user_id" value="">
-        <input type="email" class="form-control" id="entered_email" name="email" placeholder="Enter the email you used to {{ REGISTER_TERM }} here:" required value="{{ email }}">
+        <input type="email" class="form-control" id="entered_email" name="email" placeholder="enter email..." required value="{{ email }}">
         <div class="invalid-feedback">
-            Please enter the email you used to {{ REGSITER_TERM }}.
+            Please enter the email you used to {{ REGISTER_TERM }}.
         </div>
     </div>
     <div class="d-grid">
-        <input type="submit" id="submitBtn" class="btn btn-primary" value="enter email..." disabled>
+        <input type="submit" id="submitBtn" class="btn btn-primary" value="Check email..." disabled>
     </div>
 </form>
 
