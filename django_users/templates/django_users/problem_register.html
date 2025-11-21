@@ -10,8 +10,36 @@
 {% else %}
 <h1>Help me {{ REGISTER_TERM }}</h1>
 
+<p>
+    If you have tried to Register, and haven't received a verification email,
+    check if it's in your SPAM folder.
+</p>
 
-<p>In order to make sure we can send you notifications, we send you an email with a verificiation link.  Clicking the link confirms you can received the emails from us.  While this usually works, there can be problems with some email providers, particularly bigpond, that can be too enthusiastic in labeling emails as spam and may put the verification email in your spam folder or not deliver them at all.  </p>
+<p>
+    <a class="text-decoration-underline"
+       data-bs-toggle="collapse"
+       href="#why-explanation"
+       role="button"
+       aria-expanded="false"
+       aria-controls="why-explanation">
+        Why are we sending you a verification email?
+    </a>
+</p>
+
+<div class="collapse" id="why-explanation">
+    <div class="mt-2">
+       <p>
+            In order to make sure we are able to send you important information about your entries, we send you an
+            email with a verification link. Clicking the link confirms you can
+            receive emails from us. While this usually works, there can be problems
+            with some email providers, particularly BigPond, that can be too
+            enthusiastic in labeling emails as spam and may put the verification
+            email in your spam folder or not deliver them at all.
+            If you are unable to receive the email,
+            <a href="{% url 'contact' %}" class="text-decoration-underline">contact us directly</a>.
+        </p>
+    </div>
+</div>
 
 <p>Start by entering the email you used to {{ REGISTER_TERM }}:</p>
 
