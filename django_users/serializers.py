@@ -77,7 +77,7 @@ class UserShortSerializer(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id','username','email','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile')
+        fields = ('id','username','email','first_name', 'last_name',  'country','date_joined','last_login','is_active','profile',)
 
     def to_representation(self, instance):
 
@@ -93,6 +93,8 @@ class UserShortSerializer(CountryFieldMixin, DynamicModelSerializer):
             ret['formal_name'] = instance.name
             ret['sortable_name'] = instance.last_name + instance.first_name
 
+        if settings.USE_NEWSLETTER:
+            ret['subscribed'] = instance.newsletter_subscribed and not instance.newsletter_unsubscribed
         ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
         return ret
 

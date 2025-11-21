@@ -796,8 +796,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     removed_date = models.DateTimeField(blank=True, null=True)
 
     # # notifications settings
-    # subscribe_news = models.DateTimeField(blank=True, null=True)
-    # unsubscribe_news = models.DateTimeField(blank=True, null=True)
+    # reuse to tag if currently signed up to general newsletter
+
+    subscribe_news = models.DateTimeField(blank=True, null=True)
+    unsubscribe_news = models.DateTimeField(blank=True, null=True)
 
 
     status = models.PositiveSmallIntegerField(choices=USER_STATUS, default=DEFAULT_USER_STATUS, db_index=True)
