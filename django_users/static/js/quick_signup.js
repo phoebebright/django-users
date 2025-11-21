@@ -8,7 +8,7 @@ $(document).on("change", "#id_email", function() {
     //TODO: wait for email to be complete before checking
     $.ajax({
         method: "POST",
-        url: USERS_API_URL + "email_exists/",
+        url: USERS_API_URL + "email_exists_or_404/",
         dataType: 'json',
         contentType: 'json',
         data: {'email': this.value},

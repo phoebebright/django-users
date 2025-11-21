@@ -235,7 +235,7 @@ function show_channels (channels) {
 function check_user_exists(email, callback, error_callback) {
     $.ajax({
         method: "POST",
-        url: USERS_API_URL + "email_exists/",
+        url: USERS_API_URL + "email_exists_or_404/",
         data: {'email': email.toLowerCase()},
 
     })
