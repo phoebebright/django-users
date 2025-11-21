@@ -430,7 +430,10 @@ class ProblemSignup(TemplateView):
 
 @method_decorator(never_cache, name='dispatch')
 class ProblemLogin(ProblemSignup):
-    template_name = "django_users/problem_login.html"
+
+    def get_template_names(self):
+            return "django_users/problem_login.html"
+
 
     def dispatch(self, request, *args, **kwargs):
 
