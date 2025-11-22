@@ -1,0 +1,71 @@
+{% extends "admin/administrator_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block page_header %}
+Organisations
+{% endblock %}
+{% block content %}
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table id="orgTable" class="table table-striped table-bordered table-hover">
+                <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Active</th>
+                    <th>Test</th>
+                    <th>Scoring Type</th>
+                    <th>Country</th>
+                    <th>Home Page</th>
+                    <th>Logo (Large)</th>
+                    <th>Logo (Small)</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for org in organisations %}
+                    <tr>
+                        <td>{{ org.code }}</td>
+                        <td>{{ org.name }}</td>
+                        <td>{{ org.active|yesno:"Yes,No" }}</td>
+                        <td>{{ org.test|yesno:"Yes,No" }}</td>
+                        <td>{{ org.get_scoring_type_display }}</td>
+                        <td>{{ org.country }}</td>
+                        <td>
+                            {% if org.home_page %}
+                                <a href="{{ org.home_page }}" target="_blank">Visit</a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if org.logo_link_large %}
+                                <img class="logo-img" src="{{ org.logo_link_large.url }}" width="200px" alt="Large Logo">
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if org.logo_link_small %}
+                                <img class="logo-img" src="{{ org.logo_link_small.url }}" width="100px" alt="Small Logo">
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js %}
+{{DATATABLES_LOAD|safe}}
+
+<script>
+    $(document).ready(function () {
+        $('#orgTable').DataTable({
+            pageLength: 25,
+            order: [[1, 'asc']]
+        });
+    });
+</script>
+
+{% endblock %}

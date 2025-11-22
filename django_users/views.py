@@ -1756,11 +1756,10 @@ class OrganisationUpdateView(LoginRequiredMixin, UpdateView):
         return self.get(request, *args, **kwargs)
 
 
-class OrganisationListView(ListView):
+class OrganisationListViewBase(ListView):
     model = None
     template_name = "django_users/admin/organisation_list.html"
     context_object_name = "organisations"
-
 
 @login_required
 def qr_login_token(request):
