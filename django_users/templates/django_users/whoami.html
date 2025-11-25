@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Who Am I? — Debug Info</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; }
+        h1 { margin-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 14px; }
+        th { background: #f5f5f5; }
+        .highlight { background: #e9ffe9; }
+        .warn { background: #fff3e0; }
+        .section { margin-top: 30px; }
+        code { background: #f0f0f0; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+
+<h1>Who Am I? (Diagnostic Info)</h1>
+
+<div class="section">
+    <h2>User Info</h2>
+    <table>
+        <tr><th>Authenticated?</th><td>{{ authenticated }}</td></tr>
+        <tr><th>User ID</th><td>{{ user_id }}</td></tr>
+        <tr><th>Username</th><td>{{ username }}</td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <h2>Session Info</h2>
+    <table>
+        <tr><th>Session Cookie Name</th><td><code>{{ session_cookie_name }}</code></td></tr>
+        <tr><th>Session Cookie Value</th><td><code>{{ session_cookie_value }}</code></td></tr>
+        <tr><th>Session Key</th><td><code>{{ session_key }}</code></td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <h2>CSRF Info</h2>
+    <table>
+        <tr><th>CSRF Cookie Name</th><td><code>{{ csrf_cookie_name }}</code></td></tr>
+        <tr><th>CSRF Cookie Value</th><td><code>{{ csrf_cookie_value }}</code></td></tr>
+        <tr><th>X-CSRFToken Header</th><td><code>{{ csrf_header }}</code></td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <h2>Request Info</h2>
+    <table>
+        <tr><th>Host</th><td>{{ host }}</td></tr>
+        <tr><th>Scheme</th><td>{{ scheme }}</td></tr>
+        <tr><th>Origin Header</th><td>{{ origin_header }}</td></tr>
+        <tr><th>Referer Header</th><td>{{ referer_header }}</td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <h2>Cookies Sent by Browser</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Value</th>
+                <th>Session Cookie?</th>
+                <th>CSRF Cookie?</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cookies %}
+            <tr class="{% if c.is_session_cookie %}highlight{% elif c.is_csrf_cookie %}warn{% endif %}">
+                <td>{{ c.name }}</td>
+                <td><code>{{ c.value }}</code></td>
+                <td>{{ c.is_session_cookie }}</td>
+                <td>{{ c.is_csrf_cookie }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>

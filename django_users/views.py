@@ -2311,3 +2311,48 @@ class SendComms(UserCanAdministerMixin, GoNextTemplateMixin, TemplateView):
         )
 
         return HttpResponseRedirect(request.POST.get('next', "/"))
+
+
+class WhoAmIView(TemplateView):
+    template_name = "whoami.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        request = self.request
+
+        session_cookie_name = settings.SESSION_COOKIE_NAME
+        csrf_cookie_name = settings.CSRF_COOKIE_NAME
+
+        # Collect all cookie info
+        cookies = []
+        for name, value in request.COOKIES.items():
+            cookies.append({
+                "name": name,
+                "value": value,
+                "is_session_cookie": (name == session_cookie_name),
+                "is_csrf_cookie": (name == csrf_cookie_name),
+            })
+
+        context.update({
+            "authenticated": request.user.is_authenticated,
+            "user_id": getattr(request.user, "id", None),
+            "username": getattr(request.user, "username", None),
+
+            "host": request.get_host(),
+            "scheme": request.scheme,
+
+            "session_cookie_name": session_cookie_name,
+            "session_cookie_value": request.COOKIES.get(session_cookie_name),
+            "session_key": request.session.session_key,
+
+            "csrf_cookie_name": csrf_cookie_name,
+            "csrf_cookie_value": request.COOKIES.get(csrf_cookie_name),
+            "csrf_header": request.META.get("HTTP_X_CSRFTOKEN"),
+
+            "origin_header": request.META.get("HTTP_ORIGIN"),
+            "referer_header": request.META.get("HTTP_REFERER"),
+
+            "cookies": cookies,
+        })
+
+        return context
