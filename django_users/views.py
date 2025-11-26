@@ -2378,16 +2378,16 @@ class ResetSessionView(TemplateView):
         request.session.flush()
 
         next_url = request.POST.get("next") or "/"
-
+        login_url = reverse(settings.LOGIN_URL)
         response = HttpResponseRedirect(
-            f"{settings.LOGIN_URL}?next={next_url}"
+            f"{login_url}?next={next_url}"
         )
 
 
         # Delete *every* cookie we see, under every relevant domain
-        cookie_domains = [None, ".skor.ie", "skor.ie", "ride.skor.ie"]
+
         for name in list(request.COOKIES.keys()):
-            for domain in cookie_domains:
+            for domain in [None, ".skor.ie", request.get_host(), "skor.ie", "ride.skor.ie"]:
                 response.delete_cookie(name, domain=domain, path="/")
 
         return response
