@@ -315,6 +315,10 @@ def signup_redirect(request):
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
+    if request.user.last_login < datetime(2025,11,27):
+        return HttpResponseRedirect(reverse("users:reset-session"))
+        return HttpResponseRedirect(reverse("users:tell_us_about"))
+    return HttpResponseRedirect(reverse("users:user-profile"))
     if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")
     else:
@@ -2356,3 +2360,31 @@ class WhoAmIView(TemplateView):
         })
 
         return context
+
+
+class ResetSessionView(TemplateView):
+    """
+    Logs the user out, deletes ALL cookies available to this domain,
+    deletes cookies from the parent domain (.skor.ie),
+    clears the session, and shows a login-again screen.
+    """
+    template_name = "session_reset.html"
+
+    def get(self, request, *args, **kwargs):
+        # Log out user and flush session
+        logout(request)
+        request.session.flush()
+
+        context = {
+            "next": request.GET.get("next", "/"),
+        }
+        response = self.render_to_response(context)
+
+        # Completely nuke every cookie we can see
+        for name in request.COOKIES.keys():
+            # delete for current host (skor.ie or ride.skor.ie)
+            response.delete_cookie(name)
+            # delete for shared parent domain
+            response.delete_cookie(name, domain=".skor.ie")
+
+        return response
