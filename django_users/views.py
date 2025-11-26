@@ -2390,6 +2390,12 @@ class ResetSessionView(TemplateView):
             for domain in [None, ".skor.ie", request.get_host(), "skor.ie", "ride.skor.ie"]:
                 response.delete_cookie(name, domain=domain, path="/")
 
+        # Debug: what is Django actually telling the browser?
+        # can't seem to shift sessionid
+        for name, morsel in response.cookies.items():
+            if name.lower() == "sessionid":
+                logger.warning("Set-Cookie for %s -> %s", name, morsel.OutputString())
+
         return response
 
     def get_context_data(self, **kwargs):
