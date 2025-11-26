@@ -798,6 +798,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     # # notifications settings
     # reuse to tag if currently signed up to general newsletter
 
+    # can be deleted as moved to newsletter app - but better test with app not using newsletter frist
     subscribe_news = models.DateTimeField(blank=True, null=True)
     unsubscribe_news = models.DateTimeField(blank=True, null=True)
 

@@ -1,6 +1,6 @@
 from django.core.mail import mail_admins
 
-from config import settings
+from django.conf import settings
 from tools.decorators import notifications_on
 
 
