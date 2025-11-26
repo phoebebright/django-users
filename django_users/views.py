@@ -316,11 +316,11 @@ def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
 
-    legacy_cookies = getattr(settings,'LEGACY_COOKIE_NAMES', '')
-    current_cookies = request.COOKIES.keys()
-    if legacy_cookies and any(name in current_cookies for name in legacy_cookies):
-
-        return HttpResponseRedirect(reverse("users:reset-session"))
+    # legacy_cookies = getattr(settings,'LEGACY_COOKIE_NAMES', '')
+    # current_cookies = request.COOKIES.keys()
+    # if legacy_cookies and any(name in current_cookies for name in legacy_cookies):
+    #
+    #     return HttpResponseRedirect(reverse("users:reset-session"))
 
     if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")
