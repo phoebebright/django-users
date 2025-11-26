@@ -44,6 +44,7 @@ This will run without any additional settings but the following settings can be 
 
     USERS_BIG = False  # if True then will use a paged method to display users table (for large numbers of users)
 
+    CONFIRM_USER_PAGE = "users:tell_us_about" 
 
 Make sure that django model authentication is your first choice, eg.
 

@@ -315,10 +315,13 @@ def signup_redirect(request):
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
-    if request.user.last_login < datetime(2025,11,27):
+
+    legacy_cookies = getattr(settings,'LEGACY_COOKIE_NAMES', '')
+    current_cookies = request.COOKIES.keys()
+    if legacy_cookies and any(name in current_cookies for name in legacy_cookies):
+
         return HttpResponseRedirect(reverse("users:reset-session"))
-        return HttpResponseRedirect(reverse("users:tell_us_about"))
-    return HttpResponseRedirect(reverse("users:user-profile"))
+
     if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")
     else:
@@ -2364,27 +2367,32 @@ class WhoAmIView(TemplateView):
 
 class ResetSessionView(TemplateView):
     """
-    Logs the user out, deletes ALL cookies available to this domain,
-    deletes cookies from the parent domain (.skor.ie),
-    clears the session, and shows a login-again screen.
+    GET  -> show explanation + button
+    POST -> clear all cookies + session, then redirect user to login
     """
-    template_name = "session_reset.html"
+    template_name = "django_users/session_reset.html"
 
-    def get(self, request, *args, **kwargs):
-        # Log out user and flush session
+    def post(self, request, *args, **kwargs):
+        # Log out and flush the session
         logout(request)
         request.session.flush()
 
-        context = {
-            "next": request.GET.get("next", "/"),
-        }
-        response = self.render_to_response(context)
+        next_url = request.POST.get("next") or "/"
 
-        # Completely nuke every cookie we can see
-        for name in request.COOKIES.keys():
-            # delete for current host (skor.ie or ride.skor.ie)
-            response.delete_cookie(name)
-            # delete for shared parent domain
-            response.delete_cookie(name, domain=".skor.ie")
+        response = HttpResponseRedirect(
+            f"{settings.LOGIN_URL}?next={next_url}"
+        )
+
+
+        # Delete *every* cookie we see, under every relevant domain
+        cookie_domains = [None, ".skor.ie", "skor.ie", "ride.skor.ie"]
+        for name in list(request.COOKIES.keys()):
+            for domain in cookie_domains:
+                response.delete_cookie(name, domain=domain, path="/")
 
         return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["next"] = self.request.GET.get("next", "/")
+        return context

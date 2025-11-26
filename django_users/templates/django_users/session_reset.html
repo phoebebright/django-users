@@ -1,50 +1,52 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Session Reset</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background: #f9f9f9;
-        }
-        .box {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 25px;
-            background: white;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-        }
-        h1 { margin-top: 0; font-size: 22px; }
-        p { font-size: 15px; line-height: 1.5; }
-        a.button {
-            display: inline-block;
-            padding: 10px 18px;
-            background: #2c7be5;
-            color: #fff;
-            border-radius: 5px;
-            text-decoration: none;
-        }
-        a.button:hover {
-            background: #1b5bb8;
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
 
-<div class="box">
-    <h1>Your Skorie session has been reset</h1>
-    <p>
-        We have cleared all Skorie cookies for this browser.
-        To continue using the site, please log in again.
-    </p>
-    <p>
-        <a class="button" href="/accounts/login/?next={{ next|urlencode }}">
-            Log in again
-        </a>
-    </p>
+{% block title %}Skorie – Session Reset{% endblock %}
+
+{% block content %}
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <h1 class="h4 mb-3">Updating Your Skorie Account</h1>
+
+                    <p>
+                        We’ve introduced a new <strong>single sign-on</strong> system to make it much easier
+                        to use different versions of Skorie (such as <em>skor.ie</em> and <em>ride.skor.ie</em>)
+                        without needing to log in separately on each one.
+                    </p>
+
+                    <p>
+                        You are seeing this page because you previously logged in using the old system and we need to clear out those old cookies.
+                    </p>
+
+                    <p>
+                        You will need to perform this reset on <strong>each browser or device</strong> where
+                        you previously used Skorie.
+
+                    </p>
+
+                    <p>
+                        When you're ready, click the button below. This will completely clear old Skorie
+                        cookies in this browser so you can log in again using the new system.
+                    </p>
+
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                        <button type="submit" class="btn btn-primary">
+                            Reset my session and continue
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
 </div>
 
-</body>
-</html>
+{% endblock %}
