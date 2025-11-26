@@ -2374,6 +2374,7 @@ class ResetSessionView(TemplateView):
 
     def post(self, request, *args, **kwargs):
         # Log out and flush the session
+        logger.warning(f"Resetting session for user {request.user.email}")
         logout(request)
         request.session.flush()
 
