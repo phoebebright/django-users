@@ -3,10 +3,62 @@
 
 {% block title %}Login{% endblock %}
 
-
 {% block content %}
 
-<p>Use this QR tolog me in on another device.  This is timelimited to 2 mins.</p>
-<img src="data:image/png;base64,{{ qr }}" alt="QR Code" class="w-100">
+<p>
+    Use this QR to log me in on another device.
+    This is time-limited to 2 mins.
+</p>
+
+<p>
+    QR expires in
+    <strong><span id="countdown">2:00</span></strong>
+</p>
+
+<div id="qr-container">
+    <img src="data:image/png;base64,{{ qr }}" alt="QR Code" class="w-100">
+</div>
+
+<div id="expired-message" style="display:none;">
+    <p><strong>QR has expired.</strong></p>
+    <p>Please refresh this page to generate a new QR code.</p>
+</div>
+
+<script>
+    (function () {
+        // 2 minutes = 120 seconds
+        let remaining = 120;
+        const countdownEl = document.getElementById('countdown');
+        const qrContainer = document.getElementById('qr-container');
+        const expiredMessage = document.getElementById('expired-message');
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return m + ':' + (s < 10 ? '0' + s : s);
+        }
+
+        function tick() {
+            remaining -= 1;
+
+            if (remaining >= 0) {
+                countdownEl.textContent = formatTime(remaining);
+            }
+
+            if (remaining <= 0) {
+                // stop timer
+                clearInterval(timerId);
+                // hide QR and show expired message
+                if (qrContainer) qrContainer.style.display = 'none';
+                if (expiredMessage) expiredMessage.style.display = 'block';
+            }
+        }
+
+        // initial display
+        countdownEl.textContent = formatTime(remaining);
+
+        const timerId = setInterval(tick, 1000);
+    })();
+</script>
 
 {% endblock %}
