@@ -34,13 +34,30 @@
                         cookies in this browser so you can log in again using the new system.
                     </p>
 
-                    <form method="post" class="mt-4">
+                    <form id="resetForm" method="post">
                         {% csrf_token %}
                         <input type="hidden" name="next" value="{{ next }}">
-                        <button type="submit" class="btn btn-primary">
-                            Reset my session and continue
-                        </button>
+                        <button type="button" class="btn btn-primary" onclick="resetCookiesAndSubmit()">Reset my session</button>
                     </form>
+
+                    <script>
+                        function resetCookiesAndSubmit() {
+                            // Delete everything for this host and .skor.ie
+                            const domains = [location.hostname, ".skor.ie"];
+                            const cookies = document.cookie.split(";");
+
+                            cookies.forEach(cookie => {
+                                const name = cookie.split("=")[0].trim();
+                                domains.forEach(domain => {
+                                    document.cookie = `${name}=; Max-Age=0; path=/; domain=${domain}`;
+                                });
+                                document.cookie = `${name}=; Max-Age=0; path=/`; // host-only
+                            });
+
+                            // Submit POST after deleting
+                            document.getElementById("resetForm").submit();
+                        }
+                    </script>
 
                 </div>
             </div>
