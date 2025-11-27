@@ -1837,6 +1837,7 @@ def login_with_remote_token(request):
     except SignatureExpired:
         return HttpResponse("Token expired", status=403)
     except BadSignature:
+        print(secret)
         return HttpResponse("Invalid token signature", status=403)
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)

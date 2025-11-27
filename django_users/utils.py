@@ -160,16 +160,16 @@ def send_whatsapp_verification_code(phone_number, code):
 
 
 def generate_login_token(user, next='/', key=None):
-    '''create a token to login to same app on another device (no key needed)
-    or on aa related system (key needed that is shared by both apps)
-    '''
-
     payload = {
         'user_id': str(user.keycloak_id),
-        'ts': timezone.now().timestamp(),
+        'ts': timezone.now().timestamp(),  # you can actually drop this if you like
         'next': next,
     }
-    return signing.dumps(payload, key=key)
+    return signing.dumps(
+        payload,
+        key=key,
+        signer=signing.TimestampSigner,
+    )
 
 
 def get_eligible_users_for_communication(communication_type, event=None):
