@@ -1812,7 +1812,8 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         return context
 
 
-def login_with_remote_token(request, setting_name):
+def login_with_remote_token(request):
+    setting_name = 'REMOTE_LOGIN_SECRET'
     token = request.GET.get("token")
     max_age = 120  # seconds (2 minutes)
     secret = getattr(settings, setting_name, None)
