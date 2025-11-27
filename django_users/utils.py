@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import timedelta
 
@@ -158,19 +159,35 @@ def send_whatsapp_verification_code(phone_number, code):
     )
     return True
 
+# django 5
+# def generate_login_token(user, next='/', key=None):
+#     payload = {
+#         'user_id': str(user.keycloak_id),
+#         'ts': timezone.now().timestamp(),  # you can actually drop this if you like
+#         'next': next,
+#     }
+#     return signing.dumps(
+#         payload,
+#         key=key,
+#         signer=signing.TimestampSigner,
+#     )
 
 def generate_login_token(user, next='/', key=None):
+    """
+    Create a token to login to same app on another device
+    or on a related system (shared key between apps).
+    """
+    if key is None:
+        key = settings.SECRET_KEY
+
     payload = {
         'user_id': str(user.keycloak_id),
-        'ts': timezone.now().timestamp(),  # you can actually drop this if you like
         'next': next,
     }
-    return signing.dumps(
-        payload,
-        key=key,
-        signer=signing.TimestampSigner,
-    )
 
+    raw = json.dumps(payload).encode()  # bytes expected by TimestampSigner
+    signer = signing.TimestampSigner(key)
+    return signer.sign(raw)
 
 def get_eligible_users_for_communication(communication_type, event=None):
     """
