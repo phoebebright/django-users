@@ -1820,13 +1820,18 @@ def login_with_remote_token(request):
 
     if not secret:
         return HttpResponse("Missing secret", status=400)
+    if not token:
+        return HttpResponse("Missing token", status=400)
 
     signer = TimestampSigner(secret)
 
     try:
         raw = signer.unsign(token, max_age=max_age)
-        payload = json.loads(raw.decode())
-        print(payload)
+
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+
+        payload = json.loads(raw)
         user_id = payload.get('user_id')
         next_url = payload.get('next', '/')
 
@@ -1837,7 +1842,6 @@ def login_with_remote_token(request):
     except SignatureExpired:
         return HttpResponse("Token expired", status=403)
     except BadSignature:
-        print(secret)
         return HttpResponse("Invalid token signature", status=403)
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)
