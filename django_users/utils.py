@@ -185,7 +185,7 @@ def generate_login_token(user, next='/', key=None):
         'next': next,
     }
 
-    raw = json.dumps(payload).encode()  # bytes expected by TimestampSigner
+    raw = json.dumps(payload)  # bytes expected by TimestampSigner
     signer = signing.TimestampSigner(key)
     return signer.sign(raw)
 
