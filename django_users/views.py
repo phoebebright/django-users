@@ -1817,11 +1817,16 @@ def login_with_remote_token(request):
     token = request.GET.get("token")
     max_age = 120  # seconds (2 minutes)
     secret = getattr(settings, setting_name, None)
+
+    if not secret:
+        return HttpResponse("Missing secret", status=400)
+
     signer = TimestampSigner(secret)
 
     try:
         raw = signer.unsign(token, max_age=max_age)
         payload = json.loads(raw.decode())
+        print(payload)
         user_id = payload.get('user_id')
         next_url = payload.get('next', '/')
 
