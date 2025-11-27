@@ -1768,6 +1768,7 @@ class OrganisationListViewBase(ListView):
     template_name = "django_users/admin/organisation_list.html"
     context_object_name = "organisations"
 
+# is this used?
 @login_required
 def qr_login_token(request):
     user = request.user
@@ -1777,7 +1778,7 @@ def qr_login_token(request):
     }
     token = signing.dumps(payload)
 
-    login_url = request.build_absolute_uri(f"/qr-login/?token={token}")
+    login_url = request.build_absolute_uri(f"/users/lwt/?token={token}")
 
     # Create QR code
     qr = qrcode.make(login_url)

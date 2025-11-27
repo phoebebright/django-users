@@ -10,7 +10,8 @@ from .views import ProblemSignup, NewUsers, UserMigrationView, UserProfileView, 
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token, UserContactAnalyticsView, \
     UnsubscribeTokenView, SubscriptionPreferencesView, subscribe_only, unsubscribe_only, ManageRoles, ManageUsers, \
     ManageUser, SubscriptionDataFrameView, dedupe_role, UserCountries, ConfirmAccount, \
-    ManageUserProfile, VerifyMagicLinkView, SendComms, TellUsAbout, after_login_redirect, WhoAmIView, ResetSessionView
+    ManageUserProfile, VerifyMagicLinkView, SendComms, TellUsAbout, after_login_redirect, WhoAmIView, ResetSessionView, \
+    login_with_remote_token
 from .keycloak import logout_user_from_keycloak_and_django
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -74,7 +75,9 @@ urlpatterns = [
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
     path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),
     path('qr_login/', QRLogin.as_view(), name='qr-login'),
-    path('lwt/', login_with_token, name='lwt'),
+    path('lwt/', login_with_token, name='lwt'),  # login with token to same system
+    path('lwrt/', login_with_remote_token, name='lwrt'),  # login with token to another system
+
     path('login/', LoginView.as_view(), name='login'),
     path('after_login_redirect/', after_login_redirect, name='after_login_redirect'),
 
