@@ -74,7 +74,7 @@ urlpatterns = [
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
     path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),
     path('qr_login/', QRLogin.as_view(), name='qr-login'),
-    path('lwt/', login_with_token, name='qr-login'),
+    path('lwt/', login_with_token, name='lwt'),
     path('login/', LoginView.as_view(), name='login'),
     path('after_login_redirect/', after_login_redirect, name='after_login_redirect'),
 
