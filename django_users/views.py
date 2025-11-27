@@ -1840,7 +1840,8 @@ def login_with_remote_token(request):
         return HttpResponse("Invalid token signature", status=403)
     except User.DoesNotExist:
         return HttpResponse("User not found", status=404)
-
+    except Exception as e:
+        return HttpResponse(f"Error with lwrt: {e}", status=400)
 
 def login_with_token(request, key=None):
     '''handle being sent a token to log a user in (generated with keycloak.generate_login_token or qr token)
