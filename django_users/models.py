@@ -1067,7 +1067,9 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
             }
 
-
+    @property
+    def is_system_user(self):
+        return self.email == "system@test.com"
 
     # note we want to have properties rather than a more generic has_role(role_required) so we can use them in templates
     # and because there is a lot of legacy code that uses these properties (that used to be part of the data model)
@@ -1963,15 +1965,23 @@ class UserContactBase(models.Model):
                 data = None
 
 
+        is_anon = user.is_system_user
+        if is_anon:
+            user_url = ''
+        else:
+            user_url = settings.SITE_URL + reverse('users:admin_user', args=[user.keycloak_id])
+
+        contact = cls(user=user, method=method, notes=notes, data=data)
+        contact.save()
         obj = cls.objects.create(user=user, method=method, notes=notes, data=data, site=settings.SITE_URL.replace('https://', ''))
         if data and 'message' in data:
-            msg = f"{user} contacted us via {data['message']} from {settings.SITE_URL}"
+            msg = f"{user} - with email {data['email']} contacted us via {method}: \n {data['message']}\n{user_url }/\n"
         else:
-            msg = f"{user} contacted us via {method} from {settings.SITE_URL}"
+            msg = f"{user} with email {data['email']}  contacted us via: \n {method} \n{user_url}/\n"
 
         if send_mail:
             mail.send(
-                subject=f"Contact from {settings.SITE_NAME} user {obj.user} ",
+                subject=f"Contact from {settings.SITE_NAME} user {obj.user if not is_anon else data['email']} ",
                 message=msg,
                 recipients=[settings.SUPPORT_EMAIL, ],
                 sender=settings.DEFAULT_FROM_EMAIL,

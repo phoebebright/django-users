@@ -1575,7 +1575,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
                 {"newsletter": nl, "subscription": nl.user_subs[0] if nl.user_subs else None}
                 for nl in newsletters
             ]
-
+        #context['roles4user'] = context['object'].Role.objects.filter(user=user).order_by('role_type').select_related('organisation','authority','person')
         context['roles4user'] = context['object'].Role.objects.filter(user=user).order_by('role_type')
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
