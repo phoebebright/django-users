@@ -1160,7 +1160,7 @@ class MemberViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RoleViewSetBase(viewsets.ModelViewSet):
     queryset = None
-    serializer = RoleSerializer
+    serializer_class = RoleSerializer
 
     def get_queryset(self):
         Role = apps.get_model('users', 'Role')
@@ -1210,7 +1210,7 @@ class RoleViewSet(UserCanAdministerMixin, RoleViewSetBase):
 class PersonViewSet(viewsets.ModelViewSet):
     queryset = None
     lookup_field = 'ref'
-    serializer = PersonSerializer
+    serializer_class = PersonSerializer
 
     def get_queryset(self):
         Person = apps.get_model('users', 'Person')
