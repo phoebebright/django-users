@@ -315,12 +315,9 @@ def signup_redirect(request):
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
-    logger.info(f"redirecting user {request.user} - is authenticated{bool(request.user.is_authenticated)}")
-    # legacy_cookies = getattr(settings,'LEGACY_COOKIE_NAMES', '')
-    # current_cookies = request.COOKIES.keys()
-    # if legacy_cookies and any(name in current_cookies for name in legacy_cookies):
-    #
-    #     return HttpResponseRedirect(reverse("users:reset-session"))
+
+    if not request.user.is_authenticated:
+        logger.error(f"In after_login_redirect and user is not authenticated")
 
     if request.user.is_authenticated and request.user.status < User.USER_STATUS_CONFIRMED:
         url = reverse("users:tell_us_about")
