@@ -315,7 +315,7 @@ def signup_redirect(request):
 def after_login_redirect(request):
     # using skor.ie emails as temporary emails so don't want subscirbe form displayed
     User = get_user_model()
-
+    logger.info(f"redirecting user {request.user} - is authenticated{bool(request.user.is_authenticated)}")
     # legacy_cookies = getattr(settings,'LEGACY_COOKIE_NAMES', '')
     # current_cookies = request.COOKIES.keys()
     # if legacy_cookies and any(name in current_cookies for name in legacy_cookies):
