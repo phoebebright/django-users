@@ -1805,6 +1805,12 @@ class CustomUserBase(CustomUserBaseBasic):
         '''return a list of outstanding invitations to upcoming or current events'''
         return self.EventTeam.objects.outstanding().filter(user=self)
 
+    @property
+    def current_roles(self):
+        '''return a list of outstanding invitations to upcoming or current events'''
+        return self.EventTeam.objects.current_roles().filter(user=self)
+
+
     def make_order(self, event=None, items=None):
         """
         create order with all current outstanding items or specific item(s)
