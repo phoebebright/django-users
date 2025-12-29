@@ -1980,10 +1980,11 @@ class UserContactBase(models.Model):
         contact = cls(user=user, method=method, notes=notes, data=data)
         contact.save()
         obj = cls.objects.create(user=user, method=method, notes=notes, data=data, site=settings.SITE_URL.replace('https://', ''))
+        email = data.get('email', user.email)
         if data and 'message' in data:
-            msg = f"{user} - with email {data['email']} contacted us via {method}: \n {data['message']}\n{user_url }/\n"
+            msg = f"{user} - with email {email} contacted us via {method}: \n {data['message']}\n{user_url}/\n"
         else:
-            msg = f"{user} with email {data['email']}  contacted us via: \n {method} \n{user_url}/\n"
+            msg = f"{user} with email {email}  contacted us via: \n {method} \n{user_url}/\n"
 
         if send_mail:
             mail.send(
