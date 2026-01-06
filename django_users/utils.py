@@ -186,7 +186,7 @@ def generate_login_token(user, next='/', key=None):
     }
 
     raw = json.dumps(payload)  # bytes expected by TimestampSigner
-    signer = signing.TimestampSigner(key)
+    signer = signing.TimestampSigner(secret=key)
     return signer.sign(raw)
 
 def get_eligible_users_for_communication(communication_type, event=None):
