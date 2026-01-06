@@ -1,3 +1,4 @@
+import inspect
 import json
 import logging
 from datetime import timedelta
@@ -186,7 +187,13 @@ def generate_login_token(user, next='/', key=None):
     }
 
     raw = json.dumps(payload)  # bytes expected by TimestampSigner
-    signer = signing.TimestampSigner(secret=key)
+
+    params = inspect.signature(signing.TimestampSigner).parameters
+    if "secret" in params:
+        signer = signing.TimestampSigner(secret=key)
+    if "key" in params:
+        signer = signing.TimestampSigner(key=key)
+
     return signer.sign(raw)
 
 def get_eligible_users_for_communication(communication_type, event=None):
