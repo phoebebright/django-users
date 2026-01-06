@@ -1820,7 +1820,7 @@ def login_with_remote_token(request):
     if not token:
         return HttpResponse("Missing token", status=400)
 
-    signer = TimestampSigner(secret)
+    signer = TimestampSigner(key=secret)
 
     try:
         raw = signer.unsign(token, max_age=max_age)
