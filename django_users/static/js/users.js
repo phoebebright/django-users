@@ -5,6 +5,8 @@
 
 
 function problem_login(email){
+    $('#emailForm').css('opacity', '0.5');
+    $('#submitBtn').prop('disabled', true);
 
     $.ajax({
         method: "POST",
@@ -12,6 +14,9 @@ function problem_login(email){
         data: {'email': email},
 
         success: function (d) {
+            $('#emailForm').css('opacity', '1');
+            $('#submitBtn').prop('disabled', false);
+
             const keycloak_id = $('#keycloak_id').val();
             $("#user_id").val(d.django_user_id);
             $("#keycloak_id").val(d.django_user_keycloak_user);
@@ -71,6 +76,9 @@ function problem_login(email){
 
         },
         error: function () {
+            $('#emailForm').css('opacity', '1');
+            $('#submitBtn').prop('disabled', false);
+
             // If there's an error, show the error message
             $('#apiError').show();
             $('#apiResponse').hide();

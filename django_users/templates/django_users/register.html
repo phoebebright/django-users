@@ -70,6 +70,8 @@
 
             // Form submit event handler to set the formatted phone number
             $("#register").on("submit", function (event) {
+                $(this).css('opacity', '0.5');
+                $(this).find(':submit').prop('disabled', true);
 
                 let phoneNumber = '';
 
@@ -77,6 +79,8 @@
 
 
                     if (!iti.isValidNumber()) {
+                        $(this).css('opacity', '1');
+                        $(this).find(':submit').prop('disabled', false);
                         event.preventDefault();
                         phoneInputField.addClass("is-invalid");
                     } else {

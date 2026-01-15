@@ -21,7 +21,7 @@
             </div>
         </div>
         <div class="d-grid">
-            <input type="submit" id="submitBtn" class="btn btn-primary" value="Check status..." disabled>
+            <input type="submit" id="submitBtn" class="btn btn-primary" value="Find Account..." disabled>
         </div>
     </form>
 
@@ -194,10 +194,14 @@
             e.preventDefault();
             e.stopPropagation();
             const email = $('#email').val();
+            $('#emailForm').css('opacity', '0.5');
+            $('#submitBtn').prop('disabled', true);
             $('#apiError').html("").hide();
             $('#apiResponse').html("").hide();
 
             get_user_signup_info(email, function(d) {
+                $('#emailForm').css('opacity', '1');
+                $('#submitBtn').prop('disabled', false);
 
                 const keycloak_id = $('#keycloak_id').val();
                 $("#user_id").val(d.user_id);
