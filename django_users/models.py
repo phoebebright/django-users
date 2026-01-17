@@ -274,7 +274,7 @@ class VerificationCodeBase(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='verification_codes')
     channel = models.ForeignKey('CommsChannel', on_delete=models.CASCADE)
-    code = models.CharField(max_length=6)    # this should be removed but looks like still being used for OTP - 17Jan26
+    # code = models.CharField(max_length=6)
     purpose = models.CharField(max_length=32, default="email_verify")  # e.g. email_verify, login, phone_verify
 
     # Code-based verification (user types the code)
