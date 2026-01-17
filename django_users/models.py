@@ -304,10 +304,11 @@ class VerificationCodeBase(models.Model):
         ]
         constraints = [
             # Only one active (unconsumed, unexpired) token per (user, channel, purpose)
+            # note that we can't add the constraint to include expired here as it hard codes the date and keeps generating new migrations
             models.UniqueConstraint(
                 fields=["user", "channel", "purpose"],
                 name="uniq_active_user_channel_purpose",
-                condition=models.Q(consumed_at__isnull=True, expires_at__gt=timezone.now())
+                condition=models.Q(consumed_at__isnull=True)
             )
         ]
 
@@ -395,11 +396,21 @@ class VerificationCodeBase(models.Model):
         raw_code = ''.join(random.choices(string.digits, k=6))
         salt = secrets.token_hex(16)
         code_hash = hashlib.sha256((salt + raw_code).encode()).hexdigest()
+
+        # Delete any existing unconsumed codes to avoid duplicates and ensure a fresh code is sent
+        cls.objects.filter(user=user, channel=channel, purpose=purpose, consumed_at__isnull=True).delete()
+
         obj = cls.objects.create(
             user=user, channel=channel, purpose=purpose,
             code_hash=code_hash, code_salt=salt, token_hash="",
             expires_at=expires_at
         )
+
+        # Log the issuance of a new verification code
+        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+             UserHistory = apps.get_model('django_users', 'UserHistory')
+             UserHistory.log(user, "issue_code", details={"purpose": purpose, "channel": str(channel)})
+
         return obj, {'code': raw_code, 'expiry_minutes': ttl_minutes, 'user': user}
 
     @classmethod
@@ -407,11 +418,21 @@ class VerificationCodeBase(models.Model):
         expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        # Delete any existing unconsumed tokens to avoid duplicates and ensure a fresh token is sent
+        cls.objects.filter(user=user, channel=channel, purpose=purpose, consumed_at__isnull=True).delete()
+
         obj = cls.objects.create(
             user=user, channel=channel, purpose=purpose,
             token_hash=token_hash, code_hash="", code_salt="",
             expires_at=expires_at
         )
+
+        # Log the issuance of a new magic link token
+        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+             UserHistory = apps.get_model('django_users', 'UserHistory')
+             UserHistory.log(user, "issue_token", details={"purpose": purpose, "channel": str(channel)})
+
         return obj, {'token': raw_token, 'expiry_minutes': ttl_minutes, 'user': user,
                      'magic_link': obj.magic_link_url(raw_token)}
 
@@ -478,6 +499,13 @@ class VerificationCodeBase(models.Model):
             obj.consumed_at = now
         obj.save(update_fields=["attempts", "consumed_at"])
 
+        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+             UserHistory = apps.get_model('django_users', 'UserHistory')
+             if ok:
+                 UserHistory.log(user, "verify_code_success", details={"purpose": purpose})
+             else:
+                 UserHistory.log(user, "verify_code_failed", details={"purpose": purpose})
+
         if ok:
             # mark verified + cleanup siblings for same channel/purpose
             channel.verify()
@@ -505,9 +533,12 @@ class VerificationCodeBase(models.Model):
         obj.channel.verify()
         # Clean up all other outstanding records for same user+channel+purpose
         cls.objects.filter(user=obj.user, channel=obj.channel, purpose=purpose).exclude(pk=obj.pk).delete()
-        return obj
 
-    # ---------- Sending
+        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+             UserHistory = apps.get_model('django_users', 'UserHistory')
+             UserHistory.log(obj.user, "verify_token_success", details={"purpose": purpose})
+
+        return obj
 
     def send_verification(self, context={}, purpose=None) -> bool:
         """
@@ -539,6 +570,34 @@ class VerificationCodeBase(models.Model):
         elif self.channel.channel_type == 'whatsapp':
             return send_whatsapp_verification_code(self.channel.value, "<CODE REDACTED>")
         return False
+
+class UserHistoryBase(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="history")
+    action = models.CharField(max_length=100)
+    details = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user} - {self.action} at {self.created_at}"
+
+    @classmethod
+    def log(cls, user, action, details=None, request=None):
+        history = cls(user=user, action=action, details=details or {})
+        if request:
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                history.ip_address = x_forwarded_for.split(',')[0]
+            else:
+                history.ip_address = request.META.get('REMOTE_ADDR')
+            history.user_agent = request.META.get('HTTP_USER_AGENT')
+        history.save()
+        return history
 
 class CustomUserQuerySet(models.QuerySet):
 

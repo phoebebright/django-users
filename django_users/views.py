@@ -627,6 +627,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         next = request.GET.get('next', request.POST.get('next', None))
         authenticated = False
 
+        UserHistory = apps.get_model('django_users', 'UserHistory') if hasattr(apps.get_app_config('django_users'), 'UserHistory') else None
+
         try:
             user = authenticate(request, username=email, password=password)
         except Exception as e:
@@ -647,9 +649,15 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 try:
                     user = User.objects.get(email=email)
                 except User.DoesNotExist:
+                    if UserHistory:
+                        # Log failed login attempt for non-existent user
+                        # We use a placeholder user or none if allowed, but here we just log with the email in details
+                        UserHistory.log(None, "login_failed", details={"email": email, "reason": "user_not_found"}, request=request)
                     messages.error(request, _('Invalid username or password.'))
                     return render(request, self.template, {'email': email})
                 else:
+                    if UserHistory:
+                        UserHistory.log(user, "login_failed", details={"reason": "invalid_password"}, request=request)
                     if KEYCLOAK_MIGRATING and user.activation_code != password:
                         user.set_password(password)
 
@@ -664,6 +672,9 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 user.activation_code = None
                 user.save(update_fields=['activation_code'])
 
+                if UserHistory:
+                    UserHistory.log(user, "login_success_temporary", request=request)
+
                 messages.warning(request,
                                  _('Your temporary password cannot be used again. Please change your password.'))
                 return redirect('users:change_password_now')
@@ -673,12 +684,16 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
         elif user and user.is_active:
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            if UserHistory:
+                UserHistory.log(user, "login_success", request=request)
             if next:
                 return redirect(next)
             else:
                 return redirect(settings.LOGIN_REDIRECT_URL)
 
         else:
+            if user and UserHistory:
+                 UserHistory.log(user, "login_failed", details={"reason": "inactive_or_other"}, request=request)
             messages.error(request, _('Invalid email or password.'))
             context = super().get_context_data()
             context['email'] = email
