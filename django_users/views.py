@@ -201,7 +201,8 @@ class TellUsAbout(LoginRequiredMixin, FormView):
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
-    def get_context_data(self):
+    def get_context_data(self, **kwargs):
+
         context = super().get_context_data()
         if settings.USE_NEWSLETTER:
             Newsletter = apps.get_model('skorie_news', 'Newsletter')
