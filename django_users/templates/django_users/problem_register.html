@@ -127,8 +127,13 @@
             if (validateEmail(email)) {
                 emailInput.removeClass('is-invalid').addClass('is-valid');
                 submitBtn.prop('disabled', false);
-            } else {
+            } else if (email) {
+                // Only show invalid state if user has entered something
                 emailInput.removeClass('is-valid').addClass('is-invalid');
+                submitBtn.prop('disabled', true);
+            } else {
+                // Empty field on load - no validation styling
+                emailInput.removeClass('is-valid is-invalid');
                 submitBtn.prop('disabled', true);
             }
         }

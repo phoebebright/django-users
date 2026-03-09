@@ -61,8 +61,16 @@
 
         $(".login_form").slideDown();
 
-
-
+        // Pass email to Help me Register and Register links
+        $('a[href*="problem_register"], a[href*="register"]').on('click', function(e) {
+            var email = $('#id_email').val();
+            if (email) {
+                e.preventDefault();
+                var href = $(this).attr('href');
+                var separator = href.indexOf('?') > -1 ? '&' : '?';
+                window.location.href = href + separator + 'email=' + encodeURIComponent(email);
+            }
+        });
 
 
     })
