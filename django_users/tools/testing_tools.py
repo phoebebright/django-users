@@ -74,6 +74,6 @@ def remove_file(fullpathname):
 
 def add_session_to_request(request):
     """Annotate a request object with a session"""
-    middleware = SessionMiddleware()
+    middleware = SessionMiddleware(lambda req: None)
     middleware.process_request(request)
     request.session.save()

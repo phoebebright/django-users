@@ -155,8 +155,10 @@ class CommsChannelBase(models.Model):
     objects = CommsChannelsQueryset.as_manager()
 
     class Meta:
-        unique_together = ('user', 'channel_type', 'value')
         abstract = True
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'channel_type', 'value'], name='%(app_label)s_%(class)s_unique_channel'),
+        ]
 
     def __str__(self):
         return f"{self.get_channel_type_display()}: {self.value}"
@@ -2136,7 +2138,9 @@ class EntryTicketLinkBase(models.Model):
 
     class Meta:
         abstract = True
-        unique_together = ['ticket', 'entry_id', 'entry_type']
+        constraints = [
+            models.UniqueConstraint(fields=['ticket', 'entry_id', 'entry_type'], name='%(app_label)s_%(class)s_unique_ticket_entry'),
+        ]
         indexes = [
             models.Index(fields=['entry_type', 'entry_id']),
         ]

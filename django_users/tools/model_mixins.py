@@ -28,9 +28,6 @@ class UnsignedAutoField(models.AutoField):
     def db_type(self, connection):
         return 'integer UNSIGNED AUTO_INCREMENT'
 
-    def rel_db_type(self, connection):
-        return 'integer UNSIGNED'
-
 
 class RefAutoField(models.AutoField):
     description = _("Alphanumeric identifier")
@@ -106,11 +103,6 @@ class RefAutoField(models.AutoField):
                 code='invalid',
                 params={'value': value},
             )
-
-    def rel_db_type(self, connection):
-        return self.db_type(connection)
-
-
 
     def validate(self, value, model_instance):
         pass
