@@ -1622,6 +1622,11 @@ class ManageUserProfile(LoginRequiredMixin, generic.CreateView):
     def get_form_class(self):
         return SkorieUserCreationForm
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['role'] = self.request.GET.get('role', None)
+        return kwargs
+
     def form_valid(self, form):
         # This method is called when valid form data has been POSTed.
         # It should return an HttpResponse.
