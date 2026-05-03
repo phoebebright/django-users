@@ -252,18 +252,26 @@ def send_test_email(request):
 
 
 def logout(request):
+    """GET-accepting logout.
+
+    1. Clear the Django session.
+    2. Redirect the browser to Authentik's end-session endpoint so the IdP
+       session is also terminated and the user is sent back to
+       LOGOUT_REDIRECT_URL.
+
+    Falls back to a local-only logout if OIDC_OP_LOGOUT_ENDPOINT is not
+    configured.
+    """
     nextpage = get_legitimate_redirect(request)
+    log_out(request)
 
-    if len(settings.AUTHENTICATION_BACKENDS) > 1:
-        return HttpResponseRedirect(f"/logout_all/?next={nextpage}")
+    end_session = getattr(settings, "OIDC_OP_LOGOUT_ENDPOINT", "")
+    if end_session:
+        from urllib.parse import urlencode
+        params = {"post_logout_redirect_uri": request.build_absolute_uri(nextpage)}
+        return HttpResponseRedirect(f"{end_session}?{urlencode(params)}")
 
-    else:
-        log_out(request)
-        return HttpResponseRedirect(nextpage)
-
-    # return_to = urlencode({'returnTo': request.build_absolute_uri('/')})
-    # return HttpResponseRedirect("/keycloak/logout")
-    # return HttpResponseRedirect(logout_url)
+    return HttpResponseRedirect(nextpage)
 
 
 def login_redirect(request):
@@ -773,6 +781,16 @@ class ManageCommsChannelsView(View):
         pass
 
 
+# RECOMMENDED: link users to Authentik's self-service settings page instead
+# of using this in-app form. Authentik handles password change, MFA enrolment,
+# recovery codes, and active session management at:
+#
+#     {{ AUTHENTIK_URL }}/if/user/#/settings
+#
+# Project context-processor exposes AUTHENTIK_URL — see web/context_processors.py.
+# The in-app form below stays for cases where you want everything to live
+# inside skorie's own UI, but it duplicates what Authentik already provides
+# and has to mirror the IdP's password validation rules.
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordNowView(GoNextTemplateMixin, FormView):
     template_name = "django_users/change_password.html"
@@ -810,6 +828,15 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
         return super().form_valid(form)
 
 
+# RECOMMENDED: redirect anonymous "I forgot my password" users to Authentik's
+# password-recovery flow rather than running this in-app reset. Configure a
+# Recovery Flow in Authentik admin, then link the Login template to:
+#
+#     {{ AUTHENTIK_URL }}/if/flow/<recovery-flow-slug>/
+#
+# That flow sends the email, verifies the code, and lets the user set a new
+# password — no password-reset code needs to live in skorie. The view below
+# remains for projects that prefer to keep the whole flow in their own UI.
 @method_decorator(never_cache, name='dispatch')
 class ForgotPassword(CheckLoginRedirectMixin, FormView):
     # TODO: instead of putting vc code into session, put the pk of the record and check properly
@@ -1049,6 +1076,16 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         return self.render_to_response(self.get_context_data(form=newform))
 
 
+# RECOMMENDED: link the user to Authentik's self-service settings page
+# instead of routing them through this view. Authentik covers password
+# change, MFA enrolment, recovery codes, and active sessions in one place:
+#
+#     {{ AUTHENTIK_URL }}/if/user/#/settings
+#
+# See templates/account/profile.html for an example link, and
+# web/context_processors.py for where AUTHENTIK_URL is exposed.
+# This in-app form stays for projects that want everything inside their
+# own UI; it duplicates what Authentik provides for free.
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordView(GoNextTemplateMixin, FormView):
     template_name = "django_users/change_password.html"

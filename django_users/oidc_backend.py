@@ -48,22 +48,40 @@ def _coerce_uuid(value: str | UUID | None) -> UUID | None:
 
 
 class AuthentikOIDCBackend(OIDCAuthenticationBackend):
-    def filter_users_by_claims(self, claims: dict) -> "list":
+    """OIDC backend with two-step user matching.
+
+    1. By ``authentik_id`` (the OIDC ``sub`` claim, if it parses as a UUID).
+    2. Fallback by ``email``. This catches:
+       - users created in Django before the IdP existed (no authentik_id yet)
+       - Authentik Providers configured with a Subject Mode other than UUID
+         (e.g. the default "hashed ID"), where ``sub`` won't parse as UUID
+
+    On match, ``update_user`` populates ``authentik_id`` so subsequent logins
+    take the fast path.
+    """
+
+    def filter_users_by_claims(self, claims: dict):
         sub = _coerce_uuid(claims.get("sub"))
-        if sub is None:
-            return self.UserModel.objects.none()
-        return self.UserModel.objects.filter(authentik_id=sub)
+        if sub:
+            by_sub = self.UserModel.objects.filter(authentik_id=sub)
+            if by_sub.exists():
+                return by_sub
+
+        email = (claims.get("email") or "").strip()
+        if email:
+            return self.UserModel.objects.filter(email__iexact=email)
+        return self.UserModel.objects.none()
 
     def create_user(self, claims: dict):
         User = get_user_model()
         sub = _coerce_uuid(claims.get("sub"))
-        email = claims.get("email", "")
+        email = (claims.get("email") or "").strip()
         first_name = claims.get("given_name", "")
         last_name = claims.get("family_name", "")
 
         user = User.objects.create(
             email=email,
-            username=email or str(sub),
+            username=email or (str(sub) if sub else claims.get("sub", "")),
             first_name=first_name,
             last_name=last_name,
             authentik_id=sub,
@@ -74,7 +92,13 @@ class AuthentikOIDCBackend(OIDCAuthenticationBackend):
 
     def update_user(self, user, claims: dict):
         changed = []
-        email = claims.get("email")
+
+        sub = _coerce_uuid(claims.get("sub"))
+        if sub and user.authentik_id != sub:
+            user.authentik_id = sub
+            changed.append("authentik_id")
+
+        email = (claims.get("email") or "").strip()
         if email and user.email != email:
             user.email = email
             changed.append("email")

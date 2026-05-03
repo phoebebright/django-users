@@ -45,7 +45,11 @@ from .views import (
 # run python manage.py show_urls to see the actual url names
 # app_name = 'users'
 
-register_converter(EventRefConverter, 'event_ref')
+try:
+    register_converter(EventRefConverter, 'event_ref')
+except ValueError:
+    # Already registered by the consumer project's urls.
+    pass
 
 
 def has_role_administrator(user):
