@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+
+{% block title %}{% trans "Accept invite" %}{% endblock %}
+
+{% block content %}
+    <h1>{% trans "Invite link" %}</h1>
+
+    {% if ok %}
+        <p>{% trans "Your account has been activated. Redirecting..." %}</p>
+    {% else %}
+        <div class="alert alert-danger" role="alert">
+            {% trans "This invitation link has expired or already been used." %}
+        </div>
+        <p>
+            {% blocktrans %}Ask whoever invited you to resend the invitation, or log in if
+            you have already set a password.{% endblocktrans %}
+        </p>
+    {% endif %}
+{% endblock %}

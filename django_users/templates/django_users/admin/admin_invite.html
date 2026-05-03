@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+{% load django_bootstrap5 %}
+
+{% block title %}{% trans "Invite user" %}{% endblock %}
+
+{% block content %}
+    <h1>{% trans "Invite a user" %}</h1>
+
+    {% if existing_user %}
+        <div class="alert alert-warning" role="alert">
+            {% blocktrans with email=existing_user.email %}
+                A user with email {{ email }} already exists.
+            {% endblocktrans %}
+        </div>
+    {% endif %}
+
+    <form method="post" id="admin_invite_form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        {% bootstrap_form form %}
+
+        <div class="action_buttons">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                <a href="{{ next }}" class="btn btn-outline-secondary">{% trans "Cancel" %}</a>
+
+                {% if existing_user %}
+                    <button type="submit" name="submit_otp_existing" class="btn btn-outline-primary">
+                        {% trans "Send login OTP" %}
+                    </button>
+                    <button type="submit" name="submit_add_existing" class="btn btn-primary">
+                        {% trans "Add to event(s)" %}
+                    </button>
+                {% else %}
+                    <button type="submit" name="submit_otp" class="btn btn-outline-primary">
+                        {% trans "Approve & Send OTP" %}
+                    </button>
+                    <button type="submit" name="submit_invite" class="btn btn-primary">
+                        {% trans "Send invite" %}
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+{% endblock %}

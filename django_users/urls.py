@@ -39,6 +39,9 @@ from .views import (
     WhoAmIView,
     ResetSessionView,
     login_with_remote_token,
+    AdminInviteView,
+    AcceptInvite,
+    EnterOTP,
 )
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -102,6 +105,11 @@ urlpatterns = [
     path('unsubscribe/<str:token>/', UnsubscribeTokenView.as_view(), name='unsubscribe_token'),
 
     path('confirm_account/<int:pk>/', ConfirmAccount.as_view(), name='confirm_account'),
+
+    # Admin invite + accept (Slice 2 of authentik migration plan).
+    path('add_user/invite/', user_passes_test(has_role_administrator)(AdminInviteView.as_view()), name='admin_invite'),
+    path('accept_invite/<str:token>/', AcceptInvite.as_view(), name='accept_invite'),
+    path('enter_otp/', EnterOTP.as_view(), name='enter_otp'),
 
     path('contact_list/', SubscriptionDataFrameView.as_view(), name='user_contact_list'),
     path('dedupe_role/<str:role_ref>/', dedupe_role, name='dedupe_role'),

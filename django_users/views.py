@@ -2111,3 +2111,259 @@ class ResetSessionView(TemplateView):
         context = super().get_context_data(**kwargs)
         context["next"] = self.request.GET.get("next", "/")
         return context
+
+
+# ---------------------------------------------------------------------------
+# Admin invite + accept (lifted from skorie4 HD-0005)
+# ---------------------------------------------------------------------------
+
+class AdminInviteView(LoginRequiredMixin, UserCanAdministerMixin, TemplateView):
+    """Admin adds a user via invitation (magic link) or admin-attested OTP.
+
+    Two POST submit buttons (``submit_invite``, ``submit_otp``) pick the
+    delivery method. Duplicate-email submissions re-render the same form
+    with an "existing user" banner and two alternative actions
+    (``submit_add_existing`` to run the post-create hook against the
+    existing user, ``submit_otp_existing`` to send an OTP for login).
+    """
+
+    template_name = 'django_users/admin/admin_invite.html'
+
+    def get_form_class(self):
+        from .forms import get_invite_form_class
+        return get_invite_form_class()
+
+    def _render_form(self, form, extra=None):
+        ctx = {
+            'form': form,
+            'next': self.request.POST.get('next') or self.request.GET.get('next', '/'),
+        }
+        if extra:
+            ctx.update(extra)
+        return self.render_to_response(ctx)
+
+    def get(self, request, *args, **kwargs):
+        FormClass = self.get_form_class()
+        form = FormClass(request_user=request.user, initial=request.GET.dict())
+        return self._render_form(form)
+
+    def _delivery_from_post(self, request, form):
+        if 'submit_invite' in request.POST:
+            return 'invite'
+        if 'submit_otp' in request.POST:
+            return 'otp'
+        # Fall back to whatever the form's delivery_method field carries.
+        return form.cleaned_data.get('delivery_method') or None
+
+    def _existing_action(self, request):
+        if 'submit_add_existing' in request.POST:
+            return 'add'
+        if 'submit_otp_existing' in request.POST:
+            return 'otp'
+        return None
+
+    def _split_extra(self, cleaned: dict, base_field_names: set) -> tuple[dict, dict]:
+        """Split cleaned form data into core (used by services) and extra
+        (project-specific, written into Invite.extra and passed to the
+        post-create hook)."""
+        core_keys = {'email', 'first_name', 'last_name', 'mobile',
+                     'delivery_method', 'personal_note'}
+        core = {k: v for k, v in cleaned.items() if k in core_keys}
+        extra = {k: v for k, v in cleaned.items() if k not in core_keys}
+        return core, extra
+
+    def get_success_redirect(self, user):
+        # Override in subclasses to redirect somewhere project-specific.
+        return redirect('users:admin_user', pk=user.pk)
+
+    def post(self, request, *args, **kwargs):
+        from .services import (
+            create_user_with_invite, send_otp_email, get_invite_model,
+        )
+
+        FormClass = self.get_form_class()
+        form = FormClass(request.POST, request_user=request.user)
+        if not form.is_valid():
+            return self._render_form(form)
+
+        cleaned = form.cleaned_data
+        email = cleaned['email']
+        UserModel = get_user_model()
+        existing = UserModel.objects.filter(email__iexact=email).first()
+
+        delivery = self._delivery_from_post(request, form)
+        existing_action = self._existing_action(request)
+
+        # Duplicate email — re-render with the choice banner.
+        if existing and not existing_action:
+            return self._render_form(form, extra={'existing_user': existing})
+
+        # Existing user: run the post-create hook against the existing user.
+        if existing and existing_action == 'add':
+            from django.utils.module_loading import import_string
+            from .services import _jsonify
+            dotted = getattr(settings, 'INVITE_POST_CREATE', None)
+            if dotted:
+                hook = import_string(dotted)
+                Invite = get_invite_model()
+                pseudo_invite = Invite(
+                    email=existing.email,
+                    first_name=existing.first_name or '',
+                    last_name=existing.last_name or '',
+                    delivery_method=Invite.DELIVERY_LINK,
+                    expires_at=timezone.now() + timedelta(days=1),
+                    created_by=request.user,
+                    user=existing,
+                    extra=_jsonify(dict(cleaned)),
+                )
+                hook(existing, pseudo_invite, dict(cleaned))
+            messages.success(
+                request, _("Added %(email)s to the selected scope.") % {'email': existing.email},
+            )
+            return self.get_success_redirect(existing)
+
+        # Existing user: just send an OTP so they can log in.
+        if existing and existing_action == 'otp':
+            Invite = get_invite_model()
+            invite = Invite.objects.create(
+                email=existing.email,
+                first_name=existing.first_name or '',
+                last_name=existing.last_name or '',
+                delivery_method=Invite.DELIVERY_OTP,
+                expires_at=timezone.now() + timedelta(
+                    hours=getattr(settings, 'OTP_EXPIRY_HOURS', 24),
+                ),
+                created_by=request.user,
+                user=existing,
+            )
+            send_otp_email(
+                invite, personal_note=cleaned.get('personal_note', ''),
+                mark_channel_verified=False,
+            )
+            invite.mark_sent()
+            messages.success(
+                request, _("Sent login OTP to %(email)s.") % {'email': existing.email},
+            )
+            return self.get_success_redirect(existing)
+
+        # New user path.
+        if not delivery:
+            messages.error(request, _("Pick Invite or Approve & Send OTP."))
+            return self._render_form(form)
+
+        delivery_method = (
+            'link' if delivery == 'invite' else 'otp'
+        )
+        core, extra = self._split_extra(cleaned, set())
+        new_user, invite = create_user_with_invite(
+            actor=request.user,
+            email=core['email'],
+            first_name=core.get('first_name', ''),
+            last_name=core.get('last_name', ''),
+            mobile=core.get('mobile', ''),
+            delivery_method=delivery_method,
+            extra=extra,
+            personal_note=core.get('personal_note', ''),
+        )
+        if delivery_method == 'link':
+            messages.success(request, _("Invitation sent to %(email)s.") % {'email': new_user.email})
+        else:
+            messages.success(
+                request,
+                _("Created %(email)s and sent login OTP (email pre-approved).") % {'email': new_user.email},
+            )
+        return self.get_success_redirect(new_user)
+
+
+class AcceptInvite(View):
+    """Magic-link landing: verify the token, log the user in, forward them
+    to the project's onboarding flow (change_password → tell_us_about by
+    default)."""
+
+    template_name = 'django_users/accept_invite.html'
+
+    def get(self, request, token, *args, **kwargs):
+        from .services import _get_verification_code_model
+        VerificationCode = _get_verification_code_model()
+
+        vc = VerificationCode.verify_token(raw_token=token, purpose='invite')
+        if vc is None:
+            return render(request, self.template_name, {'ok': False})
+
+        user = vc.user
+
+        # Mark any matching open Invite as accepted.
+        from .services import get_invite_model
+        Invite = get_invite_model()
+        Invite.objects.filter(user=user, accepted_at__isnull=True).update(
+            accepted_at=timezone.now(),
+        )
+
+        if hasattr(user, 'is_confirmed') and not user.is_confirmed:
+            if hasattr(user, 'confirm') and callable(user.confirm):
+                user.confirm()
+
+        backend = settings.AUTHENTICATION_BACKENDS[0]
+        login(request, user, backend=backend)
+
+        next_url = (
+            reverse('users:change_password')
+            + '?next=' + reverse('users:tell_us_about')
+        )
+        return redirect(next_url)
+
+
+class EnterOTP(TemplateView):
+    """OTP landing for users invited via the Approve & Send OTP path."""
+
+    template_name = 'django_users/enter_otp.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault('email', self.request.GET.get('email', ''))
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from .services import (
+            _get_comms_channel_model, _get_verification_code_model,
+            get_invite_model,
+        )
+
+        email = (request.POST.get('email') or '').strip().lower()
+        code = (request.POST.get('code') or '').strip()
+
+        UserModel = get_user_model()
+        user = UserModel.objects.filter(email__iexact=email).first()
+        Channel = _get_comms_channel_model()
+        VerificationCode = _get_verification_code_model()
+
+        channel = None
+        if user:
+            channel = user.comms_channels.filter(
+                channel_type=Channel.CHANNEL_EMAIL, value__iexact=email,
+            ).first()
+
+        if not user or not channel or not VerificationCode.verify_code(
+            user=user, channel=channel, code=code, purpose='invite',
+        ):
+            return self.render_to_response({
+                'email': email,
+                'error': _("Invalid or expired code. Check the email and try again."),
+            })
+
+        Invite = get_invite_model()
+        Invite.objects.filter(user=user, accepted_at__isnull=True).update(
+            accepted_at=timezone.now(),
+        )
+        if hasattr(user, 'is_confirmed') and not user.is_confirmed:
+            if hasattr(user, 'confirm') and callable(user.confirm):
+                user.confirm()
+
+        backend = settings.AUTHENTICATION_BACKENDS[0]
+        login(request, user, backend=backend)
+
+        next_url = (
+            reverse('users:change_password')
+            + '?next=' + reverse('users:tell_us_about')
+        )
+        return redirect(next_url)

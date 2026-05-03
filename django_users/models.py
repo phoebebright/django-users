@@ -553,6 +553,108 @@ class VerificationCodeBase(models.Model):
             return send_whatsapp_verification_code(self.channel.value, "<CODE REDACTED>")
         return False
 
+
+class InviteQuerySet(models.QuerySet):
+    def open(self):
+        now = timezone.now()
+        return self.filter(
+            accepted_at__isnull=True,
+            cancelled_at__isnull=True,
+            expires_at__gt=now,
+        )
+
+    def for_email(self, email):
+        return self.filter(email__iexact=(email or '').strip())
+
+
+class InviteBase(models.Model):
+    """Persistent record of an admin invitation.
+
+    One InviteBase row per outbound invitation. The actual delivery token
+    or 6-digit code lives on a sibling VerificationCode row keyed by
+    ``user`` + ``purpose='invite'``; resending an invite supersedes the
+    prior VerificationCode but keeps the same Invite row.
+
+    ``extra`` is a JSON bag for project-specific data (role, events,
+    mentor, etc.) that the project's ``INVITE_POST_CREATE`` hook will
+    consume after user creation.
+    """
+
+    DELIVERY_LINK = 'link'
+    DELIVERY_OTP = 'otp'
+    DELIVERY_CHOICES = (
+        (DELIVERY_LINK, _('Magic link')),
+        (DELIVERY_OTP, _('One-time code')),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(db_index=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    mobile = models.CharField(max_length=20, blank=True, default='')
+    delivery_method = models.CharField(
+        max_length=8, choices=DELIVERY_CHOICES, default=DELIVERY_LINK,
+    )
+
+    expires_at = models.DateTimeField()
+    sent_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='invites_created',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='invites_received',
+    )
+
+    extra = models.JSONField(default=dict, blank=True)
+
+    objects = InviteQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', 'accepted_at']),
+            models.Index(fields=['user', 'accepted_at']),
+        ]
+
+    def __str__(self):
+        return f"Invite({self.email}, {self.delivery_method})"
+
+    @property
+    def is_accepted(self) -> bool:
+        return self.accepted_at is not None
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.cancelled_at is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_open(self) -> bool:
+        return not (self.is_accepted or self.is_cancelled or self.is_expired)
+
+    def mark_sent(self):
+        self.sent_at = timezone.now()
+        self.save(update_fields=['sent_at'])
+
+    def mark_accepted(self):
+        self.accepted_at = timezone.now()
+        self.save(update_fields=['accepted_at'])
+
+    def cancel(self):
+        self.cancelled_at = timezone.now()
+        self.save(update_fields=['cancelled_at'])
+
+
 class UserHistoryBase(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="history")
     action = models.CharField(max_length=100)
@@ -670,12 +772,16 @@ class CustomUserManager(BaseUserManager):
             user_extras['authentik_id'] = extra_fields.pop('authentik_id')
         if 'activation_code' in extra_fields:
             user_extras['activation_code'] = extra_fields.pop('activation_code')
+        # User-only flags must not leak into Person.__init__; routed to
+        # _create_user as positional args.
+        is_superuser = bool(extra_fields.pop('is_superuser', False))
+        is_staff = bool(extra_fields.pop('is_staff', False))
 
 
         person = self.Person.objects.create(**extra_fields)
 
         user_extras['person'] = person
-        user = self._create_user(email, password, False, False, **user_extras)
+        user = self._create_user(email, password, is_staff, is_superuser, **user_extras)
 
         if not is_active:
             user.is_active = False

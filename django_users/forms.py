@@ -584,3 +584,68 @@ class SubscriptionPreferencesForm(forms.ModelForm):
             user.save()
 
         return user
+
+
+# ---------------------------------------------------------------------------
+# Admin invite — generic form scaffold + resolver
+# ---------------------------------------------------------------------------
+
+class BaseAdminInviteForm(forms.Form):
+    """Minimal admin-invite form. Project-specific fields (role, events,
+    mentor, etc.) live in subclasses wired via ``settings.INVITE_FORM``.
+
+    The form normalises the email address and exposes the picked
+    delivery method via ``cleaned_data['delivery_method']``. Views are
+    free to look at ``submit_invite``/``submit_otp`` POST keys instead and
+    set the delivery_method themselves; both styles work.
+    """
+
+    DELIVERY_LINK = 'link'
+    DELIVERY_OTP = 'otp'
+    DELIVERY_CHOICES = (
+        (DELIVERY_LINK, _('Magic link (email verified on click)')),
+        (DELIVERY_OTP, _('Approve & send OTP (admin attests email)')),
+    )
+
+    email = forms.EmailField(label=_('Email'), required=True)
+    first_name = forms.CharField(label=_('First name'), max_length=150, required=True)
+    last_name = forms.CharField(label=_('Last name'), max_length=150, required=True)
+    mobile = forms.CharField(
+        label=_('Mobile'), max_length=20, required=False,
+        help_text=_('Optional. International format, e.g. +353 1234567'),
+    )
+    delivery_method = forms.ChoiceField(
+        label=_('Delivery'),
+        choices=DELIVERY_CHOICES,
+        initial=DELIVERY_LINK,
+        required=False,
+    )
+    personal_note = forms.CharField(
+        label=_('Personal note'),
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 3,
+            'placeholder': _('Optional. Included in the invitation email.'),
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        # Accept request_user for project subclasses that filter querysets
+        # by the requesting admin's permissions.
+        self.request_user = kwargs.pop('request_user', None)
+        super().__init__(*args, **kwargs)
+
+    def clean_email(self):
+        return (self.cleaned_data.get('email') or '').strip().lower()
+
+
+def get_invite_form_class():
+    """Resolve the project's invite form class, falling back to
+    ``BaseAdminInviteForm`` if ``settings.INVITE_FORM`` is unset."""
+    from django.conf import settings as _settings
+    from django.utils.module_loading import import_string
+
+    dotted = getattr(_settings, 'INVITE_FORM', None)
+    if not dotted:
+        return BaseAdminInviteForm
+    return import_string(dotted)

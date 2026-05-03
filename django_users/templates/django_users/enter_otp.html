@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+
+{% block title %}{% trans "Enter your login code" %}{% endblock %}
+
+{% block content %}
+    <h1>{% trans "Enter your login code" %}</h1>
+    <p>
+        {% blocktrans %}Enter the email address your administrator used to create your account
+        and the 6-digit code they sent you.{% endblocktrans %}
+    </p>
+
+    {% if error %}
+        <div class="alert alert-danger" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" id="enter_otp_form">
+        {% csrf_token %}
+
+        <div class="mb-3">
+            <label for="otp_email" class="form-label">{% trans "Email" %}</label>
+            <input type="email" name="email" id="otp_email" class="form-control"
+                   required autocomplete="email" value="{{ email|default:'' }}">
+        </div>
+
+        <div class="mb-3">
+            <label for="otp_code" class="form-label">{% trans "6-digit code" %}</label>
+            <input type="text" name="code" id="otp_code" class="form-control"
+                   required inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                   autocomplete="one-time-code" placeholder="123456">
+        </div>
+
+        <div class="action_buttons">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                <button type="submit" class="btn btn-primary">{% trans "Sign in" %}</button>
+            </div>
+        </div>
+    </form>
+{% endblock %}
