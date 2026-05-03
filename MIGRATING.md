@@ -1,94 +1,79 @@
-Do Next
+# Migrating to the `authentik` branch
 
-Consider adding authorization header to request to allow API calls to pther skorie system (probably overkill)
+This document describes how a project on `main` (Keycloak) moves to
+`authentik`. Skorie4 is a fresh project so doesn't need a migration; this
+guide is for sibling projects (skorie1, skorie3, whinnie, builtair) when
+their turn comes.
 
+> **TL;DR:** the `authentik` branch is intentionally clean — no KC code,
+> no `keycloak_id` placeholder field. Sibling projects need to design
+> their own transition strategy (e.g. dual-field window) since this
+> branch alone won't bridge for them.
 
+## What changed on the package
 
-FISH
-- fix fields in users - remove subscribed, mobile, whatsapp
-- fix fields in person - remove mobile and whatsapp
+- Single new IdP-aware field on the user model: `authentik_id`.
+  `keycloak_id` is gone from `CustomUserBase`.
+- All KC admin API helpers replaced by `django_users.idp.AuthentikIdP`.
+- OIDC backend (`django_users.oidc_backend.AuthentikOIDCBackend`)
+  replaces `django_keycloak_admin.backends.*`.
+- `LoginView`, `Troubleshoot`, `ProblemSignup`, `ProblemLogin`,
+  `UserMigrationView`, `UnverifiedUsersList`, `update_users`, and the
+  KC admin endpoints (`CheckEmailInKeycloak[Public]`,
+  `add_to_keycloak`) are removed.
+- `KEYCLOAK_*` settings are no longer read.
 
-- form not fading on submit and takes a while so needs to
-- user account page
-    - change password
-    - change timezone
-    - manage comms channels
+## Migration shape (for an existing project)
 
-- migration
-    - copy email in comms channel and set email as preferred - DONE, on user save, creates comms channel
+1. **Stand up Authentik** alongside the running Keycloak instance.
+2. **Branch your project**, switch its `requirements.txt` to point at
+   `django-users@authentik`, and resolve the import diff.
+3. **Add `authentik_id` alongside `keycloak_id`** on your concrete user
+   model — the dual-field window from the consolidation decision.
+4. **Backfill**: a one-shot script that, for each user with
+   `keycloak_id`, creates the user in Authentik via
+   `AuthentikIdP.create_user` and stores the resulting UUID in
+   `authentik_id`. Passwords are not portable from KC; either send a
+   "set your password" link or, if `KEYCLOAK_MIGRATING=True` was active
+   on `main` and you have captured passwords in Django, push those.
+5. **Switch authentication backends** to OIDC. `keycloak_id` becomes
+   read-only legacy data.
+6. **Remove `keycloak_id`** in a follow-up release.
 
-- problem signup
-    - create new channel
-    - send verification code to new channel
-    - admin can verify
+## Settings cheatsheet
 
+| Old (`main`) | New (`authentik`) |
+|---|---|
+| `USE_KEYCLOAK` | removed |
+| `KEYCLOAK_CLIENTS = {DEFAULT/USERS/ADMIN}` | `AUTHENTIK = {URL, OIDC_*, API_TOKEN, VERIFY_SSL}` |
+| `KEYCLOAK_MIGRATING` | removed |
+| `django_keycloak_admin.backends.Keycloak*` | `django_users.oidc_backend.AuthentikOIDCBackend` |
+| `KeycloakDRFAuthentication` (DRF) | OIDC JWT auth class |
+| `KeycloakLoginRedirectMiddleware` | `mozilla_django_oidc.middleware.SessionRefresh` |
+| `path('logout/', logout_user_from_keycloak_and_django, ...)` | `path('oidc/', include('mozilla_django_oidc.urls'))` |
 
-Copied from Skorie3 28Feb24 - will require change in db to implement
+## Status field
 
-TODO:
-Initially point to table in web
-Organisation needs to replace id PK with code
-    - code added but foreign keys will need replacing
+`USER_STATUS_UNCONFIRMED` (3) → `USER_STATUS_CONFIRMED` (4) when the user
+"does something" (e.g. fills profile). Behaviour unchanged from `main`.
+Call `self.confirm()` explicitly in your save path if needed:
 
+```python
+if self.country and self.status == self.USER_STATUS_UNCONFIRMED:
+    self.confirm()
+```
 
-Migrating Users
+## CommsChannel
 
-rename model
+The OIDC backend creates an email `CommsChannel` on first login (matches
+the existing save invariant in skorie projects). Other channels (SMS,
+WhatsApp) are added through the existing `AddCommsChannelView` flow —
+unchanged from `main`.
 
-ALTER TABLE web_person RENAME TO users_person;
-ALTER TABLE web_role RENAME TO users_role;
-ALTER TABLE web_personorganisation RENAME TO users_personorganisation;
-ALTER TABLE web_usercontact RENAME TO users_usercontact;
-ALTER TABLE web_organisation RENAME TO users_organisation;
-ALTER TABLE web_customuser RENAME TO users_customuser;
+## SSO between projects sharing a realm
 
-Organisation replace id with code as pk is not straightforward because of foreign keys - just add code as additional field for now.
-
-Manuallyt add users migration 1 and put timestamp before web migration 1
-makemigrations and migrate
-
-Rosette 1-3
-Run rest of migrations
-
-MyHorse -> MyPartner
-MyRider -> MyCompetitor
-
-
-
-# Process
-
-*Signup form*
-  Collect name, email, password and create a django user
-
-*Verify*
-  Send verification code to email
-  User enters code
-  Create keycloak user (verified) and link to django user
-
-*Login*
-  Get email and password 
-
-
-
-# Communication Channels and Preferred Communication Channel
-
-Users continue to login with email used during signup
-
-Can have a preferred channel that is an alternate email
-
-# Migrating Users
-
-When adding comms channels we use the value in the password field to locate and verify the user to avoid using just the id field or passing email.  When migrating, ensure there is a unique value in password.
-
-## SSO
-
-Limited SSO is implemented - must initiate the login from another app sharing the keycloak realm and running this code.
-
-from app1 generates token: 
-  
-    token = generate_login_token(request.user, next_path='/dashboard/')
-    login_url = f"https://app2.example.com/lwt/?token={token}"
-
-in app2 see:
-
-    login_with_token(request):
+Authentik supports cross-app SSO the same way Keycloak does — register
+each project as an Application inside the same Authentik instance. The
+session-cookie alignment from decision 0063 (`SESSION_COOKIE_DOMAIN =
+".skor.ie"`, shared `SECRET_KEY`, etc.) still applies and needs
+re-testing under Authentik when sibling projects migrate.

@@ -1,134 +1,178 @@
-Django-users shares the common functionality used in particular by skorie but potentially other projects as well.
+# django-users — `authentik` branch
 
-Note this is not (yet?) a standard app.  It expects you to create your own users app and use these base models.  In order to use the templates, add this to settings:
+Reusable Django app providing the user models, views, and helpers used by
+the Skorie family of projects. **This branch is Authentik-only**: there is
+no Keycloak code on this branch, and there are no fallback flags. For the
+Keycloak version, use `main`.
 
+This is not (yet?) a standard pip-installable app. It expects you to create
+your own `users` app in your project and use these base models.
 
+## Setup
 
-    def app_templates_dir(app_label: str) -> Path:
-        pkg = importlib.import_module(app_label)
-        return Path(pkg.__file__).resolve().parent / "templates"
-    
-    USERS_TEMPLATES_DIR = app_templates_dir("django-users") 
+### 1. Stand up Authentik
 
-then update TEMPLTES
+You need a running Authentik instance. For local development, run it via
+Docker Compose on its own host (e.g. `localhost:9000` HTTP / `:9443` HTTPS).
+See <https://goauthentik.io/docs/installation/docker-compose>.
 
-    TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        # Search order: project templates first, then your app’s templates dir
-        "DIRS": [
-            BASE_DIR / "templates",
-            USERS_TEMPLATES_DIR,            <---------------------  add this
-        ],
+In the Authentik admin UI:
 
-Can be run with or without keycloak
+1. **Providers → Create → OAuth2/OpenID Provider**
+   - Note Client ID, Client Secret, the OpenID Configuration URL.
+   - Add your project's redirect URI to the list, e.g.
+     `http://localhost:8000/oidc/callback/`.
+2. **Applications → Create**
+   - Slug must match the slug used in the issuer URL.
+   - Provider: select the one created above.
+3. **Directory → Tokens & App passwords → Create → API Token**
+   - User: an admin (e.g. `akadmin`); copy the token value once.
 
+### 2. Install the package and dependencies
 
+```
+pip install git+https://github.com/phoebebright/django-users@authentik
+```
 
-## Settings
+Required packages (also brought in via `requirements.txt`):
 
-This will run without any additional settings but the following settings can be added:
+- `mozilla-django-oidc` — handles the OIDC authorization-code flow
+- `httpx` — used by the IdP admin adapter
 
-
-    USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
-
-    LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
-    LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
-    # define this url locally in your project
-    LOGIN_REDIRECT_URL = "after_login_redirect" 
-
-    VERIFICATION_CODE_EXPIRY_MINUTES = 5
-    VERIFY_ONCE = True    # if user is verified in one system sharing a realm  then will be auto everified on a second - if you want each client to verify their users then set to False
-
-    NOTIFY_NEW_USER_EMAILS = "phoebebright310@gmail.com"
-
-    USERS_BIG = False  # if True then will use a paged method to display users table (for large numbers of users)
-
-    CONFIRM_USER_PAGE = "users:tell_us_about" 
-
-Make sure that django model authentication is your first choice, eg.
-
-    AUTHENTICATION_BACKENDS = (
-        "django.contrib.auth.backends.ModelBackend",      # MODELBACKEND must be first
-        'django_keycloak_admin.backends.KeycloakAuthorizationCodeBackend',
-        'django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend',  
-    )
-
-## Setting up without Keycloak
-
-1. copy users directory from another system
-2. copy users template directory from another system
-3. add to requirements: git+https://github.com/phoebebright/django-users
-4. install
-5. add to settings.py:
-
+### 3. Add settings
 
 ```python
 INSTALLED_APPS = [
     ...
-    'users',
-    ...
+    "users",                # your concrete users app
+    "mozilla_django_oidc",
 ]
 
-USE_KEYCLOAK = False
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "django_users.oidc_backend.AuthentikOIDCBackend",
+]
+
+AUTHENTIK = {
+    "URL":                "https://localhost:9443",
+    "OIDC_ISSUER":        "https://localhost:9443/application/o/<slug>/",
+    "OIDC_CLIENT_ID":     "...",
+    "OIDC_CLIENT_SECRET": "...",
+    "API_TOKEN":          "...",
+    "VERIFY_SSL":         True,    # False for local self-signed certs
+}
+
+# OIDC client configuration (mozilla-django-oidc)
+OIDC_RP_CLIENT_ID                = AUTHENTIK["OIDC_CLIENT_ID"]
+OIDC_RP_CLIENT_SECRET            = AUTHENTIK["OIDC_CLIENT_SECRET"]
+OIDC_OP_AUTHORIZATION_ENDPOINT   = AUTHENTIK["OIDC_ISSUER"] + "authorize/"
+OIDC_OP_TOKEN_ENDPOINT           = AUTHENTIK["OIDC_ISSUER"] + "token/"
+OIDC_OP_USER_ENDPOINT            = AUTHENTIK["OIDC_ISSUER"] + "userinfo/"
+OIDC_OP_JWKS_ENDPOINT            = AUTHENTIK["OIDC_ISSUER"] + "jwks/"
+OIDC_RP_SIGN_ALGO                = "RS256"
+OIDC_VERIFY_SSL                  = AUTHENTIK["VERIFY_SSL"]
+
+LOGIN_URL              = "oidc_authentication_init"
+LOGIN_REDIRECT_URL     = "/"
+LOGOUT_REDIRECT_URL    = "/"
+
+# Optional middleware — keeps the session token fresh against Authentik
+MIDDLEWARE = [
+    ...
+    "mozilla_django_oidc.middleware.SessionRefresh",
+]
 ```
 
-6. check there is a login and register url
-
-from django_users.api import ChangePassword, resend_activation, CheckEmailInKeycloak, SetTemporaryPassword, \
-    CheckEmailInKeycloakPublic, toggle_role, CreateUser
-from users.api import UserProfileUpdate, CheckEmail, OrganisationViewSet, UserViewset, CommsChannelViewSet, \
-    UserListViewset, SendOTP2User, InternalRoleViewSet, RoleViewSet, MyInternalRoles, PersonViewSet
-from django_users.views import login_redirect, signup_redirect, after_login_redirect, send_test_email,  \
-     unsubscribe_only
-from users.views import SubscribeView, ManageRoles
-
-    # users apis
-
-
-    path('ql/', login_with_token, name='qr-login'),   # login to same app, eg. on mobile
-    path('lwt/', login_with_token,{'key': settings.REMOTE_LOGIN_SECRET}, name='login-with-token'),   # request to login from remote app with token
-    path('login/', login_redirect, name='login'),
-    path('logout', logout_user_from_keycloak_and_django, name="logout"),
-    path('after_login_redirect/', after_login_redirect, name="after_login_redirect"),
-
-
-
-You will need these in requirements (should not have all these dependancies!)
-
-    git+https://github.com/phoebebright/django-users
-    django_countries
-    nanoid
-    django-timezone-field
-    # original library - not being updated
-    git+https://github.com/phoebebright/django-yamlfield
-
-Currently need roles and disciplines.  Create a file (see default_roles_and_disciplines.py) and add settings to point to it:
+Add the OIDC URL include to your project's `urls.py`:
 
 ```python
-MODEL_ROLES_PATH = 'config.roles_and_disciplines.ModelRoles'
-DISCIPLINES_PATH = 'config.roles_and_disciplines.Disciplines'
+path("oidc/", include("mozilla_django_oidc.urls")),
 ```
 
-
-## Migrating from keycloak to no keycloak
-
-We need the password.  Best approach is to have a migration period to get most of the users across automatically, saving the password in django as we go.  
-
-in settings: KEYCLOAK_MIGRATING = True
-This will save the password in the django database (encrypted) on successful login
-
-Benefits of keeping keycloak:
-- MFA (not currently used)
-- SSO (if multiple apps share same users)
-- Social Signon - can also be implemented in django
-
-
-## Status Updates
-
-By default users are USER_STATUS_UNCONFIRMED (3) and then they become USER_STATUS_CONFIRMED (4) when they do something like fill in the profile.  By default this is done when update_subscribed is called but  decide how you want this to work and ensure it is in the save code of your user model.  You can call self.confirm()
+### 4. Define your concrete user model
 
 ```python
-       # confirm once profile complete (ie. country is set)
-        if self.country and self.status == self.USER_STATUS_UNCONFIRMED:
-            self.confirm()
+# users/models.py
+from django_users.models import CustomUserBase
+
+class CustomUser(CustomUserBase):
+    # add project-specific fields here
+    class Meta(CustomUserBase.Meta):
+        abstract = False
+```
+
+```python
+# settings.py
+AUTH_USER_MODEL = "users.CustomUser"
+```
+
+### 5. Required project settings
+
+Same as on `main`:
+
+```python
+MODEL_ROLES_PATH = "config.roles_and_disciplines.ModelRoles"
+DISCIPLINES_PATH = "config.roles_and_disciplines.Disciplines"
+```
+
+See `default_roles_and_disciplines.py` for an example.
+
+## Optional settings
+
+```python
+LOGIN_REGISTER                  = "users:register"
+CHANNEL_EMAIL                   = "email"
+VERIFY_ONCE                     = True
+NOTIFY_NEW_USER_EMAILS          = "phoebebright310@gmail.com"
+USERS_BIG                       = False     # paged users list
+CONFIRM_USER_PAGE               = "users:tell_us_about"
+INVITE_LINK_EXPIRY_DAYS         = 7
+OTP_EXPIRY_HOURS                = 24
+REQUIRES_APPROVAL               = False     # gate self-registered users
+```
+
+## What lives on this branch
+
+- `django_users.idp.AuthentikIdP` — the single chokepoint for Authentik
+  admin API calls (`create_user`, `set_password`, `mark_email_verified`,
+  `logout`, etc.). Every other module that talks to the IdP goes through
+  this class.
+- `django_users.oidc_backend.AuthentikOIDCBackend` — custom
+  `mozilla_django_oidc` backend. Looks up Django users by `authentik_id`
+  (the OIDC `sub` claim); seeds an email `CommsChannel` on first login.
+- `CustomUserBase.authentik_id` — the only IdP-aware field on the user
+  model. Stores the OIDC `sub` UUID.
+- Standard views: `AddUser`, `RegisterView`, `ChangePasswordView`,
+  `ChangePasswordNowView`, `ForgotPassword`, `TellUsAbout`, etc. All
+  password-mutating views call `AuthentikIdP.set_password` rather than
+  hashing locally.
+
+## What does NOT live on this branch
+
+- No `LoginView` — `mozilla-django-oidc` handles the auth handshake.
+- No `Troubleshoot`, `ProblemSignup`, `ProblemLogin` — Authentik admin
+  UI replaces these support paths.
+- No `UserMigrationView`, `update_users` — no realm-to-realm migration on
+  a fresh project.
+- No `UnverifiedUsersList` — relied on direct reads from KC's user table.
+- No `add_to_keycloak` admin action.
+- No `KEYCLOAK_*` settings or `USE_KEYCLOAK` flag.
+
+## Health check
+
+After wiring everything up, run the system check:
+
+```
+./manage.py check --tag idp
+./manage.py check --deploy --tag idp     # also probes /.well-known/openid-configuration
+```
+
+(Project-side; see `users/checks.py` in your project for an example.)
+
+## Branching policy
+
+- `main` — Keycloak baseline, used by skorie1 / skorie3 / whinnie / builtair.
+- `authentik` *(this branch)* — Authentik-only, used by skorie4 first.
+
+The two diverge hard; bug fixes that apply to both must be applied to
+both manually until `main` is retired.
