@@ -51,9 +51,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
 
 
-if settings.USE_KEYCLOAK:
-    from .keycloak import get_access_token, search_user_by_email_in_keycloak, set_temporary_password, \
-        verify_user_without_email, create_keycloak_user
+from .idp import AuthentikIdP, AuthentikError
 
 logger = logging.getLogger('django')
 
@@ -128,7 +126,7 @@ class UserViewset(viewsets.ModelViewSet):
     queryset = User.objects.all().select_related('person','preferred_channel')
     serializer_class = UserSerializer
     http_method_names = ['get', ]
-    filterset_fields = ('email', 'keycloak_id')
+    filterset_fields = ('email', 'authentik_id')
 
 
 
@@ -140,8 +138,8 @@ class UserViewset(viewsets.ModelViewSet):
         # Try to determine if the lookup value is a UUID
         try:
             uuid_obj = uuid.UUID(str(lookup_value))
-            # If no error, it's a UUID → use keycloak_id
-            return get_object_or_404(model, keycloak_id=uuid_obj)
+            # If no error, it's a UUID → use authentik_id
+            return get_object_or_404(model, authentik_id=uuid_obj)
         except (ValueError, TypeError):
             # Not a UUID → treat it as an integer id
             return get_object_or_404(model, id=lookup_value)
@@ -163,7 +161,7 @@ class UserViewset(viewsets.ModelViewSet):
 
     @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def activate_both(self, request, pk):
-        '''set active = True and activate in keycloak also'''
+        '''set active = True in Django and mark email verified in the IdP'''
         user = self.get_object()
 
         if user.is_active:
@@ -174,8 +172,12 @@ class UserViewset(viewsets.ModelViewSet):
 
         logger.info(f"Activating user {user} in django by {request.user}")
 
-        verify_user_without_email(user.keycloak_id)
-        logger.info(f"Verify user {user} in keycloak by {request.user}")
+        if user.authentik_id:
+            try:
+                AuthentikIdP().mark_email_verified(user.authentik_id)
+                logger.info(f"Marked email verified in IdP for {user} by {request.user}")
+            except AuthentikError as exc:
+                logger.warning(f"Could not mark email verified in IdP for {user}: {exc}")
 
         return Response("OK")
 
@@ -197,20 +199,16 @@ class UserViewset(viewsets.ModelViewSet):
 
     @action(methods=['get'], detail=True, permission_classes=[IsAdministrator])
     def verify(self, request, pk):
-        '''a quick catch all of checks - should be better review for automated check and fix'''
+        '''ensure the user has an Authentik record; create one if missing.'''
         user = self.get_object()
 
-        # create keycloak user if none exists
-        if settings.USE_KEYCLOAK and not user.keycloak_id:
-            password = hash(str(uuid.uuid4()))
-            keycloak_id, status_code = user.create_keycloak_user_from_user(password, self.request.user)
-            if status_code == 409:
-                messages.error(self.request, _('User already has an account.'))
-            elif status_code != 201:
-                messages.error(self.request, _('Failed to create user account.'))
+        if not user.authentik_id:
+            password = user.create_authentik_user_from_user(requester=self.request.user)
+            if password:
+                AuthentikIdP().mark_email_verified(user.authentik_id)
+                messages.info(self.request, f"Created IdP account — temporary password is {password}")
             else:
-                verify_user_without_email(keycloak_id)
-                messages.info(self.request, f"Created User account - new password is {password}")
+                messages.error(self.request, _('Failed to create user account in IdP.'))
 
         logger.info(f"Verify user {user} by {request.user}")
 
@@ -373,13 +371,13 @@ class UserProfileUpdate(viewsets.ModelViewSet):
     queryset = User.objects.none()
     serializer_class = UserProfileSerializer
     http_method_names = ['patch', ]
-    filterset_fields = ('username', 'keycloak_id')
+    filterset_fields = ('username', 'authentik_id')
 
 
 
     def get_object(self,  pk=None, username=None):
         if pk:
-            user = User.objects.get(keycloak_id=pk)
+            user = User.objects.get(authentik_id=pk)
         elif username:
             user = User.objects.get(username=username)
         else:
@@ -416,31 +414,6 @@ class UserProfileUpdate(viewsets.ModelViewSet):
 # deprecated - use UserProfileUpdate directly
 class UserProfileUpdateBase(UserProfileUpdate):
     pass
-
-
-class CheckEmailInKeycloak(APIView):
-    '''
-    check if an email has already been registered in the keycloak
-    '''
-    throttle_classes = [CustomOrdinaryUserRateThrottle, ]
-
-    def get_throttle_classes(self):
-        if self.request.user.is_administrator:
-            return [AdminUserRateThrottle, ]
-        else:
-            return [CustomOrdinaryUserRateThrottle, ]
-
-    def post(self, request, *args, **kwargs):
-        email = normalise_email(request.POST.get('email'))
-        if email:
-
-            user = search_user_by_email_in_keycloak(email, request.user)
-            if user:
-                return Response(user, status=status.HTTP_200_OK)
-            else:
-                return Response({"status": "N"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"status": "N"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class SendVerificationPinPublic(APIView):
@@ -606,130 +579,8 @@ class SendVerificationCode(APIView):
         return self.post(request, *args, **kwargs)
 
 
-@method_decorator(never_cache, name='dispatch')
-class CheckEmailInKeycloakPublic(APIView):
-    '''
-    check if an email has already been registered in keycloak
-    '''
-
-    permission_classes = [AllowAny]
-    throttle_classes = [CustomAnonRateThrottle]
-
-    def get_throttle_classes(self):
-        """
-        Dynamically assign throttles based on user type.
-        """
-        if self.request.user.is_authenticated:
-            if self.request.user.is_administrator:
-                return [AdminUserRateThrottle()]
-            else:
-                return [CustomOrdinaryUserRateThrottle()]
-        else:
-            return [CustomAnonRateThrottle()]
-
-    def post(self, request, *args, **kwargs):
-        User = get_user_model()
-        create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
-        email = request.POST.get('email', None)
-        updated_keycloak_id = False
-
-        if email:
-            email = normalise_email(email)
-
-            channels = []
-
-            # get user in django
-            try:
-                # username will be set by keycloak so use email as key
-                django_user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                django_user = None
-            else:
-                set_current_user(request, django_user.id, "PROBLEM")
-                channels = []
-
-                # migrate existing channels
-                django_user.migrate_channels()
-
-                for item in django_user.comms_channels.all():
-                    channels.append(
-                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
-                         'verified': item.is_verified})
-
-                # django_user = django_user.keycloak_id
-
-            keycloak_user = search_user_by_email_in_keycloak(email, request.user)
-
-            # make sure we can link users
-            if (django_user and keycloak_user) and not str(django_user.keycloak_id) == keycloak_user['id']:
-                django_user.keycloak_id = keycloak_user['id']
-                django_user.save(update_fields=['keycloak_id', ])
-                updated_keycloak_id = True
-
-            elif not django_user and keycloak_user and create_in_django:
-                # remove this code when all users transitioned to new signup system as should not apply
-
-                with transaction.atomic():
-                    # create user in django
-                    django_user = User.objects.create_user(email=email.lower(), username=email,
-                                                           first_name=keycloak_user['firstName'],
-                                                           last_name=keycloak_user['lastName'],
-                                                           )
-                    django_user.keycloak_id = keycloak_user['id']
-                    django_user.save(update_fields=['keycloak_id', ])
-
-                    for item in django_user.comms_channels.all():
-                        channels.append(
-                            {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
-                             'verified': item.is_verified})
-
-                set_current_user(request, django_user.id, "REGISTER")
-
-            if keycloak_user:
-                if request.user.is_authenticated and request.user.is_organiser:
-                    data = {
-                        'updated_keycloak_id': updated_keycloak_id,
-                        "keycloak_user_id": keycloak_user['id'],
-                        "keycloak_created": keycloak_user['createdTimestamp'],
-                        "keycloak_enabled": keycloak_user['enabled'],
-                        "keycloak_actions": keycloak_user['requiredActions'],
-                        "keycloak_verified": keycloak_user['emailVerified'],
-                        "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
-                        "django_user_id": django_user.pk if django_user else 0,
-                        "django_is_active": django_user.is_active,
-                        "formal_name": django_user.person.formal_name,
-                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
-                        "channels": channels,
-                    }
-                else:
-                    data = {
-                        'updated_keycloak_id': updated_keycloak_id,
-                        "keycloak_created": keycloak_user['createdTimestamp'],
-                        "keycloak_enabled": keycloak_user['enabled'],
-                        "keycloak_actions": keycloak_user['requiredActions'],
-                        "keycloak_verified": keycloak_user['emailVerified'],
-                        "django_is_active": django_user.is_active,
-                        "formal_name": django_user.person.formal_name,
-                        "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
-                        "channels": channels,
-                    }
-                return JsonResponse(data)
-            else:
-                return JsonResponse({
-                    'updated_keycloak_id': updated_keycloak_id,
-                    "keycloak_user_id": '',
-                    "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
-                    "django_user_id": django_user.pk if django_user else 0,
-                    "channels": channels,
-                    "formal_name": django_user.person.formal_name if django_user else '',
-                    "friendly_name": django_user.person.friendly_name if django_user else '',
-                    "keycloak_verified": False,
-                })
-
-        else:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-
+# CheckEmailInKeycloakPublic removed on the authentik branch.
+# Authentik's admin UI replaces this support endpoint.
 
 
 @api_view(["POST"])
@@ -862,28 +713,22 @@ class CheckUserPublicBase(CheckUserPublic):
 
 
 class SetTemporaryPassword(APIView):
-    permission_classes([IsAuthenticated, IsAdministratorPermission])
+    """Set a temporary password on an existing IdP user."""
+    permission_classes = [IsAuthenticated, IsAdministratorPermission]
 
     def post(self, request, *args, **kwargs):
-        user_id = request.data.get('username')  # User ID in Keycloak
-        new_password = request.data.get('new_password')  # New temporary password
+        sub = request.data.get('username')           # OIDC sub (UUID)
+        new_password = request.data.get('new_password')
 
-        if not user_id or not new_password:
-            return Response({"error": "user_id and new_password are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not sub or not new_password:
+            return Response({"error": "username (sub) and new_password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        payload = {
-            "type": "password",
-            "value": new_password,
-            "temporary": True
-        }
+        try:
+            AuthentikIdP().set_password(sub, new_password)
+        except AuthentikError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        status_code = set_temporary_password(user_id, payload, request.user)
-
-        if status_code == 204:
-            return Response({"message": "Temporary password set successfully."})
-
-        else:
-            return Response({"error": "Failed to set temporary password."}, status=status_code)
+        return Response({"message": "Temporary password set successfully."})
 
 
 class CommsChannelViewSet(viewsets.ModelViewSet):
@@ -1069,67 +914,59 @@ class CreateUser(APIView):
     throttle_classes = [CustomOrdinaryUserRateThrottle]
 
     def post(self, request, *args, **kwargs):
+        """Create a user in Authentik, then a matching Django user.
 
-        '''at the moment we are creating the keycloak user then the django user to make it easier to
-        ensure the django user points to the keycloak user.  In future we might want to think about creating just
-        the django user at this point and then creating the keycloak user when the user signs in'''
-
+        Auth at the IdP layer is the source of truth for identity; the
+        Django user mirrors it for domain-data purposes.
+        """
         data = request.data
         requester = request.user
+        email = data['email']
+        password = (data.get('password') or '').replace(' ', '')
 
-        payload = {
-            "email": data['email'],
-            "username": data['email'],
-            "firstName": data['first_name'],
-            "lastName": data['last_name'],
-            "emailVerified": True,
-            "enabled": True,
-            "attributes": {
-                "django_created": "true",
-            },
-            "credentials": [{
-                "type": "password",
-                "value": data['password'].replace(" ", ""),  # remove spaces
-                "temporary": False,  # to allow login via keycloak before password is changed
-            }],
-            "requiredActions": [],
+        idp = AuthentikIdP()
 
-        }
+        try:
+            idp_user = idp.create_user(
+                email=email,
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+            )
+        except AuthentikError as exc:
+            logger.error(f"Failed to create IdP user for {email}: {exc}")
+            return Response({"error": "Failed to create IdP user"}, status=HTTP_400_BAD_REQUEST)
 
-        keycloak_id, status_code = create_keycloak_user(payload, requester)
+        if password:
+            idp.set_password(idp_user.uuid, password)
+        idp.mark_email_verified(idp_user.uuid)
 
-        if keycloak_id:
-
+        try:
+            user = User.objects.get(authentik_id=idp_user.uuid)
+        except User.DoesNotExist:
             try:
-                user = User.objects.get(keycloak_id=keycloak_id)
-            except User.DoesNotExist:
-                try:
-                    user = User.objects.get(email=data['email'])
-                    logger.warning(
-                        f"User {user.pk} already exists with email but no keycloak id so attaching id {keycloak_id}")
-                    user.keycloak_id = keycloak_id
-                    user.save()
-                    serializer = UserSerializer(user)
-                    return Response(serializer.data, status=status.HTTP_200_OK)
-                except User.DoesNotExist:
-
-                    # now create the django instance
-                    user = User.objects.create_user(email=data['email'], username=data['email'],
-                                                    first_name=data['first_name'],
-                                                    last_name=data['last_name'], keycloak_id=keycloak_id,
-                                                    creator=requester,
-                                                    activation_code=data['password'])
-                    # reconsider use of activation_code as temporary password.  Currently removed when user logs in.  Be better if this was all in keycloak
-                    serializer = UserSerializer(user)
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                # user already exists
+                user = User.objects.get(email=email)
+                logger.warning(
+                    f"User {user.pk} already exists with email but no authentik_id; linking to {idp_user.uuid}"
+                )
+                user.authentik_id = idp_user.uuid
+                user.save()
                 serializer = UserSerializer(user)
-                return Response(serializer.data, status=status.HTTP_208_ALREADY_REPORTED)
-
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                user = User.objects.create_user(
+                    email=email,
+                    username=email,
+                    first_name=data.get('first_name', ''),
+                    last_name=data.get('last_name', ''),
+                    authentik_id=idp_user.uuid,
+                    creator=requester,
+                    activation_code=password,
+                )
+                serializer = UserSerializer(user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
-            logger.error(f"Failed to create keycloak user for {data['email']}")
-            return Response({"error": "Failed to create keycloak user"}, status=HTTP_400_BAD_REQUEST)
+            serializer = UserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_208_ALREADY_REPORTED)
 
 
 class MemberViewSet(viewsets.ReadOnlyModelViewSet):

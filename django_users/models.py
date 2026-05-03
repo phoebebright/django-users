@@ -49,10 +49,7 @@ mail = get_mail_class()
 
 import logging
 
-if settings.USE_KEYCLOAK:
-    from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, \
-        search_user_by_email_in_keycloak
-
+from .idp import AuthentikIdP, AuthentikError
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -212,38 +209,21 @@ class CommsChannelBase(models.Model):
         self.verified_at = timezone.now()
         self.save()
 
-        if settings.USE_KEYCLOAK:
-            # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
-            keycloak_verified = False
+        # Reflect verification in the IdP (best-effort) and activate the
+        # Django user. If the user has no IdP record yet, OIDC login on
+        # next visit will create one.
+        if self.user.authentik_id:
+            try:
+                AuthentikIdP().mark_email_verified(self.user.authentik_id)
+            except AuthentikError as exc:
+                logging.getLogger(__name__).warning(
+                    "Could not mark email verified in Authentik for user %s: %s",
+                    self.user.pk, exc,
+                )
 
-            # do we have keycloak user setup yet?
-            keycloak_user = None
-            if self.user.keycloak_id:
-                keycloak_user = get_user_by_id(self.user.keycloak_id)
-            if keycloak_user:
-                keycloak_verified =  keycloak_user['emailVerified']
-            else:
-                # let's create keycloak user and mark as verified
-                payload = {
-                    "email": self.user.username,
-                    "username": self.user.username,
-                    "firstName": self.user.first_name,
-                    "lastName": self.user.last_name,
-                    "enabled": True,
-                    'emailVerified': True,
-                    "requiredActions": [],
-                }
-                # is it safe to assume the verifier is the user?
-                keycloak_id, status_code = create_keycloak_user(payload, self.user)
-
+        if not self.user.is_active:
             self.user.is_active = True
             self.user.save()
-
-        # TODO: move this somewhere better
-        if not self.user.is_active or not keycloak_verified:
-            self.user.is_active = True
-            self.user.save()
-            verify_user_without_email(self.user.keycloak_id)
 
 
     def send_msg(self, msg, subject=None):
@@ -686,8 +666,8 @@ class CustomUserManager(BaseUserManager):
             extra_fields.pop('username')
         if 'is_active' in extra_fields:
             is_active = extra_fields.pop('is_active')
-        if 'keycloak_id' in extra_fields:
-            user_extras['keycloak_id'] = extra_fields.pop('keycloak_id')
+        if 'authentik_id' in extra_fields:
+            user_extras['authentik_id'] = extra_fields.pop('authentik_id')
         if 'activation_code' in extra_fields:
             user_extras['activation_code'] = extra_fields.pop('activation_code')
 
@@ -929,7 +909,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             self.person = self.Person.create_from_user(self)
             self.quick_save(update_fields=['person', ])
 
-        # get the keycloak_id as soon as we can - alternative is to change django_keycloak_admin
+        # authentik_id is populated by the OIDC backend on first login.
 
 
 
@@ -1122,8 +1102,8 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
             django_user = None
 
             return {
-                "keycloak_user_id": '',
-                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                "authentik_user_id": '',
+                "django_user_authentik_id": django_user.authentik_id if django_user else 0,
                 "django_user_id": django_user.pk if django_user else 0,
 
             }
@@ -1375,10 +1355,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
         if created:
             status = "created"
-        elif settings.USE_KEYCLOAK and not user.keycloak_id:
-                # need to create a keycloak user
-                keycloak_id = user.create_keycloak_user_from_user(passw)
-                status = "keycloak created"
+        elif not user.authentik_id:
+            # need to create an Authentik user
+            user.create_authentik_user_from_user(passw)
+            status = "idp created"
 
         elif not user.is_active:
             # user is not is_active (not same same active field, such a bad naming choice)
@@ -1597,7 +1577,7 @@ class CustomUserBase(CustomUserBaseBasic):
         'devteam': "Skorie Development Team",
     }
 
-    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
+    authentik_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
 
     user_source = models.CharField(max_length=20, default="Unknown",
                                    help_text=_("How or where did this user get created"))
@@ -1637,9 +1617,6 @@ class CustomUserBase(CustomUserBaseBasic):
 
         super().save(*args, **kwargs)
 
-        if not self.keycloak_id:
-            self.keycloak_id = None
-
         # assuming we are using email to login and want a unique random id to use in urls
         # if creating own unique username then this will not be triggered
         if not self.username:
@@ -1647,74 +1624,70 @@ class CustomUserBase(CustomUserBaseBasic):
             self.username = str(uuid.uuid4())
 
     @classmethod
-    def check_register_status(cls, email, requester):
+    def check_register_status(cls, email, requester=None):
         '''check if user is registered and activated/verified'''
 
-        # get user in django
         try:
-            # username will be set by keycloak so use email as key
             django_user = cls.objects.get(email=email)
         except cls.DoesNotExist:
             django_user = None
 
-        keycloak_user = search_user_by_email_in_keycloak(email, requester)
+        idp_user = AuthentikIdP().find_by_email(email)
 
-        if keycloak_user:
-
+        if idp_user:
             return {
-                "keycloak_user_id": keycloak_user['id'],
-                "keycloak_created": keycloak_user['createdTimestamp'],
-                "keycloak_enabled": keycloak_user['enabled'],
-                "keycloak_actions": keycloak_user['requiredActions'],
-                "keycloak_verified": keycloak_user['emailVerified'],
-                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                "authentik_user_id": str(idp_user.uuid),
+                "authentik_active": idp_user.is_active,
+                "authentik_email_verified": bool(idp_user.attributes.get("email_verified")),
+                "django_user_authentik_id": django_user.authentik_id if django_user else 0,
                 "django_user_id": django_user.pk if django_user else 0,
-                "django_is_active": django_user.is_active,
-
+                "django_is_active": django_user.is_active if django_user else False,
             }
 
-        else:
-            return {
-                "keycloak_user_id": '',
-                "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
-                "django_user_id": django_user.pk if django_user else 0,
-
-            }
-
-    def create_keycloak_user_from_user(self, password, requester):
-
-        user_data = {
-            "firstName": self.first_name,
-            "lastName": self.last_name,
-            "email": self.email,
-            "username": self.username,
-            "enabled": True,
-            "emailVerified": False,
-            "credentials": [{"value": password, "type": "password"}],
+        return {
+            "authentik_user_id": '',
+            "django_user_authentik_id": django_user.authentik_id if django_user else 0,
+            "django_user_id": django_user.pk if django_user else 0,
         }
+
+    def create_authentik_user_from_user(self, password=None, requester=None):
+        """Create the user in Authentik and store the resulting UUID locally.
+
+        If `password` is supplied, sets it on the new IdP user. If omitted,
+        a random temporary password is generated and returned (caller is
+        responsible for delivering it).
+        """
+        idp = AuthentikIdP()
         try:
-            keycloak_user_id, status_code = create_keycloak_user(user_data, requester)
-
-        except Exception as e:
-            # Handle exceptions (e.g., user already exists)
-            print(f"Error creating Keycloak user: {e}")
+            idp_user = idp.create_user(
+                email=self.email,
+                first_name=self.first_name,
+                last_name=self.last_name,
+            )
+        except AuthentikError as exc:
+            logging.getLogger(__name__).error(
+                "Failed to create Authentik user for %s: %s", self.email, exc,
+            )
             return None
-        else:
 
-            self.keycloak_id = keycloak_user_id
-            self.save()
-            return status_code
+        self.authentik_id = idp_user.uuid
+        self.save()
 
-    def update_keycloak_email_verified(self):
-        verify_user_without_email(self.keycloak_id)
+        if password:
+            idp.set_password(idp_user.uuid, password)
+            return password
+        return idp.set_temporary_password(idp_user.uuid)
+
+    def update_email_verified_in_idp(self):
+        if self.authentik_id:
+            AuthentikIdP().mark_email_verified(self.authentik_id)
 
     @cached_property
     def user_pk(self):
-        '''return the user pk - used in keycloak'''
-        if self.keycloak_id:
-            return str(self.keycloak_id)
-        else:
-            return str(self.pk)
+        '''return the user identifier — IdP sub if linked, else Django pk.'''
+        if self.authentik_id:
+            return str(self.authentik_id)
+        return str(self.pk)
 
     @cached_property
     def is_devteam(self):
@@ -2036,7 +2009,7 @@ class UserContactBase(models.Model):
         if is_anon:
             user_url = ''
         else:
-            user_url = settings.SITE_URL + reverse('users:admin_user', args=[user.keycloak_id])
+            user_url = settings.SITE_URL + reverse('users:admin_user', args=[user.authentik_id])
 
         contact = cls(user=user, method=method, notes=notes, data=data)
         contact.save()
