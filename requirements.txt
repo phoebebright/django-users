@@ -1,5 +1,6 @@
-git+https://github.com/phoebebright/django-keycloak-admin
 Django
+mozilla-django-oidc
+httpx
 twilio
 nanoid
 qrcode
@@ -14,5 +15,3 @@ pycountry
 
 git+https://github.com/phoebebright/django-yamlfield
 django-timezone-field
-django_countries
-nanoid

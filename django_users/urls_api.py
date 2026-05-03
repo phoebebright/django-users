@@ -6,7 +6,7 @@ from django.urls import path, include
 
 
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
-    UserProfileUpdate, SetTemporaryPassword, toggle_role, CheckEmailInKeycloakPublic, CheckEmailInKeycloak, \
+    UserProfileUpdate, SetTemporaryPassword, toggle_role, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
      SendVerificationCode, CheckUserPublic, PagedUserListViewset, email_exists_or_404
 from django_users.views import login_with_token
@@ -30,10 +30,8 @@ urlpatterns = [
     #these are prepended with api/u1
     path('change_pw/', ChangePassword.as_view(), name="change_pw"),
     path('resend_activation/', resend_activation, name="resend_activation"),
-    path('email_exists_on_keycloak/', CheckEmailInKeycloak.as_view(), name='email_exists_on_keycloak'),
-    # admin only
-    path('email_exists_on_keycloak_p/', CheckEmailInKeycloakPublic.as_view(), name='email_exists_on_keycloak_p'),
-    # public with throttle
+    # email_exists_on_keycloak / _p removed on the authentik branch — Authentik
+    # admin UI replaces these support endpoints.
     path('set_temp_password/', SetTemporaryPassword.as_view(), name='set_temp_password'),
     path('toggle_role/', toggle_role, name="toggle_role"),
 

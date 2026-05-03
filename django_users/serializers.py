@@ -96,7 +96,7 @@ class UserShortSerializer(CountryFieldMixin, DynamicModelSerializer):
         if settings.USE_NEWSLETTER:
             ret['subscribed'] = 'Y' if instance.subscribe_news and not instance.unsubscribe_news else 'N'
 
-        ret['user_pk'] = str(instance.keycloak_id) if instance.keycloak_id else instance.pk
+        ret['user_pk'] = str(instance.authentik_id) if instance.authentik_id else instance.pk
         ret['is_active'] = 'Y' if instance.is_active else 'N'
         return ret
 
@@ -218,7 +218,7 @@ class UserSyncSerializer(DynamicModelSerializer):
                     except User.DoesNotExist:
                         pass
                 else:
-                    self.message = _("Missing username field.  This is the GUID returned from keycloak in the username field.")
+                    self.message = _("Missing username field. This is the OIDC sub (GUID) supplied by the IdP.")
 
 
 

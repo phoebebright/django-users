@@ -36,7 +36,7 @@
         <form method="get">
             {% csrf_token %}
 
-            <input type="hidden" id="keycloak_id" value="{{ recipient.keycloak_id }}">
+            <input type="hidden" id="authentik_id" value="{{ recipient.authentik_id }}">
             <input type="hidden" id="otp" value="{{ recipient.activation_code }}">
             <input type="hidden" id="channel_id" value="{{ recipient.preferred_channel_id }}">
 
@@ -75,12 +75,12 @@
             e.stopPropagation();
 
             const payload = {
-                'username': $("#keycloak_id").val(),
+                'username': $("#authentik_id").val(),
                 'new_password': $("#otp").val(),
             };
 
             try {
-                const data = await set_keycloak_password(payload);
+                const data = await set_idp_password(payload);
                 console.log(data);
 
                 // Ensure the value is properly retrieved

@@ -80,37 +80,6 @@ delete_one.short_description = "If Delete fails try this"
 
 
 
-def credential_representation_from_hash(hash_, temporary=False):
-    algorithm, hashIterations, salt, hashedSaltedValue = hash_.split('$')
-
-    return {
-        'type': 'password',
-        'hashedSaltedValue': hashedSaltedValue,
-        'algorithm': algorithm.replace('_', '-'),
-        'hashIterations': int(hashIterations),
-        'salt': base64.b64encode(salt.encode()).decode('ascii').strip(),
-        'temporary': temporary
-    }
-
-
-def add_user(client, user):
-    """
-    Create user in Keycloak based on a local user including password.
-
-    :param django_keycloak.models.Client client:
-    :param django.contrib.auth.models.User user:
-    """
-    credentials = credential_representation_from_hash(hash_=user.password)
-
-    client.admin_api_client.realms.by_name(client.realm.name).users.create(
-        username=user.email,
-        credentials=credentials,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        email=user.email,
-        enabled=user.is_active
-    )
-
 def make_event_manager(self, request, queryset):
 
     for user in queryset:
@@ -118,14 +87,12 @@ def make_event_manager(self, request, queryset):
 
 make_event_manager.short_description = "Add Role Event Manager"
 
-def add_to_keycloak(self, request, queryset):
 
-    realm = settings.KEYCLOAK_CLIENTS['DEFAULT']['REALM']
+# `add_to_keycloak` and its `add_user`/`credential_representation_from_hash`
+# helpers are removed on the authentik branch. Authentik admin UI handles
+# bulk user creation; programmatic provisioning goes through
+# `django_users.idp.AuthentikIdP`.
 
-    for user in queryset:
-        add_user(client=realm.client, user=user)
-
-add_to_keycloak.short_description = "Add to Keycloak"
 
 class UserCreationForm(forms.ModelForm):
     """A form for creating new users. Includes all the required
@@ -186,7 +153,7 @@ class CustomUserAdminBase(UserAdmin):
     list_filter = ('is_staff', 'is_active', 'status')
     search_fields = (  'email','username')
     ordering = ( 'email',)
-    actions = [email_list, remove, add_to_keycloak, make_event_manager, delete_one]
+    actions = [email_list, remove, make_event_manager, delete_one]
 
     class Meta:
         model = None

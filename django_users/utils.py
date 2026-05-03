@@ -182,7 +182,7 @@ def generate_login_token(user, next='/', key=None):
         key = settings.SECRET_KEY
 
     payload = {
-        'user_id': str(user.keycloak_id),
+        'user_id': str(user.authentik_id),
         'next': next,
     }
 

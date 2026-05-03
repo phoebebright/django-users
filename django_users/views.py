@@ -59,23 +59,13 @@ mail = get_mail_class()
 
 logger = logging.getLogger('django')
 
-USE_KEYCLOAK = getattr(settings, 'USE_KEYCLOAK', False)
 LOGIN_URL = getattr(settings, 'LOGIN_URL', 'users:login')
 LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need to change this
 VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
                       True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
-if settings.USE_KEYCLOAK:
-    from .keycloak import KeycloakAdmin, KeycloakGetError, KeycloakAuthenticationError, create_keycloak_user, \
-        get_access_token, verify_user_without_email, keycloak_admin, verify_login, update_password_keycloak, \
-        is_temporary_password, get_user_by_id, search_user_by_email_in_keycloak
-else:
-    from .no_keycloak import verify_login
-
-from .keycloak_models import UserEntity
-
-KEYCLOAK_MIGRATING = getattr(settings, 'KEYCLOAK_MIGRATING', False)
+from .idp import AuthentikIdP, AuthentikError
 
 
 def get_legitimate_redirect(request):
@@ -99,19 +89,18 @@ class GoNextTemplateMixin(TemplateView):
 
 
 class AddUser(generic.CreateView):
-    '''this creates both a local user instance and a keycloak instance (if it doesn't already exist)
-    To use, inherit this class and ensure correct permissions are set in the child class
-    Define success url that may pass on to a send message to user - this only creates the user
+    '''Creates a Django user backed by a matching Authentik user.
+
+    Inherit and ensure correct permissions are set in the child class.
+    Define a success_url that may pass on to a view that delivers the
+    initial password — this view only creates the user.
     '''
     new_user = None
     otp_code = None
 
     template_name = 'django_users/admin/add_user.html'
 
-    # temporary code until all system transitioned to new naming
     def get_template_names(self):
-        '''standardise on admin templates in admin.users/...'''
-        # check if self.template_name file exists in the file system
         try:
             get_template(self.template_name)
         except TemplateDoesNotExist:
@@ -136,60 +125,42 @@ class AddUser(generic.CreateView):
         kwargs['role'] = self.request.GET.get('role', None)
         return kwargs
 
-    def send_create_keycloak_user(self, data, user):
-        '''at the moment we are creating the keycloak user then the django user to make it easier to
-        ensure the django user points to the keycloak user.  In future we might want to think about creating just
-        the django user at this point and then creating the keycloak user when the user signs in'''
-        payload = {
-            "email": data['email'],
-            "username": data['email'],
-            "firstName": data['first_name'],
-            "lastName": data['last_name'],
-            "emailVerified": True,
-            "enabled": True,
-            "attributes": {
-                "django_created": "true",
-            },
-            "credentials": [{
-                "type": "password",
-                "value": data['password'].replace(" ", ""),  # remove spaces
-                "temporary": False,  # to allow login via keycloak before password is changed
-            }],
-            "requiredActions": [],
-
-        }
-
-        keycloak_id, status_code = create_keycloak_user(payload, user)
-
-        print(status_code)
-
-        return keycloak_id
-
     def form_valid(self, form):
-        '''create the keycloak user first then the local user'''
-
+        '''Create the IdP user first, then the Django user pointing at it.'''
         me = self.request.user
-        keycloak_id = self.send_create_keycloak_user(form.cleaned_data, me)
+        data = form.cleaned_data
+        password = (data.get('password') or '').replace(' ', '')
 
-        if keycloak_id:
-            # now create the django instance
-            user = form.save(commit=False)
+        idp = AuthentikIdP()
+        try:
+            idp_user = idp.create_user(
+                email=data['email'],
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+            )
+        except AuthentikError as exc:
+            logger.error("Failed to create Authentik user for %s: %s", data['email'], exc)
+            form.add_error(None, _('Could not create user account in IdP.'))
+            return self.form_invalid(form)
 
-            # not sure why user is sometimes a form instance and sometimes a user instance, just have to handle it
-            if not isinstance(user, User):
-                user = user.instance
+        if password:
+            idp.set_password(idp_user.uuid, password)
+        idp.mark_email_verified(idp_user.uuid)
 
-            user.keycloak_id = keycloak_id
-            self.otp_code = form.cleaned_data['password']
-            user.attributes = {'temporary_password': self.otp_code }  # lets use activation code (or verification code) to store the temporary password
-            user.activation_code = self.otp_code   # only reason saving here is that I need to pass from view that creates to view that sends message - at some point recode to use a post or something more sublte
-            user.creator = me
-            if not user.username:
-                user.username = user.email
-            user.save()
+        user = form.save(commit=False)
+        if not isinstance(user, User):
+            user = user.instance
 
-            self.new_user = user
+        user.authentik_id = idp_user.uuid
+        self.otp_code = password
+        user.attributes = {'temporary_password': self.otp_code}
+        user.activation_code = self.otp_code
+        user.creator = me
+        if not user.username:
+            user.username = user.email
+        user.save()
 
+        self.new_user = user
         return super().form_valid(form)
 
 
@@ -389,85 +360,10 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
 
 @method_decorator(never_cache, name='dispatch')
-class Troubleshoot(UserCanAdministerMixin, View):
-    '''given an email, see what the problem is'''
-
-    def post(self, request, *args, **kwargs):
-        email = request.POST.get('email')
-
-        try:
-            django_user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            django_user = None
-
-        if django_user:
-            if django_user.is_active:
-                # redirect to profile as they are fully activated
-                return HttpResponseRedirect(reverse('users:manage-user-profile') + f"?email={email}")
-
-        # still not verified
-        return HttpResponseRedirect(reverse('users:problem_register') + f"?email={email}")
-
-
-@method_decorator(never_cache, name='dispatch')
-class ProblemSignup(TemplateView):
-    template_name = "django_users/problem_register.html"
-    verified = False
-
-    def get(self, request, *args, **kwargs):
-
-        if request.user.is_authenticated:
-            messages.info(request, "You are already signed up and logged in")
-            return HttpResponseRedirect(reverse('users:user-profile'))
-        return super().get(request, *args, **kwargs)
-
-    def get_template_names(self):
-            return "django_users/problem_register.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        set_current_user(self.request, None, None)
-
-        context['next'] = get_legitimate_redirect(self.request)
-        context['email'] = kwargs['email'] if 'email' in kwargs else self.request.GET.get('email', '')
-        return context
-
-
-@method_decorator(never_cache, name='dispatch')
-class ProblemLogin(ProblemSignup):
-
-    def get_template_names(self):
-            return "django_users/problem_login.html"
-
-
-    def dispatch(self, request, *args, **kwargs):
-
-        email = request.GET.get('email', None)
-        if email:
-            User = get_user_model()
-            try:
-                django_user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                pass
-            else:
-                # self.verified = django_user.is_verified
-                self.verified = django_user.is_active
-
-        else:
-            # no email passed so continue
-            return super().dispatch(request, *args, **kwargs)
-
-        if not self.verified:
-            return HttpResponseRedirect(reverse('users:problem_register') + f"?email={email}")
-
-        return super().dispatch(request, *args, **kwargs)
-
-    # def get_template_names(self):
-    #     if self.request.user.is_authenticated and self.request.user.is_administrator:
-    #         #return "django_users/django_users/problem_login_admin.html"
-    #         return 'django_users/admin/problem_login_admin.html'
-    #     else:
-    #         return "django_users/problem_login.html"
+# Troubleshoot, ProblemSignup, ProblemLogin removed on the authentik branch.
+# These were Keycloak-specific debugging flows. Authentik's admin UI replaces
+# the support paths; for users with login problems, point them at the IdP's
+# password-reset flow.
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -489,113 +385,9 @@ class NewUsers(UserCanAdministerMixin, TemplateView):
         return context
 
 
-def get_keycloak_signup_url(email):
-    """Construct the Keycloak signup URL with the email pre-filled."""
-    base_url = f"{settings.KEYCLOAK_CLIENTS['DEFAULT']['URL']}/realms/{settings.KEYCLOAK_CLIENTS['DEFAULT']['REALM']}/protocol/openid-connect/auth"
-    params = {
-        'client_id': settings.KEYCLOAK_CLIENTS['DEFAULT']['CLIENT_ID'],
-        'response_type': 'code',
-        'scope': 'email',
-        'redirect_uri': f"{settings.SITE_URL}/keycloak/login-complete/",
-        'login_hint': email,
-        'action': 'register'
-    }
-    signup_url = f"{base_url}?{urlencode(params)}"
-    return signup_url
-
-
-@method_decorator(never_cache, name='dispatch')
-class UserMigrationView(View):
-    http_method_names = ['post', ]
-
-    def authenticate_old_keycloak(self, email, password):
-        try:
-            assert settings.OLD_KEYCLOAK_URL and settings.OLD_REALM and settings.OLD_CLIENT_ID and settings.OLD_CLIENT_SECRET
-        except AssertionError:
-            logger.error("Old Keycloak URL, realm, client ID, or client secret not set.")
-            return False
-
-        token_url = f"{settings.OLD_KEYCLOAK_URL}/realms/{settings.OLD_REALM}/protocol/openid-connect/token"
-        data = {
-            'client_id': settings.OLD_CLIENT_ID,
-            'client_secret': settings.OLD_CLIENT_SECRET,  # Include the client secret here
-            'grant_type': 'password',
-            'username': email,
-            'password': password,
-        }
-        response = requests.post(token_url, data=data)
-        return response.status_code == 200
-
-    def update_password_new_keycloak(self, email, password):
-        try:
-            # Initialize KeycloakAdmin for the new Keycloak instance
-            new_keycloak_admin = KeycloakAdmin(
-                server_url=settings.KEYCLOAK_CLIENTS['ADMIN']['URL'],
-                username=settings.KEYCLOAK_ADMIN_USERNAME,  # Admin username for new Keycloak
-                password=settings.KEYCLOAK_ADMIN_PASSWORD,  # Admin password for new Keycloak
-                realm_name=settings.KEYCLOAK_CLIENTS['ADMIN']['REALM'],
-                client_id=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_ID'],
-                client_secret_key=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_SECRET'],
-                verify=True  # Set to False if you encounter SSL issues
-            )
-
-        except KeycloakGetError as e:
-            print(f"Failed to update password in new Keycloak: {e.response_code} - {e.error_message}")
-            return False
-
-        try:
-            # Find the user by email
-            users = new_keycloak_admin.get_users({"email": email})
-            if users:
-                user_id = users[0]['id']
-                # Update the user's password
-                new_keycloak_admin.set_user_password(user_id, password, temporary=False)
-                return True
-            else:
-                print(f"User with email {email} not found in new Keycloak.")
-                # need to add them
-                return False
-        except Exception as e:
-            print(f"Failed to update password in new Keycloak: {e}")
-
-        return False
-
-    def post(self, request, *args, **kwargs):
-        from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
-        User = get_user_model()
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # check if user has signup in new keycloak and is so proceed with login first time
-            # Need to redirect to register page - email already filled in
-            user = None
-        else:
-            do_migration = getattr(settings, 'USER_MIGRATION_DATE', None)
-            if do_migration and user.last_login:
-                if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
-
-                    # try authenticating with old keycloak
-                    if self.authenticate_old_keycloak(email, password):
-                        if self.update_password_new_keycloak(email, password):
-                            logger.info(f"User {email} has been migrated successfully.")
-                        else:
-                            logger.info(f"User {email} Failed to update password in the new system.")
-                            return redirect(settings.FORGOT_PASSWORD_URL)
-
-        # need to sign in user with new keycloak
-        backend = KeycloakPasswordCredentialsBackend()
-        authenticated_user = backend.authenticate(self.request, username=email, password=password)
-        if authenticated_user:
-            login(request, authenticated_user,
-                  backend='django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend')
-            messages.success(request, "You have been successfully logged in.")
-            return redirect(settings.LOGIN_REDIRECT_URL)
-        else:
-            messages.error(self.request, "Authentication failed. Please check your credentials.")
-            return redirect(LOGIN_URL)
+# get_keycloak_signup_url and UserMigrationView removed on the authentik branch.
+# OIDC discovery handles authorize URLs; old-realm migration is N/A on a fresh
+# project.
 
 
 def send_sms(recipient_user, message, user=None):
@@ -611,94 +403,10 @@ def send_sms(recipient_user, message, user=None):
     return message.sid
 
 
-@method_decorator([never_cache, ensure_csrf_cookie, csrf_protect], name='dispatch')
-class LoginView(GoNextTemplateMixin, TemplateView):
-    template = "django_users/login.html"
-
-    def get(self, request):
-        # TODO: check user is not already logged in
-        context = super().get_context_data()
-        return render(request, self.template, context)
-
-    def post(self, request):
-        # NOTE THAT TEMPORARY PASSWORDS IN KEYCLOAK WILL NOT AUTHENTICATE HERE
-        # HAVE TO REMOVE ALL REQUIRED ACTIONS FIRST
-        email = normalise_email(request.POST.get('email'))
-        password = request.POST.get('password')
-        next = request.GET.get('next', request.POST.get('next', None))
-        authenticated = False
-
-        UserHistory = apps.get_model('django_users', 'UserHistory') if hasattr(apps.get_app_config('django_users'), 'UserHistory') else None
-
-        try:
-            user = authenticate(request, username=email, password=password)
-        except Exception as e:
-            # TODO:  need to identify if error other than invalid email or password
-            logger.warning(str(e))
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                messages.error(request, _('Invalid email or password.'))
-                return render(request, self.template, {'email': email})
-        else:
-            if user:
-                authenticated = True
-                if KEYCLOAK_MIGRATING and user.activation_code != password:
-                    user.set_password(password)
-                    user.save()
-            else:
-                try:
-                    user = User.objects.get(email=email)
-                except User.DoesNotExist:
-                    if UserHistory:
-                        # Log failed login attempt for non-existent user
-                        # We use a placeholder user or none if allowed, but here we just log with the email in details
-                        UserHistory.log(None, "login_failed", details={"email": email, "reason": "user_not_found"}, request=request)
-                    messages.error(request, _('Invalid username or password.'))
-                    return render(request, self.template, {'email': email})
-                else:
-                    if UserHistory:
-                        UserHistory.log(user, "login_failed", details={"reason": "invalid_password"}, request=request)
-                    if KEYCLOAK_MIGRATING and user.activation_code != password:
-                        user.set_password(password)
-
-        if user and not authenticated:
-            # keycloak won't allow login if temporary password so have to do it this way for now
-            # Keycloak temporary passwords not currently working: (settings.USE_KEYCLOAK and is_temporary_password(user))
-            if (user.activation_code and password == user.activation_code):
-                user.backend = 'django.contrib.auth.backends.ModelBackend'
-                login(request, user)
-
-                # do this already?
-                user.activation_code = None
-                user.save(update_fields=['activation_code'])
-
-                if UserHistory:
-                    UserHistory.log(user, "login_success_temporary", request=request)
-
-                messages.warning(request,
-                                 _('Your temporary password cannot be used again. Please change your password.'))
-                return redirect('users:change_password_now')
-            else:
-                messages.error(request, _('Invalid email or password.'))
-                return render(request, self.template, {'email': email})
-
-        elif user and user.is_active:
-            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            if UserHistory:
-                UserHistory.log(user, "login_success", request=request)
-            if next:
-                return redirect(next)
-            else:
-                return redirect(settings.LOGIN_REDIRECT_URL)
-
-        else:
-            if user and UserHistory:
-                 UserHistory.log(user, "login_failed", details={"reason": "inactive_or_other"}, request=request)
-            messages.error(request, _('Invalid email or password.'))
-            context = super().get_context_data()
-            context['email'] = email
-            return render(request, self.template, context)
+# LoginView removed on the authentik branch. mozilla-django-oidc handles the
+# OIDC authorization-code flow; settings.LOGIN_URL should resolve to
+# 'oidc_authentication_init' (or be aliased via a one-line view that
+# redirects there).
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -748,21 +456,14 @@ class RegisterView(FormView):
                                _(f'Failed to create user account with error {e}. Please try again later.'))
                 raise
         else:
-            if not user.is_active and USE_KEYCLOAK and user.keycloak_id:
-                # TODO: handle VERIFY_ONCE = False - need to resend verification email and notify user
-                keycloak_details = get_user_by_id(user.keycloak_id)
-                if keycloak_details['emailVerified']:
-
-                    if VERIFY_ONCE:
-                        user.is_active = True
-                        user.save()
-                    messages.warning(self.request,
-                                     _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                    return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
-                else:
-                    # as they never finished setting up the user, let's update the password so they can continue
-                    update_password_keycloak(user.keycloak_id, password)
-                    logger.warning(f"User {user.email} is registering again. Account in keycloak is not verified.")
+            if not user.is_active and user.authentik_id:
+                # User exists in IdP but never finished verification. Reset
+                # their password so they can complete registration.
+                try:
+                    AuthentikIdP().set_password(user.authentik_id, password)
+                except AuthentikError as exc:
+                    logger.warning("Could not reset IdP password during re-registration of %s: %s",
+                                   user.email, exc)
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
@@ -770,12 +471,8 @@ class RegisterView(FormView):
 
         set_current_user(self.request, user.id, "REGISTER")
 
-        if USE_KEYCLOAK and not user.keycloak_id:
-            status_code = user.create_keycloak_user_from_user(password, self.request.user)
-            if status_code == 409:
-                messages.error(self.request, _('You already have an account.'))
-                return HttpResponseRedirect(reverse(LOGIN_REGISTER))
-            elif status_code != 201:
+        if not user.authentik_id:
+            if user.create_authentik_user_from_user(password, self.request.user) is None:
                 messages.error(self.request, _('Failed to create user account. Please try again later.'))
                 return HttpResponseRedirect(reverse(LOGIN_REGISTER))
 
@@ -1096,36 +793,17 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
         return self.form_class
 
     def form_valid(self, form):
-
         user = self.request.user
         new_password = form.cleaned_data["new_password"]
 
-        use_keycloak = getattr(settings, "USE_KEYCLOAK", False)
-        migrating = getattr(settings, "KEYCLOAK_MIGRATING", False)
+        if not user.authentik_id:
+            form.add_error(None, "Cannot update password: user has no IdP account.")
+            return self.form_invalid(form)
 
         try:
-            if use_keycloak:
-                # 1) Update in Keycloak (source of truth)
-                user_id = getattr(user, "keycloak_id", None)
-                if not user_id:
-                    form.add_error(None, "Cannot update password: missing Keycloak ID.")
-                    return self.form_invalid(form)
-
-                update_password_keycloak(user_id, new_password)
-
-                # 2) If migrating, mirror to Django so future Django auth works
-                if migrating:
-                    update_password_django(user, new_password)
-                    # We changed the Django password, so rotate the session hash
-                    update_session_auth_hash(self.request, user)
-
-            else:
-                # Pure Django setup: change password + rotate session
-                update_password_django(user, new_password)
-                update_session_auth_hash(self.request, user)
-
-        except Exception as e:
-            form.add_error(None, f"Failed to update password: {e}")
+            AuthentikIdP().set_password(user.authentik_id, new_password)
+        except AuthentikError as exc:
+            form.add_error(None, f"Failed to update password: {exc}")
             return self.form_invalid(form)
 
         messages.success(self.request, "Password updated successfully.")
@@ -1335,20 +1013,17 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('confirm_password', 'Passwords do not match.')
                 return self.form_invalid(form)
 
-            # ---- your password update logic ----
-            success = True
-            if getattr(settings, "USE_KEYCLOAK", False):
-                if not getattr(user, "keycloak_id", None):
-                    logger.error("User %s does not have a keycloak_id.", user.pk)
-                    form.add_error('confirm_password', 'There is an issue with your account.')
-                    return self.form_invalid(form)
-                success = update_password_keycloak(user.keycloak_id, new_password)
-                if getattr(settings, "KEYCLOAK_MIGRATING", False):
-                    update_password_django(user, new_password)
-            else:
-                update_password_django(user, new_password)
-                user.save()
+            # ---- password update via the IdP ----
+            if not getattr(user, "authentik_id", None):
+                logger.error("User %s does not have an authentik_id.", user.pk)
+                form.add_error('confirm_password', 'There is an issue with your account.')
+                return self.form_invalid(form)
+            try:
+                AuthentikIdP().set_password(user.authentik_id, new_password)
                 success = True
+            except AuthentikError as exc:
+                logger.error("Failed to set IdP password for user %s: %s", user.pk, exc)
+                success = False
 
             if success:
                 # Keep user logged-in if they're changing their own password while authenticated (rare in this flow)
@@ -1389,28 +1064,22 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         # Your helper returns the canonical user object to update
         user, user_login_mode = get_current_user(self.request)
 
-        # Verify current password before changing it
-        if not verify_login(self.request.user.email, current_password):
+        # Verify current password by checking against Django's hash. The IdP
+        # session-cookie already proves identity for the *current* request;
+        # we only need to confirm intent before mutating the password.
+        if not user.check_password(current_password):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
-        use_keycloak = getattr(settings, "USE_KEYCLOAK", False)
-        migrating = getattr(settings, "KEYCLOAK_MIGRATING", False)
+        if not getattr(user, "authentik_id", None):
+            form.add_error(None, "Cannot change password: user has no IdP account.")
+            return self.form_invalid(form)
 
         try:
-            # 1) Change the password in the correct source(s) of truth
-            if use_keycloak:
-                update_password_keycloak(user.keycloak_id, new_password)
-                if migrating:
-                    # Mirror to Django during migration
-                    update_password_django(user, new_password)
-            else:
-                # Pure Django
-                update_password_django(user, new_password)
-
-            # 2) Keep the *current* session authenticated (rotate session hash)
-            # Only necessary if the Django password was updated, but safe to call.
-            update_session_auth_hash(self.request, user)
+            AuthentikIdP().set_password(user.authentik_id, new_password)
+        except AuthentikError as exc:
+            form.add_error(None, f"Failed to update password: {exc}")
+            return self.form_invalid(form)
 
             # # 3) If this code ever runs in a flow where the user isn't authenticated
             # # (e.g., recovery form), sign them in with the new password now.
@@ -1433,38 +1102,9 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
             return self.form_invalid(form)
 
 
-def update_users(request):
-    # temporary function to update all users with keycloak_id - comment out once used
-    User = get_user_model()
-    for user in User.objects.filter(keycloak_id__isnull=True):
-        try:
-            user.keycloak_id = keycloak_admin.get_user_id(user.email)
-        except Exception as e:
-            print(e)
-        else:
-            user.save(update_fields=['keycloak_id', ])
-
-
-# this should only be used with keycloak, UserEntity is a link to the keycloak user model
-class UnverifiedUsersList(UserCanAdministerMixin, ListView):
-    model = UserEntity
-    template_name = 'django_users/unverified_users_report.html'
-    context_object_name = 'users'  # Name to use in the template
-
-    def get_queryset(self):
-        # Calculate one month ago as a timestamp in milliseconds
-        one_month_ago = datetime.now() - timedelta(days=30)
-        one_month_ago_timestamp = int(one_month_ago.timestamp() * 1000)
-        # Query unverified users from the last month
-        return UserEntity.objects.using('keycloak_new').filter(
-            email_verified=False,
-            created_timestamp__gte=one_month_ago_timestamp
-        ).order_by('-created_timestamp')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'Unverified Users (Last Month)'
-        return context
+# update_users (one-off authentik_id backfill) and UnverifiedUsersList
+# (read directly from Keycloak's UserEntity table) removed on the authentik
+# branch. Authentik's admin UI provides equivalent visibility.
 
 
 class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):
@@ -1554,11 +1194,11 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         Payment = apps.get_model('skorie_payments.Payment')
         DirectEmail = apps.get_model('skorie_news.DirectEmail')
         user = None
-        # this has all go very messy - should have a uuid id field but we don't so using keycloak_id.
+        # this has all go very messy - should have a uuid id field but we don't so using authentik_id.
         try:
             if 'pk' in kwargs:
                 try:
-                    user = User.objects.get(keycloak_id=kwargs['pk'])
+                    user = User.objects.get(authentik_id=kwargs['pk'])
                 except:
                     user = User.objects.get(id=kwargs['pk'])  # don;t use id
             elif 'email' in kwargs:
@@ -1791,7 +1431,7 @@ class OrganisationListViewBase(ListView):
 def qr_login_token(request):
     user = request.user
     payload = {
-        'user_id': user.keycloak_id,
+        'user_id': user.authentik_id,
         'ts': timezone.now().timestamp()
     }
     token = signing.dumps(payload)
@@ -1814,7 +1454,7 @@ class QRLogin(LoginRequiredMixin, TemplateView):
         me = self.request.user
         context = super().get_context_data(**kwargs)
         payload = {
-            'user_id': str(me.keycloak_id),
+            'user_id': str(me.authentik_id),
             'ts': timezone.now().timestamp()
         }
         token = signing.dumps(payload)
@@ -1853,7 +1493,7 @@ def login_with_remote_token(request):
         user_id = payload.get('user_id')
         next_url = payload.get('next', '/')
 
-        user = User.objects.get(keycloak_id=user_id)
+        user = User.objects.get(authentik_id=user_id)
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         return redirect(next_url)
 
@@ -1879,7 +1519,7 @@ def login_with_token(request, key=None):
         next_url = payload.get('next', '/')
 
         print("Logging in with token")
-        user = User.objects.get(keycloak_id=user_id)
+        user = User.objects.get(authentik_id=user_id)
         print(f"User found: {user}")
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
@@ -2312,7 +1952,7 @@ class SendComms(UserCanAdministerMixin, GoNextTemplateMixin, TemplateView):
         me = self.request.user
 
         if 'pk' in self.kwargs:
-            user = User.objects.get(keycloak_id=self.kwargs['pk'])
+            user = User.objects.get(authentik_id=self.kwargs['pk'])
         elif 'user_id' in self.kwargs:
             user = User.objects.get(pk=self.kwargs['user_id'])
         context['recipient'] = user
