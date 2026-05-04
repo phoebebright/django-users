@@ -516,14 +516,6 @@ class SendVerificationCode(APIView):
 
 
             if not channel:
-                # Ensure the email channel exists / is current
-                # If you have user.migrate_channels(), call it safely
-                try:
-                    if hasattr(user, "migrate_channels"):
-                        user.migrate_channels()
-                except Exception:
-                    pass  # do not block sending
-
                 channel = (user.comms_channels
                            .filter(channel_type='email')
                            .order_by('id')
@@ -535,8 +527,6 @@ class SendVerificationCode(APIView):
                     channel = CommsChannel.objects.create(
                         user=user,
                         channel_type='email',
-                        value=user.email,
-                        verified=False,
                     )
 
             # Cooldown: avoid re-sending too frequently
@@ -687,9 +677,6 @@ class CheckUserPublic(CheckEmail):
                 set_current_user(request, django_user.id, "PROBLEM")
                 channels = []
 
-                # migrate existing channels
-                django_user.migrate_channels()
-
                 for item in django_user.comms_channels.all():
                     channels.append(
                         {'channel_id': item.pk, 'channel_type': item.channel_type, 'email': item.obfuscated_email,
@@ -789,10 +776,9 @@ class CommsChannelViewSet(viewsets.ModelViewSet):
 
         # check we don't already have this one
         channel_type = serializer.validated_data['channel_type']
-        value = serializer.validated_data['value']
 
         created = False
-        channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type, value=value)
+        channel, created = CommsChannel.objects.get_or_create(user=user, channel_type=channel_type)
 
         if not created:
             # if channel exists but is unverified then continue to verificiation step else return error

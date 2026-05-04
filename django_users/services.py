@@ -92,7 +92,7 @@ def _ensure_email_channel(user):
     channel = user.comms_channels.filter(channel_type=Channel.CHANNEL_EMAIL).first()
     if channel is None:
         channel = Channel.objects.create(
-            user=user, channel_type=Channel.CHANNEL_EMAIL, value=user.email,
+            user=user, channel_type=Channel.CHANNEL_EMAIL,
         )
     return channel
 
@@ -267,9 +267,8 @@ def create_user_with_invite(
         user = User.objects.create(
             email=email, username=email,
             first_name=first_name, last_name=last_name,
+            mobile=mobile or '',
         )
-        if mobile and hasattr(user, 'mobile'):
-            user.mobile = mobile
         # Mark unconfirmed if the project's user model supports it.
         unconfirmed = getattr(User, 'USER_STATUS_UNCONFIRMED', None)
         if unconfirmed is not None and hasattr(user, 'status'):

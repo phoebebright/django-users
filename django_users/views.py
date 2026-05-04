@@ -234,7 +234,7 @@ def send_test_email(request):
     if chid:
         channel = CommsChannel.objects.filter(user=request.user, pk=chid, channel_type="email").first()
         if channel:
-            to_email = channel.value
+            to_email = channel.address
 
     mail.send(
         subject=f"Test Message from {settings.SITE_NAME}",
@@ -452,6 +452,7 @@ class RegisterView(FormView):
                     email=email,
                     first_name=form.cleaned_data['first_name'],
                     last_name=form.cleaned_data['last_name'],
+                    mobile=mobile or '',
                     is_active=False
                 )
             except User.DoesNotExist:
@@ -484,24 +485,23 @@ class RegisterView(FormView):
                 messages.error(self.request, _('Failed to create user account. Please try again later.'))
                 return HttpResponseRedirect(reverse(LOGIN_REGISTER))
 
-        self.create_comms_channels(CHANNEL_EMAIL, email, user)
-        if mobile:
-            self.create_comms_channels(preferred_channel, mobile, user)
+        self.create_comms_channels(CHANNEL_EMAIL, user)
+        if mobile and preferred_channel in CommsChannel.MOBILE_CHANNELS:
+            self.create_comms_channels(preferred_channel, user)
 
-        user.preferred_channel = self.create_comms_channels(preferred_channel, mobile or email, user)
+        user.preferred_channel = self.create_comms_channels(preferred_channel, user)
         user.save(update_fields=['preferred_channel'])
 
         # TODO: could try signing in - at least put email in login form
         self.user = user
         return HttpResponseRedirect(self.get_success_url())
 
-    def create_comms_channels(self, channel_type, value, user):
+    def create_comms_channels(self, channel_type, user):
         CommsChannel = apps.get_model('users.CommsChannel')
         channel, created = CommsChannel.objects.get_or_create(
             user=user,
             channel_type=channel_type,
-            value=value)
-
+        )
         return channel
 
 
@@ -530,16 +530,10 @@ class AddCommsChannelView(FormView):
             validated_data = form.cleaned_data
             user, user_login_mode = get_current_user(request)
             if user:
-                # Determine the value for the communication channel
-                value = validated_data['email'] if validated_data['channel_type'] == CHANNEL_EMAIL else validated_data[
-                    'mobile']
-
-                # Create or get an existing communication channel
                 CommsChannel = apps.get_model('users.CommsChannel')
                 channel, created = CommsChannel.objects.get_or_create(
                     user=user,
                     channel_type=validated_data['channel_type'],
-                    value=value
                 )
 
                 return HttpResponseRedirect(reverse('users:manage-channels'))
@@ -2338,9 +2332,9 @@ class EnterOTP(TemplateView):
         VerificationCode = _get_verification_code_model()
 
         channel = None
-        if user:
+        if user and (user.email or '').lower() == (email or '').lower():
             channel = user.comms_channels.filter(
-                channel_type=Channel.CHANNEL_EMAIL, value__iexact=email,
+                channel_type=Channel.CHANNEL_EMAIL,
             ).first()
 
         if not user or not channel or not VerificationCode.verify_code(

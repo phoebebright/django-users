@@ -294,9 +294,13 @@ class RoleAdminBase(admin.ModelAdmin):
 
 
 class CommsChannelAdminBase(admin.ModelAdmin):
-    list_display = ('user', 'channel_type', 'value',  'verified_at')
+    list_display = ('user', 'channel_type', 'address', 'verified_at')
     list_filter = ('channel_type',)
-    search_fields = ('phone', 'email')
+    search_fields = ('user__email', 'user__mobile')
+
+    def address(self, obj):
+        return obj.address or '—'
+    address.short_description = 'Delivers to'
 
     def __init__(self, model, admin_site):
         super().__init__(model, admin_site)

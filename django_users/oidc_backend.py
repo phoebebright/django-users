@@ -138,6 +138,8 @@ class AuthentikOIDCBackend(OIDCAuthenticationBackend):
         CommsChannel.objects.get_or_create(
             user=user,
             channel_type="email",
-            value=email,
             defaults=defaults,
         )
+        if verified and not user.email_verified_at:
+            user.email_verified_at = timezone.now()
+            user.save(update_fields=['email_verified_at'])

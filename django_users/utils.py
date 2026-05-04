@@ -32,84 +32,50 @@ def get_mail_class():
 
 
 def send_otp(channel, code):
-    context = {'verification_code': code,
-                   'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?' + urlencode({'email': channel.value})
-               }
-    template = 'send_otp'
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if channel.value < ' ':
-        to_email = channel.user.email
-        logger.error(f"Channel id has no value {channel.id} ")
-    else:
-        to_email = channel.value
-
+    to_email = channel.user.email
+    context = {
+        'verification_code': code,
+        'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?' + urlencode({'email': to_email}),
+    }
     mail = get_mail_class()
     mail.send(
         to_email,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
+        template='send_otp',
         context=context,
         receiver=channel.user,
     )
-
     return True
 
 
 def send_email_verification_code(verificationcode, context={}):
-    template = 'email_verification_code'
-
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if verificationcode.channel.value <= ' ':
-        to_email = verificationcode.channel.user.email
-        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
-    else:
-        to_email = verificationcode.channel.value
-
     mail = get_mail_class()
     mail.send(
-        to_email,
+        verificationcode.channel.user.email,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
+        template='email_verification_code',
         context=context,
         receiver=verificationcode.user,
     )
     return True
 
 def send_email_magic_link(verificationcode, context={}):
-    template = 'email_verification_token'
-
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if verificationcode.channel.value <= ' ':
-        to_email = verificationcode.channel.user.email
-        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
-    else:
-        to_email = verificationcode.channel.value
-
     mail = get_mail_class()
     mail.send(
-        to_email,
+        verificationcode.channel.user.email,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
+        template='email_verification_token',
         context=context,
         receiver=verificationcode.user,
     )
     return True
 
 def send_forgot_password(verificationcode, context={}):
-    template = 'forgot_password_code'
-
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if verificationcode.channel.value <= ' ':
-        to_email = verificationcode.channel.user.email
-        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
-    else:
-        to_email = verificationcode.channel.value
-
     mail = get_mail_class()
     mail.send(
-        to_email,
+        verificationcode.channel.user.email,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
+        template='forgot_password_code',
         context=context,
         receiver=verificationcode.user,
     )
@@ -117,22 +83,16 @@ def send_forgot_password(verificationcode, context={}):
 
 def send_email_magic_login_link(verificationcode, context={}):
     '''this will auto login and not ask for password reset'''
-    template = 'email_login_token'
-
-    # we have not fully transitioned to using channels, so fallback to user.email
-    if verificationcode.channel.value <= ' ':
-        to_email = verificationcode.channel.user.email
-        logger.error(f"Channel id has no value {verificationcode.channel.id} ")
-    else:
-        to_email = verificationcode.channel.value
-
-    context['password_reset_link'] = settings.SITE_URL + reverse_lazy('users:change_password') + '?email=' + urlencode({'email': verificationcode.channel.value})
-
+    to_email = verificationcode.channel.user.email
+    context['password_reset_link'] = (
+        settings.SITE_URL + reverse_lazy('users:change_password')
+        + '?' + urlencode({'email': to_email})
+    )
     mail = get_mail_class()
     mail.send(
         to_email,
         settings.DEFAULT_FROM_EMAIL,
-        template=template,
+        template='email_login_token',
         context=context,
         receiver=verificationcode.user,
     )

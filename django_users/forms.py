@@ -173,7 +173,7 @@ class ForgotPasswordForm(forms.Form):
             choices = []
             if self.user_for_channels:
                 for ch in self.user_for_channels.comms_channels.all():
-                    choices.append((str(ch.id), f"{ch.channel_type}: {ch.value}"))
+                    choices.append((str(ch.id), f"{ch.channel_type}: {ch.address}"))
             required_fields['channel'].choices = choices
 
         # Step 3: code entry
@@ -413,49 +413,23 @@ class OrganisationForm(ModelForm):
         fields = '__all__'
 
 class CommsChannelForm(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False,
-        widget=forms.EmailInput(attrs={
-            "class": "form-control force-lower",
-            "autocomplete": "email",
-            "autocapitalize": "none",
-            "autocorrect": "off",
-            "spellcheck": "false",
-        })
-    )
-    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
+    """A channel is just a delivery preference now — the address is taken
+    from ``user.email`` / ``user.mobile``. Use ProfileForm to update
+    those."""
     class Meta:
         model = apps.get_model('users', 'CommsChannel')
-        fields = ['channel_type', 'email', 'mobile']
+        fields = ['channel_type']
+
 
 class AddCommsChannelForm(forms.ModelForm):
-    email = forms.EmailField(label=_('Email'), required=False,
-        widget=forms.EmailInput(attrs={
-            "class": "form-control force-lower",
-            "autocomplete": "email",
-            "autocapitalize": "none",
-            "autocorrect": "off",
-            "spellcheck": "false",
-
-        })
-    )
-    mobile = PhoneNumberField(label=_('Mobile Number'), required=False)
+    """Used to opt the user into a delivery channel. Verification of the
+    underlying address (email/mobile) happens in a separate flow."""
     # need to review why I put this in, but likely to trace same call between steps.  Where should it be set?
     username_code = forms.CharField(widget=HiddenInput(), required=False)
 
     class Meta:
         model = apps.get_model('users', 'CommsChannel')
-        fields = ['channel_type', 'email', 'mobile']
-
-    def clean(self):
-        cleaned_data = super().clean()
-        email = normalise_email(cleaned_data.get('email'))
-        mobile = cleaned_data.get('mobile')
-
-        # Validate that at least one of email or mobile is provided
-        if not email and not mobile:
-            raise ValidationError(_('You must provide either an email or a mobile number.'))
-
-        return cleaned_data
+        fields = ['channel_type']
 
 class ContactForm(Form):
     email = forms.EmailField(

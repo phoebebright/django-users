@@ -131,10 +131,19 @@ class CommsChannelsQueryset(models.QuerySet):
         return self.filter(verified_at__isnull=False)
 
 class CommsChannelBase(models.Model):
+    """Per-user delivery preference + verification record.
+
+    A row says: "this user has opted into delivery via this channel, and
+    we proved it works on date X." The actual address (email, mobile)
+    lives on the User model — there is one canonical email and one
+    canonical mobile per user, shared by all channels that use them.
+    """
 
     CHANNEL_EMAIL = "email"
     CHANNEL_SMS = "sms"
     CHANNEL_WHATSAPP = "whatsapp"
+
+    MOBILE_CHANNELS = (CHANNEL_SMS, CHANNEL_WHATSAPP)
 
     ALL_CHANNEL_CHOICES = [
         (CHANNEL_EMAIL, 'Email'),
@@ -146,7 +155,6 @@ class CommsChannelBase(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comms_channels')
     channel_type = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
-    value = models.CharField(max_length=255)
     verified_at = models.DateTimeField(null=True, blank=True)
 
     objects = CommsChannelsQueryset.as_manager()
@@ -154,64 +162,83 @@ class CommsChannelBase(models.Model):
     class Meta:
         abstract = True
         constraints = [
-            models.UniqueConstraint(fields=['user', 'channel_type', 'value'], name='%(app_label)s_%(class)s_unique_channel'),
+            models.UniqueConstraint(fields=['user', 'channel_type'], name='%(app_label)s_%(class)s_unique_channel'),
         ]
 
     def __str__(self):
-        return f"{self.get_channel_type_display()}: {self.value}"
+        return f"{self.get_channel_type_display()}: {self.address or '(unset)'}"
 
     @property
     def is_verified(self):
         return self.verified_at is not None
 
     @property
+    def address(self):
+        """The address messages on this channel are delivered to.
+
+        Email channels deliver to ``user.email``; SMS/WhatsApp deliver to
+        ``user.mobile``. Returns an empty string if the user has no
+        address set for this channel type.
+        """
+        if self.channel_type == self.CHANNEL_EMAIL:
+            return self.user.email or ''
+        if self.channel_type in self.MOBILE_CHANNELS:
+            return self.user.mobile or ''
+        return ''
+
+    @property
     def obfuscated_value(self):
         if self.channel_type == self.CHANNEL_EMAIL:
             return self.obfuscated_email
-        elif self.channel_type == self.CHANNEL_SMS:
+        elif self.channel_type in self.MOBILE_CHANNELS:
             return self.obfuscated_mobile
         else:
             return ''
+
     @property
     def obfuscated_email(self):
-        # Split the email into username and domain
-
-        if not self.value:
+        email = self.user.email if self.channel_type == self.CHANNEL_EMAIL else ''
+        if not email:
             return ''
-
         try:
-            username, domain = self.value.split('@')
-        except:
+            username, domain = email.split('@')
+        except ValueError:
             return ''
-        else:
-            # Keep the first character of the username and mask the rest
-            obfuscated_username = username[0] + '*' * (len(username) - 1)
-            return f"{obfuscated_username}@{domain}"
+        return f"{username[0]}{'*' * (len(username) - 1)}@{domain}"
 
     @property
     def obfuscated_mobile(self):
-        # Only show the last four digits, mask the rest
-        if self.value:
-            mobile = str(self.value)
-            return  '*' * (len(mobile) - 4) + mobile[-4:]
-        else:
+        mobile = self.user.mobile if self.channel_type in self.MOBILE_CHANNELS else ''
+        if not mobile:
             return ''
-
+        mobile = str(mobile)
+        return '*' * (len(mobile) - 4) + mobile[-4:]
 
     @property
     def hash_username(self):
         '''create a hash of the username to pass into a form so as to avoid exposing the email address'''
-        # Convert the username (email) to lowercase to ensure consistent hashing
         normal = self.username.strip().lower()
         return hashlib.sha256(normal.encode()).hexdigest()
 
     def verify(self):
-        self.verified_at = timezone.now()
+        """Mark this channel verified. Also stamps ``user.email_verified_at``
+        / ``user.mobile_verified_at`` the first time any channel of that
+        kind is verified — the User-level stamp is the canonical "we
+        own this address" proof, reusable when the user opts into a new
+        channel that delivers to the same address (e.g. adding Telegram
+        when SMS is already verified)."""
+        now = timezone.now()
+        self.verified_at = now
         self.save()
 
-        # Reflect verification in the IdP (best-effort) and activate the
-        # Django user. If the user has no IdP record yet, OIDC login on
-        # next visit will create one.
+        user_updates = []
+        if self.channel_type == self.CHANNEL_EMAIL and not self.user.email_verified_at:
+            self.user.email_verified_at = now
+            user_updates.append('email_verified_at')
+        elif self.channel_type in self.MOBILE_CHANNELS and not self.user.mobile_verified_at:
+            self.user.mobile_verified_at = now
+            user_updates.append('mobile_verified_at')
+
         if self.user.authentik_id:
             try:
                 AuthentikIdP().mark_email_verified(self.user.authentik_id)
@@ -223,22 +250,28 @@ class CommsChannelBase(models.Model):
 
         if not self.user.is_active:
             self.user.is_active = True
-            self.user.save()
+            user_updates.append('is_active')
+
+        if user_updates:
+            self.user.save(update_fields=user_updates)
 
 
     def send_msg(self, msg, subject=None):
+        address = self.address
+        if not address:
+            return
         if self.channel_type == self.CHANNEL_EMAIL:
             mail.send(
-                recipients=self.value,
+                recipients=address,
                 subject=subject,
                 message=msg,
                 priority='now',
                 language="EN",
             )
         elif self.channel_type == self.CHANNEL_SMS:
-            send_sms_verification_code(self.value, msg)
+            send_sms_verification_code(address, msg)
         elif self.channel_type == self.CHANNEL_WHATSAPP:
-            send_whatsapp_verification_code(self.value, msg)
+            send_whatsapp_verification_code(address, msg)
 
 class VerificationCodeQuerySet(models.QuerySet):
 
@@ -548,9 +581,9 @@ class VerificationCodeBase(models.Model):
                 logger.error(f"Unknown purpose with code in send_verification: {purpose}")
 
         elif self.channel.channel_type == 'sms':
-            return send_sms_verification_code(self.channel.value, "<CODE REDACTED>")
+            return send_sms_verification_code(self.channel.address, "<CODE REDACTED>")
         elif self.channel.channel_type == 'whatsapp':
-            return send_whatsapp_verification_code(self.channel.value, "<CODE REDACTED>")
+            return send_whatsapp_verification_code(self.channel.address, "<CODE REDACTED>")
         return False
 
 
@@ -751,6 +784,11 @@ class CustomUserManager(BaseUserManager):
             extra_fields.pop('first_name')
             extra_fields.pop('last_name')
 
+        # User-only fields that must not be forwarded to Person
+        for user_only in ('mobile', 'mobile_verified_at', 'email_verified_at'):
+            if user_only in extra_fields:
+                user_extras[user_only] = extra_fields.pop(user_only)
+
         # person needs a name
         if not 'formal_name' in extra_fields:
             if 'first_name' in user_extras and 'last_name' in user_extras:
@@ -931,6 +969,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
 
     email = models.EmailField(_('email address'), unique=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+
+    mobile = models.CharField(max_length=20, blank=True, default='')
+    mobile_verified_at = models.DateTimeField(null=True, blank=True)
 
     is_staff = models.BooleanField(_('staff status'), default=False,
                                    help_text=_('Designates whether the user can log into this admin '
@@ -988,27 +1030,43 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         if not self.password:
             self.password = hash(str(uuid.uuid4()))
 
-            # migrate email to comms channel
-        if not self.preferred_channel and self.date_joined and self.date_joined < timezone.make_aware(
-                datetime(*settings.USER_COMMS_MIGRATION_DATE)):
-            email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                  value=self.email,
-                                                                  defaults={'verified_at': self.date_joined})
+        # If email or mobile changed on an existing row, the old verification
+        # no longer proves anything about the new address. Clear the User-level
+        # verification stamp; per-channel verified_at gets cleared below.
+        clear_email_channels = False
+        clear_mobile_channels = False
+        if not new:
+            try:
+                previous = type(self).objects.only('email', 'mobile').get(pk=self.pk)
+            except type(self).DoesNotExist:
+                previous = None
+            if previous:
+                if (previous.email or '') != (self.email or ''):
+                    self.email_verified_at = None
+                    clear_email_channels = True
+                if (previous.mobile or '') != (self.mobile or ''):
+                    self.mobile_verified_at = None
+                    clear_mobile_channels = True
 
         super().save(*args, **kwargs)
 
+        if clear_email_channels:
+            self.comms_channels.filter(
+                channel_type=self.CommsChannel.CHANNEL_EMAIL,
+            ).update(verified_at=None)
+        if clear_mobile_channels:
+            self.comms_channels.filter(
+                channel_type__in=self.CommsChannel.MOBILE_CHANNELS,
+            ).update(verified_at=None)
+
         # setup email as preferred channel but not verified
         if not self.preferred_channel:
-            email_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
-                                                                  channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                  value=self.email)
+            email_channel, _ = self.CommsChannel.objects.get_or_create(
+                user=self,
+                channel_type=self.CommsChannel.CHANNEL_EMAIL,
+            )
             self.preferred_channel = email_channel
             self.quick_save(update_fields=['preferred_channel', ])
-
-
-
-
 
         # Person has link to user, so can't create until user is saved
         if not self.person_id:
@@ -1045,24 +1103,24 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
         if linked:
             self.upgrade_to_rider()
-    @property
-    def mobile(self):
-        return None
 
     @property
     def has_mobile(self):
-        return self.CommsChannel.objects.filter(user=self, channel_type=self.CHANNEL_SMS).exclude(verified_at=None).exists()
+        return bool(self.mobile and self.mobile_verified_at)
 
     @property
     def has_email(self):
-        return self.CommsChannel.objects.filter(user=self, channel_type=self.CHANNEL_EMAIL).exclude(verified_at=None).exists()
+        return bool(self.email and self.email_verified_at)
 
     @property
     def get_preferred_channel(self):
         '''handle migration where there may be no email comms channel'''
         if not self.preferred_channel:
-            self.preferred_channel.CommsChannel.objects.create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, value=self.email)
-            self.quick_save(updated_fields=['preferred_channel'])
+            channel, _ = self.CommsChannel.objects.get_or_create(
+                user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL,
+            )
+            self.preferred_channel = channel
+            self.quick_save(update_fields=['preferred_channel'])
 
         return self.preferred_channel
 
@@ -1663,16 +1721,10 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         return True
 
     def migrate_channels(self):
-        # migrate email to comms channel and mobile if available in profile
-        if not self.preferred_channel:
-            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self,
-                                                                                channel_type=self.CommsChannel.CHANNEL_EMAIL,
-                                                                                email=self.email)
-            self.save()
-
-            if 'mobile' in self.profile and self.profile['mobile']:
-                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS,
-                                                        mobile=self.profile['mobile'])
+        """Backstop helper kept for callers in api.py — under the
+        single-mobile-on-User schema there's nothing to migrate. Email
+        channel seeding happens in ``save()``."""
+        return
 
 
 class CustomUserBase(CustomUserBaseBasic):
@@ -2039,13 +2091,9 @@ class CustomUserBase(CustomUserBaseBasic):
 
 
     def migrate_channels(self):
-        # migrate email to comms channel and mobile if available in profile
-        if not self.preferred_channel:
-            self.preferred_channel, _ = self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_EMAIL, value=self.email)
-            self.save()
-
-            if 'mobile' in self.profile and self.profile['mobile']:
-                self.CommsChannel.objects.get_or_create(user=self, channel_type=self.CommsChannel.CHANNEL_SMS, value=self.profile['mobile'])
+        """Backstop helper kept for callers in api.py — see
+        ``CustomUserBaseBasic.migrate_channels`` for the rationale."""
+        return
 
 
 class UserContactBase(models.Model):
