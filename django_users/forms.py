@@ -623,3 +623,50 @@ def get_invite_form_class():
     if not dotted:
         return BaseAdminInviteForm
     return import_string(dotted)
+
+
+class AdminEditContactForm(forms.ModelForm):
+    """Admin-only edit of a user's email + mobile. Either change clears
+    the matching ``*_verified_at`` stamp on the User and the corresponding
+    CommsChannel.verified_at via ``User.save()`` cascade. See ADR pattern
+    in CommsChannelBase docstring."""
+
+    mobile = PhoneNumberField(
+        label=_("Mobile Number"),
+        max_length=20,
+        required=False,
+        help_text=_("International format, e.g. +353 1234567"),
+    )
+
+    class Meta:
+        model = User
+        fields = ['email', 'mobile']
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        if not email:
+            raise forms.ValidationError(_("Email is required."))
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(_("Another user already uses this email."))
+        return email
+
+
+class AdminAddChannelForm(forms.Form):
+    """Admin opts a user into a comms channel — picks a type that's not
+    already present. Verification of the underlying address (email/mobile)
+    is a separate flow."""
+
+    channel_type = forms.ChoiceField(label=_("Channel type"), choices=[])
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user')
+        super().__init__(*args, **kwargs)
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        existing = set(user.comms_channels.values_list('channel_type', flat=True))
+        self.fields['channel_type'].choices = [
+            (ct, label) for (ct, label) in CommsChannel.CHANNEL_CHOICES
+            if ct not in existing
+        ]

@@ -42,6 +42,11 @@ from .views import (
     AdminInviteView,
     AcceptInvite,
     EnterOTP,
+    AdminEditContact,
+    AdminAddChannel,
+    AdminDeleteChannel,
+    AdminSendChannelVerification,
+    AdminMarkChannelVerified,
 )
 
 # using this seems to cause urls to end up with users:users:url rather than users:url
@@ -123,4 +128,38 @@ urlpatterns = [
          name='comms2user'),
     path("whoami/", WhoAmIView.as_view(), name="whoami"),
     path("reset_session/", ResetSessionView.as_view(), name="reset-session"),
+
+    # Admin: edit contact + manage comms channels on behalf of a user.
+    # Each pattern accepts both int pk and uuid (authentik_id) — same as
+    # the existing admin_user routes that consuming projects define.
+    path('admin_user/<int:pk>/edit-contact/',
+         user_passes_test(has_role_administrator)(AdminEditContact.as_view()),
+         name='admin_user_edit_contact'),
+    path('admin_user/<uuid:pk>/edit-contact/',
+         user_passes_test(has_role_administrator)(AdminEditContact.as_view()),
+         name='admin_user_edit_contact'),
+    path('admin_user/<int:pk>/add-channel/',
+         user_passes_test(has_role_administrator)(AdminAddChannel.as_view()),
+         name='admin_user_add_channel'),
+    path('admin_user/<uuid:pk>/add-channel/',
+         user_passes_test(has_role_administrator)(AdminAddChannel.as_view()),
+         name='admin_user_add_channel'),
+    path('admin_user/<int:pk>/delete-channel/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminDeleteChannel.as_view()),
+         name='admin_user_delete_channel'),
+    path('admin_user/<uuid:pk>/delete-channel/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminDeleteChannel.as_view()),
+         name='admin_user_delete_channel'),
+    path('admin_user/<int:pk>/send-channel-verify/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminSendChannelVerification.as_view()),
+         name='admin_user_send_channel_verify'),
+    path('admin_user/<uuid:pk>/send-channel-verify/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminSendChannelVerification.as_view()),
+         name='admin_user_send_channel_verify'),
+    path('admin_user/<int:pk>/mark-channel-verified/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminMarkChannelVerified.as_view()),
+         name='admin_user_mark_channel_verified'),
+    path('admin_user/<uuid:pk>/mark-channel-verified/<int:channel_pk>/',
+         user_passes_test(has_role_administrator)(AdminMarkChannelVerified.as_view()),
+         name='admin_user_mark_channel_verified'),
 ]

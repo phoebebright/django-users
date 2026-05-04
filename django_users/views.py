@@ -13,7 +13,7 @@ import qrcode
 from django.apps import apps
 from django.core import signing
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Case, When, CharField, Q, Prefetch
 from django.db.models.functions import Extract, Concat, Cast, LPad
 from django.template import TemplateDoesNotExist
@@ -27,7 +27,7 @@ from docserve.mixins import DocServeMixin
 from .forms import SubscribeForm, ChangePasswordNowCurrentForm, ForgotPasswordForm, ChangePasswordForm, \
     ContactForm as ContactForm, OrganisationForm, CustomUserCreationForm, SubscriptionPreferencesForm, \
     SignUpForm, AddCommsChannelForm, CommsChannelForm, VerificationCodeForm, PersonForm, SkorieUserCreationForm, \
-    ProfileForm
+    ProfileForm, AdminEditContactForm, AdminAddChannelForm
 
 import requests
 
@@ -2361,3 +2361,209 @@ class EnterOTP(TemplateView):
             + '?next=' + reverse('users:tell_us_about')
         )
         return redirect(next_url)
+
+
+# ---- Admin: edit contact + manage comms channels on behalf of a user ----
+#
+# These views power the per-user admin pages (typically reached from the
+# ManageUser / admin_user page). They follow the two-layer verification model
+# documented on CommsChannelBase: address ownership lives on User; channel
+# opt-in lives on CommsChannel.
+
+def _get_admin_target_user(pk):
+    """Resolve admin URL pk to a user, accepting either authentik_id (UUID)
+    or Django pk (int)."""
+    try:
+        return User.objects.get(authentik_id=pk)
+    except (User.DoesNotExist, ValueError):
+        return User.objects.get(pk=pk)
+
+
+class AdminEditContact(UserCanAdministerMixin, UpdateView):
+    """Admin updates a user's email and/or mobile. ``User.save()`` does
+    the cascade — clears ``User.{email,mobile}_verified_at`` and the
+    matching ``CommsChannel.verified_at`` when an address changes — so
+    this view does not duplicate that work."""
+
+    model = User
+    form_class = AdminEditContactForm
+    template_name = 'django_users/admin/edit_contact.html'
+
+    def get_object(self, queryset=None):
+        return _get_admin_target_user(self.kwargs['pk'])
+
+    def get_success_url(self):
+        return reverse('users:admin_user', kwargs={'pk': self.object.pk})
+
+    @transaction.atomic
+    def form_valid(self, form):
+        original = User.objects.get(pk=form.instance.pk)
+        new_email = form.cleaned_data['email']
+        new_mobile_obj = form.cleaned_data.get('mobile') or ''
+        new_mobile = str(new_mobile_obj) if new_mobile_obj else ''
+
+        email_changed = (original.email or '') != new_email
+        mobile_changed = (original.mobile or '') != new_mobile
+
+        # User.save() handles the cascade (see CommsChannelBase docstring).
+        response = super().form_valid(form)
+
+        if email_changed and hasattr(self.object, 'change_names_email'):
+            self.object.change_names_email()
+
+        if email_changed:
+            messages.warning(
+                self.request,
+                f"Email changed to {self.object.email}. The user must re-verify before it counts as confirmed.",
+            )
+            if self.object.authentik_id:
+                messages.error(
+                    self.request,
+                    f"This user logs in via Authentik. They will keep logging in with the OLD email "
+                    f"until it is changed in Authentik too — the change here was not pushed to the IdP.",
+                )
+        if mobile_changed:
+            messages.warning(
+                self.request,
+                f"Mobile changed to {self.object.mobile}. The user must re-verify SMS/WhatsApp.",
+            )
+        if not (email_changed or mobile_changed):
+            messages.info(self.request, "No changes made.")
+
+        return response
+
+
+class AdminAddChannel(UserCanAdministerMixin, FormView):
+    """Admin opts a target user into a CommsChannel; row created unverified."""
+
+    form_class = AdminAddChannelForm
+    template_name = 'django_users/admin/add_channel.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.target_user = _get_admin_target_user(kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.target_user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object'] = self.target_user
+        return context
+
+    def get_success_url(self):
+        return reverse('users:admin_user', kwargs={'pk': self.target_user.pk})
+
+    def form_valid(self, form):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        channel_type = form.cleaned_data['channel_type']
+        channel, created = CommsChannel.objects.get_or_create(
+            user=self.target_user, channel_type=channel_type,
+        )
+        if created:
+            messages.success(
+                self.request,
+                f"{channel.get_channel_type_display()} channel added. The user must opt in / verify before it counts as active.",
+            )
+        else:
+            messages.info(
+                self.request,
+                f"{channel.get_channel_type_display()} channel already existed — no change.",
+            )
+        return HttpResponseRedirect(self.get_success_url())
+
+
+class AdminDeleteChannel(UserCanAdministerMixin, View):
+    """Admin removes a comms channel (hard delete; re-opt-in creates a fresh row)."""
+
+    def post(self, request, pk, channel_pk):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        target = _get_admin_target_user(pk)
+        try:
+            channel = CommsChannel.objects.get(pk=channel_pk, user=target)
+        except CommsChannel.DoesNotExist:
+            messages.error(request, "Channel not found for this user.")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        if channel.channel_type == CommsChannel.CHANNEL_EMAIL:
+            messages.error(
+                request,
+                "Email channel cannot be removed here — it is the canonical contact channel for the account.",
+            )
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        channel_label = channel.get_channel_type_display()
+        if target.preferred_channel_id == channel.pk:
+            target.preferred_channel = None
+            target.quick_save(update_fields=['preferred_channel'])
+        channel.delete()
+        messages.success(request, f"{channel_label} channel removed.")
+        return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+
+class AdminSendChannelVerification(UserCanAdministerMixin, View):
+    """Admin triggers the verification round-trip for a user's channel."""
+
+    def post(self, request, pk, channel_pk):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        VerificationCode = apps.get_model('users', 'VerificationCode')
+        target = _get_admin_target_user(pk)
+        try:
+            channel = CommsChannel.objects.get(pk=channel_pk, user=target)
+        except CommsChannel.DoesNotExist:
+            messages.error(request, "Channel not found for this user.")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        if channel.is_verified:
+            messages.info(request, f"{channel.get_channel_type_display()} channel is already verified.")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        try:
+            vc, context = VerificationCode.create_for_code(
+                user=target, channel=channel, purpose='email_verify',
+            )
+            sent = vc.send_verification(context, 'email_verify')
+        except Exception as exc:
+            logger.exception("Failed to send channel verification")
+            messages.error(request, f"Could not send verification: {exc}")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        if sent:
+            destination = target.email if channel.channel_type == 'email' else target.mobile
+            messages.success(
+                request,
+                f"Verification sent to {destination} via {channel.get_channel_type_display()}.",
+            )
+        else:
+            messages.error(
+                request,
+                f"Failed to send verification via {channel.get_channel_type_display()}.",
+            )
+        return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+
+class AdminMarkChannelVerified(UserCanAdministerMixin, View):
+    """Admin attests a channel is verified out-of-band; stamps verified_at
+    via ``channel.verify()`` (which also dual-stamps the User-level field)."""
+
+    def post(self, request, pk, channel_pk):
+        CommsChannel = apps.get_model('users', 'CommsChannel')
+        target = _get_admin_target_user(pk)
+        try:
+            channel = CommsChannel.objects.get(pk=channel_pk, user=target)
+        except CommsChannel.DoesNotExist:
+            messages.error(request, "Channel not found for this user.")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        if channel.is_verified:
+            messages.info(request, f"{channel.get_channel_type_display()} channel was already verified.")
+            return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))
+
+        channel.verify()
+        messages.success(
+            request,
+            f"{channel.get_channel_type_display()} channel marked verified by {request.user.email}.",
+        )
+        return redirect(reverse('users:admin_user', kwargs={'pk': target.pk}))

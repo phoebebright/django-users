@@ -1,0 +1,45 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block title %}{% trans "Edit Contact" %} &mdash; {{ object.full_name|default:object.email }}{% endblock %}
+
+{% block page_header %}Edit Contact &mdash; {{ object.full_name|default:object.email }}{% endblock %}
+
+{% block content %}
+
+    <div class="alert alert-warning">
+        Changing the email or mobile clears its verification. The user will need to re-verify before the new address counts as confirmed.
+    </div>
+
+    {% if object.authentik_id %}
+        <div class="alert alert-danger">
+            <strong>This user logs in via Authentik.</strong>
+            Changing the email here only updates the local record &mdash; it is <strong>not</strong> pushed to Authentik.
+            <ul class="mb-0 mt-2">
+                <li>They will continue to log in with the <strong>old</strong> email ({{ object.email }}) until it is also changed in Authentik.</li>
+                <li>On their next OIDC login, Authentik may overwrite the new email back to the old one.</li>
+            </ul>
+            Update the email in Authentik first (or alongside this change) to keep the two in sync.
+        </div>
+    {% endif %}
+
+    <form method="post" id="edit_contact_form">
+        {% csrf_token %}
+
+        {% bootstrap_form_errors form type='non_fields' %}
+
+        {% bootstrap_field form.email %}
+        {% bootstrap_field form.mobile %}
+
+        <div class="action_buttons">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                <a href="{% url 'users:admin_user' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </form>
+
+{% endblock %}

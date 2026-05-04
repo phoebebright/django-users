@@ -1,0 +1,38 @@
+{% extends "organiser/organiser_base.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load bootstrap5 %}
+
+{% block title %}{% trans "Add Comms Channel" %} &mdash; {{ object.full_name|default:object.email }}{% endblock %}
+
+{% block page_header %}Add Comms Channel &mdash; {{ object.full_name|default:object.email }}{% endblock %}
+
+{% block content %}
+
+    <div class="alert alert-info">
+        Adds an unverified comms channel for this user. They will need to complete the opt-in / verification step before the channel can be used to deliver messages.
+    </div>
+
+    {% if not form.fields.channel_type.choices %}
+        <div class="alert alert-warning">
+            This user already has every available comms channel type. Nothing to add.
+        </div>
+        <a href="{% url 'users:admin_user' object.pk %}" class="btn btn-outline-secondary">Back to user</a>
+    {% else %}
+        <form method="post">
+            {% csrf_token %}
+
+            {% bootstrap_form_errors form type='non_fields' %}
+            {% bootstrap_field form.channel_type %}
+
+            <div class="action_buttons">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                    <a href="{% url 'users:admin_user' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Add channel</button>
+                </div>
+            </div>
+        </form>
+    {% endif %}
+
+{% endblock %}
