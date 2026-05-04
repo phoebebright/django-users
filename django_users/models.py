@@ -137,6 +137,39 @@ class CommsChannelBase(models.Model):
     we proved it works on date X." The actual address (email, mobile)
     lives on the User model — there is one canonical email and one
     canonical mobile per user, shared by all channels that use them.
+
+    Two-layer verification model
+    ============================
+
+    Verification has two independent layers; do not conflate them.
+
+    * **Address ownership** — "we proved this user owns this address" —
+      lives on ``User.email_verified_at`` / ``User.mobile_verified_at``.
+    * **Channel opt-in** — "user is contactable on this delivery method" —
+      lives on ``CommsChannel.verified_at``.
+
+    Email is the only address with exactly one delivery method, so the
+    email row's ``verified_at`` is structurally a mirror of
+    ``User.email_verified_at`` and adds no information. The row still
+    exists as the FK target of ``User.preferred_channel`` and
+    ``VerificationCode.channel``.
+
+    For every other channel that rides on the mobile address (sms,
+    whatsapp, future telegram, ...) the two layers are independent and
+    both meaningful. A user can own the number without having opted into
+    WhatsApp, and vice versa. SMS belongs here on the same footing as
+    WhatsApp — do not fold it into ``User.mobile_verified_at``,
+    otherwise "opt out of SMS but keep WhatsApp" cannot be expressed.
+
+    The ``verify()`` method on this class stamps both layers when
+    applicable; ``CustomUserBase.save()`` clears both layers when the
+    underlying address changes (mobile change → all
+    ``MOBILE_CHANNELS`` rows lose their ``verified_at``).
+
+    Opt-out of an over-the-top channel = hard-delete the row. A
+    ``disabled_at`` field for automatic webhook-driven opt-outs (Twilio
+    bounce, Meta STOP keyword) is intentionally deferred — add it when
+    those handlers land.
     """
 
     CHANNEL_EMAIL = "email"
@@ -155,6 +188,9 @@ class CommsChannelBase(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comms_channels')
     channel_type = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    # Channel opt-in stamp. Email rows: mirror of User.email_verified_at.
+    # SMS / WhatsApp / over-the-top: source of truth, separate from
+    # ownership (User.mobile_verified_at). See class docstring.
     verified_at = models.DateTimeField(null=True, blank=True)
 
     objects = CommsChannelsQueryset.as_manager()
@@ -969,9 +1005,17 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
 
     email = models.EmailField(_('email address'), unique=True)
+    # Address-ownership stamp. Source of truth for "do we own this address?".
+    # Set by CommsChannel.verify() when an email channel verifies; cleared by
+    # User.save() when ``email`` changes. See CommsChannelBase docstring.
     email_verified_at = models.DateTimeField(null=True, blank=True)
 
     mobile = models.CharField(max_length=20, blank=True, default='')
+    # Address-ownership stamp for the mobile number, independent of any
+    # specific delivery channel. Set by CommsChannel.verify() when ANY
+    # mobile-using channel (sms / whatsapp / ...) verifies; cleared by
+    # User.save() when ``mobile`` changes (which also clears verified_at on
+    # every MOBILE_CHANNELS row). See CommsChannelBase docstring.
     mobile_verified_at = models.DateTimeField(null=True, blank=True)
 
     is_staff = models.BooleanField(_('staff status'), default=False,
