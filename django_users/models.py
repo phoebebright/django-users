@@ -617,9 +617,9 @@ class VerificationCodeBase(models.Model):
                 logger.error(f"Unknown purpose with code in send_verification: {purpose}")
 
         elif self.channel.channel_type == 'sms':
-            return send_sms_verification_code(self.channel.address, "<CODE REDACTED>")
+            return send_sms_verification_code(self.channel.address, context['code'])
         elif self.channel.channel_type == 'whatsapp':
-            return send_whatsapp_verification_code(self.channel.address, "<CODE REDACTED>")
+            return send_whatsapp_verification_code(self.channel.address, context['code'])
         return False
 
 
