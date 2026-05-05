@@ -273,6 +273,166 @@ class SendOTP2User(UserCanAdministerMixin, APIView):
         return Response(status=status.HTTP_200_OK)
 
 
+class GenerateOTP(UserCanAdministerMixin, APIView):
+    """Generate a 6-digit OTP for a user, set it as the IdP password, mark the
+    user as must-change-password, and optionally send the code via the
+    requested channel.
+
+    POST payload (optional):
+        - ``send`` — one of ``email``, ``sms``, ``whatsapp`` to also send the OTP
+
+    Response: ``{"otp", "login_username", "channel": {"type", "address"} | null,
+    "sent": <bool>}``
+    """
+
+    def post(self, request, pk):
+        recipient = get_object_or_404(User, pk=pk)
+
+        otp = ''.join(random.choices(string.digits, k=6))
+        recipient.activation_code = otp
+        recipient.save(update_fields=['activation_code'])
+
+        if getattr(recipient, 'authentik_id', None):
+            try:
+                idp = AuthentikIdP()
+                idp.set_password(recipient.authentik_id, otp)
+                idp.set_must_change_password(recipient.authentik_id, True)
+            except AuthentikError as exc:
+                return Response(
+                    {"error": f"Failed to set IdP password: {exc}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        sent = False
+        send_via = request.data.get('send')
+        channel_info = _channel_info(recipient)
+        if send_via and channel_info:
+            try:
+                _send_via(send_via, recipient, otp)
+                sent = True
+            except Exception as exc:
+                return Response(
+                    {"error": f"Failed to send OTP: {exc}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        return Response({
+            'otp': otp,
+            'login_username': recipient.email,
+            'channel': channel_info,
+            'sent': sent,
+        })
+
+
+class GenerateRecoveryLink(UserCanAdministerMixin, APIView):
+    """Generate an Authentik single-use recovery link for the user, and
+    optionally send it via the requested channel.
+
+    The link is single-use and time-limited (Authentik enforces). The user
+    chooses their own new password on the recovery page.
+
+    POST payload (optional):
+        - ``send`` — one of ``email``, ``sms``, ``whatsapp`` to send the link
+
+    Response: ``{"link", "login_username", "channel": {"type", "address"} | null,
+    "sent": <bool>}``
+    """
+
+    def post(self, request, pk):
+        recipient = get_object_or_404(User, pk=pk)
+
+        if not getattr(recipient, 'authentik_id', None):
+            return Response(
+                {"error": "User has no IdP account; recovery link requires Authentik."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            link = AuthentikIdP().generate_recovery_link(recipient.authentik_id)
+        except AuthentikError as exc:
+            return Response(
+                {"error": f"Failed to generate recovery link: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sent = False
+        send_via = request.data.get('send')
+        channel_info = _channel_info(recipient)
+        if send_via and channel_info:
+            try:
+                _send_via(send_via, recipient, link, is_link=True)
+                sent = True
+            except Exception as exc:
+                return Response(
+                    {"error": f"Failed to send recovery link: {exc}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        return Response({
+            'link': link,
+            'login_username': recipient.email,
+            'channel': channel_info,
+            'sent': sent,
+        })
+
+
+def _channel_info(user):
+    channel_id = user.preferred_channel_id
+    if not channel_id:
+        return None
+    CommsChannel = apps.get_model('users', 'CommsChannel')
+    try:
+        channel = CommsChannel.objects.get(pk=channel_id)
+    except CommsChannel.DoesNotExist:
+        return None
+    return {'type': channel.channel_type, 'address': channel.address}
+
+
+def _send_via(send_via, user, value, is_link: bool = False):
+    """Send ``value`` (an OTP code or a recovery URL) via the chosen channel.
+
+    Email uses the existing ``send_otp`` helper for OTP codes; for recovery
+    links we use the generic mail wrapper with a recovery_link template.
+    SMS/WhatsApp use Twilio helpers.
+    """
+    from .utils import (
+        send_otp as send_otp_email,
+        send_sms_verification_code,
+        send_whatsapp_verification_code,
+        get_mail_class,
+    )
+    CommsChannel = apps.get_model('users', 'CommsChannel')
+
+    if send_via == 'email':
+        channel = user.comms_channels.filter(channel_type='email').first()
+        if channel is None:
+            raise ValueError("User has no email channel.")
+        if is_link:
+            mail = get_mail_class()
+            from django.conf import settings as _settings
+            mail.send(
+                user.email,
+                _settings.DEFAULT_FROM_EMAIL,
+                template='recovery_link',
+                context={'recovery_link': value},
+                receiver=user,
+            )
+        else:
+            send_otp_email(channel, value)
+        return
+
+    if send_via in ('sms', 'whatsapp'):
+        if not getattr(user, 'mobile', None):
+            raise ValueError("User has no mobile number.")
+        if send_via == 'sms':
+            send_sms_verification_code(user.mobile, value)
+        else:
+            send_whatsapp_verification_code(user.mobile, value)
+        return
+
+    raise ValueError(f"Unsupported send channel: {send_via}")
+
+
 class ChangePassword(APIView):
     """
     Only for use when called with a valid device key

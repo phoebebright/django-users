@@ -6,7 +6,7 @@ from django.urls import path, include
 
 
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
-    UserProfileUpdate, SetTemporaryPassword, toggle_role, \
+    GenerateOTP, GenerateRecoveryLink, UserProfileUpdate, SetTemporaryPassword, toggle_role, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
      SendVerificationCode, CheckUserPublic, PagedUserListViewset, email_exists_or_404
 from django_users.views import login_with_token
@@ -38,6 +38,8 @@ urlpatterns = [
     path('userprofile/<uuid:pk>/', UserProfileUpdate.as_view({'patch': 'update'}), name="userprofile_update"),
     path('userprofile/<str:username>/', UserProfileUpdate.as_view({'patch': 'update'}), name="userprofile_update"),
     path('comms_otp/', SendOTP2User.as_view(), name='comms_otp'),
+    path('generate_otp/<int:pk>/', GenerateOTP.as_view(), name='generate_otp'),
+    path('generate_recovery_link/<int:pk>/', GenerateRecoveryLink.as_view(), name='generate_recovery_link'),
     path('create_user/', CreateUser.as_view(), name='create-user-api'),
     path('user_countries/', UserCountry.as_view(), name='user-country-api'),
     path('ql/', login_with_token, name='qr-login'),  # login to same app, eg. on mobile

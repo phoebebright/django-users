@@ -168,6 +168,38 @@ class AuthentikIdP:
         self.set_password(sub, password)
         return password
 
+    def set_must_change_password(self, sub: UUID | str, value: bool = True) -> None:
+        """Set the ``must_change_password`` attribute on the user.
+
+        Authentik has no first-class flag for forcing password change at next
+        login. Convention is a custom attribute that the auth flow inspects
+        via a policy, routing the user through a ``password_change`` stage
+        and clearing the attribute afterwards.
+        """
+        user = self.get_user(sub)
+        if user is None:
+            raise AuthentikError(f"Authentik has no user with uuid={sub}.")
+        attrs = dict(user.attributes)
+        attrs["must_change_password"] = bool(value)
+        self._request(
+            "PATCH",
+            f"/api/v3/core/users/{user.pk}/",
+            json={"attributes": attrs},
+        )
+
+    def generate_recovery_link(self, sub: UUID | str) -> str:
+        """Generate a single-use recovery link for the user.
+
+        Returns the URL that takes the user through Authentik's recovery
+        flow (verify identity → set new password). The link is signed and
+        time-limited by Authentik.
+        """
+        pk = self._resolve_pk(sub)
+        data = self._request("POST", f"/api/v3/core/users/{pk}/recovery/")
+        if not isinstance(data, dict) or "link" not in data:
+            raise AuthentikError(f"Unexpected recovery response: {data!r}")
+        return data["link"]
+
     def mark_email_verified(self, sub: UUID | str) -> None:
         """Mark the user's email verified in Authentik attributes.
 
