@@ -701,14 +701,6 @@ class SettingMixin(object):
 
 
 
-class HelpdeskEntryMixin(models.Model):
-    '''link a ticket to an entry
-    requires the EntryHelpdeskLink to be created'''
-
-    ticket = models.ForeignKey("EntryHelpdeskLink", blank=True, null=True, on_delete=models.CASCADE)
-
-    class Meta:
-        abstract = True
 #
 # class UserSubscribeMixin(models.Model):
 #     '''use where want different levels of subscribe and are using events'''

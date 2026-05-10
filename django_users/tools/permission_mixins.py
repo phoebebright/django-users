@@ -3,13 +3,11 @@ import logging
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from django.contrib.auth.mixins import (AccessMixin, LoginRequiredMixin,
+from django.contrib.auth.mixins import (LoginRequiredMixin,
                                         UserPassesTestMixin)
 from django.shortcuts import redirect
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
-
-from django.contrib import auth
 
 from rest_framework import permissions
 from rest_framework.views import APIView
@@ -130,19 +128,6 @@ class UserCanOrganiserMixin(HasRoleMixin):
     role_required = ModelRoles.ROLE_ORGANISER
 
 # for django views
-class CanUpdateHelpdeskMixin(AccessMixin):
-
-    def dispatch(self, request, *args, **kwargs):
-
-        if not request.user.is_authenticated:
-            user = auth.get_user(request)
-            raise PermissionDenied("Logged in user required")
-
-        if not request.user.has_role('devteam'):
-            raise PermissionDenied("Requires extra_role devteam")
-
-        return super().dispatch(request, *args, **kwargs)
-
 class IsAdministrator(BasePermission):
     def has_permission(self, request, view):
         return getattr(request.user, 'is_administrator', False)
