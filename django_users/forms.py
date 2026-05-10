@@ -366,14 +366,12 @@ class SkorieUserCreationForm(CustomUserCreationForm):
     class Meta(CustomUserCreationForm.Meta):
         model = User  # Use the project-specific CustomUser model
 
-    def __init__(self, role, *args, **kwargs):
-
+    def __init__(self, *args, **kwargs):
+        role = kwargs.pop('role', None)
         super().__init__(*args, **kwargs)
 
-        if role:
-            # if role corresponds to a field, set its initial value
-            if 'role' in self.fields:
-                self.fields['role'].initial = role
+        if role is not None and 'role' in self.fields:
+            self.fields['role'].initial = role
 
     def is_valid(self):
         valid = super().is_valid()
