@@ -49,10 +49,11 @@ mail = get_mail_class()
 
 import logging
 
-if getattr(settings, 'USE_KEYCLOAK', False):
+try:
     from .keycloak import create_keycloak_user, verify_user_without_email, get_user_by_id, \
         search_user_by_email_in_keycloak
-
+except:
+    logging.warning("keycloak not available")
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
