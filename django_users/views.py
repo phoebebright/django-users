@@ -589,8 +589,15 @@ class UserMigrationView(View):
         backend = KeycloakPasswordCredentialsBackend()
         authenticated_user = backend.authenticate(self.request, username=email, password=password)
         if authenticated_user:
+            # Record ModelBackend (not the Keycloak backend) as the session's auth
+            # backend. get_user() then resolves the user from the DB for the life of
+            # the week-long Django session instead of being tied to the short-lived
+            # Keycloak token. Keycloak still verifies the password above; recording
+            # the Keycloak backend made get_user() return None once the token lapsed,
+            # silently logging the user out (API requests 403 with user=None while the
+            # session cookie still looked valid).
             login(request, authenticated_user,
-                  backend='django_keycloak_admin.backends.KeycloakPasswordCredentialsBackend')
+                  backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, "You have been successfully logged in.")
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
