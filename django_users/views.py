@@ -1701,48 +1701,6 @@ class ContactView(FormView):
             message = f"Message from {email}:\n\n{data['message']}"
             mail.send(subject=subject, message=message, sender=settings.DEFAULT_FROM_EMAIL,
                       recipients=settings.CONTACT_FORM_NOTIFICATION_TO)
-        #
-        # # can only use API if admin - sigh
-        # # url = f'{settings.SITE_URL}/helpdesk/api/tickets/'
-        # # response = requests.post(url, data={
-        # #     'queue': settings.HELPDESK_DEFAULT_QUEUE,
-        # #     'title': "Send us a message",
-        # #     'description': data['message'],
-        # #     'submitter_email': email,
-        # # })
-        #
-        #
-        #
-        # data['title'] = 'Contact Us Form'
-        # data['body'] = data['message']
-        # data['priority'] = 1
-        #
-        # # TicketForm needs id for ForeignKey (not the instance themselves)
-        # queue_choices = [(q.id, q.title) for q in Queue.objects.all()]
-        #
-        # try:
-        #     data['queue'] = Queue.objects.get(slug=settings.HELPDESK_DEFAULT_QUEUE).pk
-        # except Queue.DoesNotExist:
-        #     data['queue'] = Queue.objects.all().first().pk
-        #
-        # files = {'attachment': data.pop('attachment', None)}
-        #
-        # ticket_form = TicketForm(
-        #     data=data, files=files,
-        #     queue_choices=queue_choices )
-        # if ticket_form.is_valid():
-        #     ticket = ticket_form.save(user=user)
-        #     ticket.submitter_email =  data['email']
-        #     ticket.save()
-        #     # should be in the form - but not working so hacking for now
-        #     custom_field = self.request.POST.get('custom_entryid', None)
-        #     if custom_field:
-        #         ticket.save_custom_field_values({'custom_entryid': custom_field})
-        #     # ticket.save_custom_field_values(form.cleaned_data)
-        #     # ticket.set_custom_field_values()
-        # else:
-        #     raise ValidationError(ticket_form.errors)
-
         return super().form_valid(form)
 
 
