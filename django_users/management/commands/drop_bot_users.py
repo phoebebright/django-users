@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
+from django.db.models import ProtectedError
 
 from django_users.utils import looks_like_bot_name
 
@@ -41,5 +42,21 @@ class Command(BaseCommand):
             )
             return
 
-        deleted, _ = User.objects.filter(pk__in=[u.pk for u in matched]).delete()
-        self.stdout.write(self.style.SUCCESS(f"Deleted {len(matched)} user(s) ({deleted} object(s) total)."))
+        # Delete one at a time so a single user referenced by protected foreign keys
+        # doesn't abort the whole batch — skip and warn about those instead.
+        deleted = 0
+        skipped = []
+        for u in matched:
+            try:
+                u.delete()
+                deleted += 1
+            except ProtectedError as e:
+                skipped.append((u, e))
+
+        self.stdout.write(self.style.SUCCESS(f"Deleted {deleted} user(s)."))
+        if skipped:
+            self.stdout.write(self.style.WARNING(
+                f"Skipped {len(skipped)} user(s) referenced by protected foreign keys:"
+            ))
+            for u, e in skipped:
+                self.stdout.write(self.style.WARNING(f"  {u.pk}\t{u.email}\t{e}"))
