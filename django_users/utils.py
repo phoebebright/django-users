@@ -28,20 +28,62 @@ logger = logging.getLogger('django')
 _UUID_LIKE_RE = re.compile(r'^[0-9a-f]{4,}(?:-[0-9a-f]{2,}){2,}$', re.IGNORECASE)
 # A single long hex blob with no hyphens (e.g. "4245a264f75d49f4").
 _HEX_BLOB_RE = re.compile(r'^[0-9a-f]{16,}$', re.IGNORECASE)
+# Splits a name into words on whitespace and the separators legitimately found in
+# real names, so each word can be checked independently.
+_NAME_SEP_RE = re.compile(r"[\s\-'./]+")
+_VOWELS = set('aeiouyAEIOUY')
+
+
+def _has_random_casing(word):
+    """True for tokens with random internal capitalisation (e.g. "hREsCKna").
+
+    Real names capitalise only the first letter of a word (optionally after a
+    separator like "-" or "'", or one internal capital as in "McDonald"). Bot
+    tokens scatter capitals through a mixed-case word, so two or more uppercase
+    letters after the first position — alongside at least one lowercase letter —
+    is the signal. All-caps words (e.g. "JOHN") have no lowercase and are ignored.
+    """
+    has_lower = any(c.islower() for c in word)
+    internal_upper = sum(1 for i, c in enumerate(word) if i > 0 and c.isupper())
+    return has_lower and internal_upper >= 2
+
+
+def _has_long_consonant_run(word):
+    """True if the word has a run of 5+ consecutive consonants (y treated as a
+    vowel). Catches random lowercase tokens that lack real-name structure; runs
+    this long effectively don't occur in genuine names."""
+    run = 0
+    for c in word:
+        if c.isalpha() and c not in _VOWELS:
+            run += 1
+            if run >= 5:
+                return True
+        else:
+            run = 0
+    return False
 
 
 def looks_like_bot_name(*names):
-    """Return True if any supplied name looks machine-generated (UUID/hex blob).
+    """Return True if any supplied name looks machine-generated.
 
-    Used to silently drop registrations submitted by bots, which typically fill
-    first_name/last_name with UUIDs rather than real names.
+    Bots fill first_name/last_name with UUIDs, hex blobs, or random mixed-case /
+    consonant-heavy tokens rather than real names. Used to silently drop those
+    registrations and to find existing bot accounts for removal. Tuned for high
+    precision (few false positives) since it gates a silent drop.
     """
     for name in names:
         if not name:
             continue
         candidate = name.strip()
+        if not candidate:
+            continue
         if _UUID_LIKE_RE.match(candidate) or _HEX_BLOB_RE.match(candidate):
             return True
+        for word in _NAME_SEP_RE.split(candidate):
+            if not word:
+                continue
+            if _has_random_casing(word) or _has_long_consonant_run(word):
+                return True
     return False
 
 

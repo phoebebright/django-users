@@ -1,5 +1,3 @@
-import csv
-
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
@@ -19,11 +17,6 @@ class Command(BaseCommand):
             action="store_true",
             help="Actually delete the matched users. Without this flag the command only reports.",
         )
-        parser.add_argument(
-            "--csv",
-            dest="csv_path",
-            help="Write the matched users to a CSV at this path before deleting.",
-        )
 
     def handle(self, *args, **opts):
         User = get_user_model()
@@ -41,14 +34,6 @@ class Command(BaseCommand):
         self.stdout.write(f"Found {len(matched)} bot-like user(s):")
         for u in matched:
             self.stdout.write(f"  {u.pk}\t{u.email}\t{u.first_name!r} {u.last_name!r}")
-
-        if opts.get("csv_path"):
-            with open(opts["csv_path"], "w", newline="") as fh:
-                writer = csv.writer(fh)
-                writer.writerow(["id", "email", "first_name", "last_name"])
-                for u in matched:
-                    writer.writerow([u.pk, u.email, u.first_name, u.last_name])
-            self.stdout.write(self.style.SUCCESS(f"Wrote {len(matched)} row(s) to {opts['csv_path']}"))
 
         if not opts.get("delete"):
             self.stdout.write(
