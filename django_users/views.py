@@ -49,7 +49,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
-from .utils import normalise_email, get_mail_class
+from .utils import normalise_email, get_mail_class, looks_like_bot_name
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
@@ -728,6 +728,15 @@ class RegisterView(FormView):
         email = normalise_email(form.cleaned_data['email'])
         mobile = form.cleaned_data.get('mobile')
         password = form.cleaned_data['password']
+        first_name = form.cleaned_data['first_name']
+        last_name = form.cleaned_data['last_name']
+
+        # Bots submit UUID-like first/last names. Silently drop the registration
+        # without creating a user or surfacing an error so they get no feedback.
+        if looks_like_bot_name(first_name, last_name):
+            logger.warning(f"Silently dropping bot-like registration for {email} "
+                           f"(first_name={first_name!r}, last_name={last_name!r})")
+            return HttpResponseRedirect(reverse(LOGIN_REGISTER))
 
         User = get_user_model()
         # this code cannot find username=email but when you try to create it, it says can't create duplicate and you see it already there.
@@ -741,8 +750,8 @@ class RegisterView(FormView):
                 user = User.objects.create_user(
                     username=email,
                     email=email,
-                    first_name=form.cleaned_data['first_name'],
-                    last_name=form.cleaned_data['last_name'],
+                    first_name=first_name,
+                    last_name=last_name,
                     is_active=False
                 )
             except User.DoesNotExist:

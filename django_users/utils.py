@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -21,6 +22,28 @@ from django.utils.module_loading import import_string
 from email_validator import validate_email, EmailNotValidError
 
 logger = logging.getLogger('django')
+
+# Matches UUID-like strings (e.g. "4245a264-f75d-49f4-9e68-79336fa5469") that bots
+# submit as first/last names. Two or more hyphen-separated hex groups, hex-only.
+_UUID_LIKE_RE = re.compile(r'^[0-9a-f]{4,}(?:-[0-9a-f]{2,}){2,}$', re.IGNORECASE)
+# A single long hex blob with no hyphens (e.g. "4245a264f75d49f4").
+_HEX_BLOB_RE = re.compile(r'^[0-9a-f]{16,}$', re.IGNORECASE)
+
+
+def looks_like_bot_name(*names):
+    """Return True if any supplied name looks machine-generated (UUID/hex blob).
+
+    Used to silently drop registrations submitted by bots, which typically fill
+    first_name/last_name with UUIDs rather than real names.
+    """
+    for name in names:
+        if not name:
+            continue
+        candidate = name.strip()
+        if _UUID_LIKE_RE.match(candidate) or _HEX_BLOB_RE.match(candidate):
+            return True
+    return False
+
 
 def get_mail_class():
     """
