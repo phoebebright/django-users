@@ -104,13 +104,13 @@
     return false;
   }
 
-        update_profile("{{ user.keycloak_id }}");
+        update_profile("{{ user.pk }}");
         document.location.href = "{{ next }}";
 
     });
 
     $(document).on("change", '.form-control', function() {
-        update_profile("{{ user.keycloak_id }}");
+        update_profile("{{ user.pk }}");
     });
 
 

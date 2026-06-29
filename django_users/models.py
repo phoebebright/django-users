@@ -1002,7 +1002,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     #active = models.BooleanField(default=True,
                                  #db_index=True)  # true when user accepts an invitation or confirms account
 
-    username = models.CharField(max_length=254, blank=True, null=True)  # required for keycloak interface only
+    username = models.CharField(max_length=254, blank=True, null=True)  # legacy IdP username; retained for back-compat
 
     email = models.EmailField(_('email address'), unique=True)
     # Address-ownership stamp. Source of truth for "do we own this address?".
@@ -1046,7 +1046,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     # have to allow blank to prevent race condition on creating user
     person = models.ForeignKey("users.Person", on_delete=models.CASCADE, blank=True, null=True)
 
-    usergroups = YAMLField(default=dict, help_text=_("Groups this user belongs to in Keycloak"))
+    usergroups = YAMLField(default=dict, help_text=_("Groups this user belongs to in the identity provider"))
     # profile_info = models.JSONField(blank=True, null=True, help_text=_("Free form info related to this users profile")) # see valid_profile_data for valid values
 
     preferred_channel = models.ForeignKey("users.CommsChannel", on_delete=models.CASCADE, blank=True, null=True)

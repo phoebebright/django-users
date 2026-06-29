@@ -4,79 +4,10 @@
             }
 
 
-function problem_login(email){
-
-    $.ajax({
-        method: "POST",
-        url: USERS_API_URL + "email_exists_on_keycloak_p/",
-        data: {'email': email},
-
-        success: function (d) {
-            const keycloak_id = $('#keycloak_id').val();
-            $("#user_id").val(d.django_user_id);
-            $("#keycloak_id").val(d.django_user_keycloak_user);
-
-
-
-            if (d.channels ) {
-                // for each d.channel create a button to click
-                $('#existing_channels').html(show_channels(d.channels));
-
-            }
-
-            // check django keycloak_id is the same as the one in keycloak - if there is one
-
-            // not registered locally or in keycloak
-            if (d.django_user_id == 0 && d.keycloak_user_id == '') {
-                $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or ' + REGISTER_TERM + ' again. <a href="' + register_url + '?email=' + email + '" class="btn btn-primary-outline">' + REGISTER_TERM + '</div>');
-                $("#result").slideDown();
-                return;
-            }
-              else if (d.django_user_id == 0 && d.keycloak_user_id > '') {
-                    $('#result').html('<div class="alert alert-warning" role="alert">This email has been setup but needs verifying.</div>');
-                $("#result").slideDown();
-                    $("#verify_how").slideDown();
-                return;
-
-                } else if (d.django_user_id && d.django_user_keycloak_user == 0 && d.keycloak_user_id > '') {
-                    if (d.django_user_id != d.django_user_keycloak_user) {
-                    $('#result').html('<div class="alert alert-danger" role="alert">The email you entered is already in use by another account.</div>');
-                    $("#result").slideDown();
-                    return;
-                }
-            }
-
-
-            if (d.keycloak_verified) {
-                $('#result').html(`
-    <div class="alert alert-success" role="alert">
-        Your account is verified and ready to use. Have you forgotten your password? 
-        <a href="${forgot_pw_url}?email=${encodeURIComponent(email)}" class="text-primary">Yes</a><br />
-        Try <a href="${login_url}?email=${encodeURIComponent(email)}" class="change_password_now text-primary">
-            ${LOGIN_TERM}
-        </a>
- 
-    </div>
-`);
-
-                $("#id_email").val(email);
-                $("#id_password").focus();
-                $(".login_form_div").slideDown();
-            } else {
-                $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified. </div>');
-                $("#verify_how").slideDown();
-
-            }
-            $("#result").slideDown();
-
-        },
-        error: function () {
-            // If there's an error, show the error message
-            $('#apiError').show();
-            $('#apiResponse').hide();
-        }
-    });
-}
+// problem_login() removed on the authentik branch — it called the removed
+// email_exists_on_keycloak_p/ endpoint and was never invoked (the
+// .goto_problem_login handler navigates to problem_login_url instead). The
+// "problem with login" flow is to be rebuilt against the Authentik admin API.
 
 
 // Function to check if the email is valid

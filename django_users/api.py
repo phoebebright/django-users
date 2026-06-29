@@ -577,7 +577,7 @@ class UserProfileUpdateBase(UserProfileUpdate):
 
 
 class SendVerificationPinPublic(APIView):
-    '''request keycloak send verification email and wait from response'''
+    '''generate a 6-digit PIN and send it to the user's phone via SMS'''
     authentication_classes = []
     permission_classes = []
     throttle_classes = [CustomAnonRateThrottle]
@@ -619,7 +619,7 @@ class SendVerificationPinPublic(APIView):
 
 @method_decorator(never_cache, name='dispatch')
 class SendVerificationCode(APIView):
-    '''set keycloak account as verified even though email is not verified'''
+    '''email the user a magic link or 6-digit code to verify their email address'''
     authentication_classes = []
     permission_classes = []
     throttle_classes = [CustomAnonRateThrottle]
