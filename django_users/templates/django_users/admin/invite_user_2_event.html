@@ -23,7 +23,8 @@
                 </div>
 
 
-                <button id="check_user" class="btn btn-primary mb-3">{% blocktrans %}Check if already setup{% endblocktrans %}</button>
+                <button id="check_user" class="btn btn-secondary mb-3" disabled title="{% blocktrans %}Temporarily unavailable — pending Authentik integration{% endblocktrans %}">{% blocktrans %}Check if already setup{% endblocktrans %}</button>
+                <small class="text-muted d-block mb-3">{% blocktrans %}Account lookup is temporarily unavailable — pending Authentik integration.{% endblocktrans %}</small>
                 <div id="message mt-3"></div>
             </form>
 
