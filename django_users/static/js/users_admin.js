@@ -518,14 +518,18 @@ function get_user_roles(email) {
 }
 
 function activate_user(userid) {
-    // NEUTRALISED on the authentik branch: the users/<id>/activate_both/ endpoint
-    // (django + keycloak activation) was removed and this function has no callers.
-    // To be rebuilt against the Authentik admin API (TODO 3a06749).
-    console.warn("activate_user: disabled pending Authentik integration");
-    // const url = USERS_API_URL + "users/" + userid + "/activate_both/";
-    // $.ajax({ method: "GET", url: url })
-    //     .done(function (data) { console.log("done"); })
-    //     .fail(function (jqXHR, textStatus) { console.log('failed api call to '+url+' with error: ' + textStatus); });
+    // Activates the user in Django and marks their email verified in the IdP.
+    // Hits the live UserViewset.activate_both DRF action (router-routed, guarded
+    // by authentik_enabled() server-side). Currently has no callers.
+    const url = USERS_API_URL + "users/" + userid + "/activate_both/";
+    $.ajax({
+        method: "GET",
+        url: url,
+    }).done(function (data) {
+        console.log("done");
+    }).fail(function (jqXHR, textStatus) {
+        console.log('failed api call to '+url+' with error: ' + textStatus);
+    });
 }
 
 function deactivate_user(userid) {
