@@ -104,11 +104,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
             var d = dt.row(this).data();
             loading_on();
             //TODO: add next and include current search.
-            if (d.keycloak_id) {
-                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
-            } else {
-                 document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
-            }
+            document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
             loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
         }
     } );
@@ -234,11 +230,7 @@ const dt = $(selection).DataTable(table_options);
             var d = dt.row(this).data();
             loading_on();
             //TODO: add next and include current search.
-            if (d.keycloak_id) {
-                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
-            } else {
             document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
-            }
             loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
         }
     } );
