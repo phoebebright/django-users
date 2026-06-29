@@ -65,7 +65,7 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need
 VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
                       True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
-from .idp import AuthentikIdP, AuthentikError
+from .idp import AuthentikIdP, AuthentikError, authentik_enabled
 
 
 def get_legitimate_redirect(request):
@@ -130,6 +130,10 @@ class AddUser(generic.CreateView):
         me = self.request.user
         data = form.cleaned_data
         password = (data.get('password') or '').replace(' ', '')
+
+        if not authentik_enabled():
+            form.add_error(None, _('Authentik is not configured for this project.'))
+            return self.form_invalid(form)
 
         idp = AuthentikIdP()
         try:
@@ -465,7 +469,7 @@ class RegisterView(FormView):
                                _(f'Failed to create user account with error {e}. Please try again later.'))
                 raise
         else:
-            if not user.is_active and user.authentik_id:
+            if not user.is_active and user.authentik_id and authentik_enabled():
                 # User exists in IdP but never finished verification. Reset
                 # their password so they can complete registration.
                 try:
@@ -808,6 +812,10 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
         user = self.request.user
         new_password = form.cleaned_data["new_password"]
 
+        if not authentik_enabled():
+            form.add_error(None, "Cannot update password: Authentik is not configured.")
+            return self.form_invalid(form)
+
         if not user.authentik_id:
             form.add_error(None, "Cannot update password: user has no IdP account.")
             return self.form_invalid(form)
@@ -1035,6 +1043,9 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # ---- password update via the IdP ----
+            if not authentik_enabled():
+                form.add_error('confirm_password', 'Password reset via this form requires Authentik.')
+                return self.form_invalid(form)
             if not getattr(user, "authentik_id", None):
                 logger.error("User %s does not have an authentik_id.", user.pk)
                 form.add_error('confirm_password', 'There is an issue with your account.')
@@ -1100,6 +1111,10 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         # we only need to confirm intent before mutating the password.
         if not user.check_password(current_password):
             form.add_error('current_password', "Current password is incorrect.")
+            return self.form_invalid(form)
+
+        if not authentik_enabled():
+            form.add_error(None, "Cannot change password: Authentik is not configured.")
             return self.form_invalid(form)
 
         if not getattr(user, "authentik_id", None):

@@ -51,7 +51,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
 
 
-from .idp import AuthentikIdP, AuthentikError
+from .idp import AuthentikIdP, AuthentikError, authentik_enabled
 
 logger = logging.getLogger('django')
 
@@ -172,7 +172,7 @@ class UserViewset(viewsets.ModelViewSet):
 
         logger.info(f"Activating user {user} in django by {request.user}")
 
-        if user.authentik_id:
+        if user.authentik_id and authentik_enabled():
             try:
                 AuthentikIdP().mark_email_verified(user.authentik_id)
                 logger.info(f"Marked email verified in IdP for {user} by {request.user}")
@@ -204,7 +204,7 @@ class UserViewset(viewsets.ModelViewSet):
 
         if not user.authentik_id:
             password = user.create_authentik_user_from_user(requester=self.request.user)
-            if password:
+            if password and authentik_enabled():
                 AuthentikIdP().mark_email_verified(user.authentik_id)
                 messages.info(self.request, f"Created IdP account — temporary password is {password}")
             else:
@@ -292,7 +292,7 @@ class GenerateOTP(UserCanAdministerMixin, APIView):
         recipient.activation_code = otp
         recipient.save(update_fields=['activation_code'])
 
-        if getattr(recipient, 'authentik_id', None):
+        if getattr(recipient, 'authentik_id', None) and authentik_enabled():
             try:
                 idp = AuthentikIdP()
                 idp.set_password(recipient.authentik_id, otp)
@@ -340,6 +340,12 @@ class GenerateRecoveryLink(UserCanAdministerMixin, APIView):
 
     def post(self, request, pk):
         recipient = get_object_or_404(User, pk=pk)
+
+        if not authentik_enabled():
+            return Response(
+                {"error": "Recovery link requires Authentik to be configured."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not getattr(recipient, 'authentik_id', None):
             return Response(
@@ -870,6 +876,9 @@ class SetTemporaryPassword(APIView):
         if not sub or not new_password:
             return Response({"error": "username (sub) and new_password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not authentik_enabled():
+            return Response({"error": "Authentik is not configured."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             AuthentikIdP().set_password(sub, new_password)
         except AuthentikError as exc:
@@ -1069,6 +1078,9 @@ class CreateUser(APIView):
         requester = request.user
         email = data['email']
         password = (data.get('password') or '').replace(' ', '')
+
+        if not authentik_enabled():
+            return Response({"error": "Authentik is not configured."}, status=HTTP_400_BAD_REQUEST)
 
         idp = AuthentikIdP()
 

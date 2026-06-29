@@ -39,6 +39,19 @@ class AuthentikError(Exception):
     """Raised for any non-2xx response from the Authentik API."""
 
 
+def authentik_enabled() -> bool:
+    """Return True when Authentik is the active IdP for this project.
+
+    Why: this library was converted from Keycloak to Authentik, but downstream
+    projects can still run with Keycloak by setting ``USE_KEYCLOAK = True``.
+    When that flag is on, AuthentikIdP must not be instantiated at all - its
+    __init__ would raise because no AUTHENTIK dict exists in settings.
+    """
+    if getattr(settings, "USE_KEYCLOAK", False):
+        return False
+    return bool(getattr(settings, "AUTHENTIK", None))
+
+
 @dataclass(frozen=True)
 class AuthentikUser:
     pk: int

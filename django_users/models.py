@@ -49,7 +49,7 @@ mail = get_mail_class()
 
 import logging
 
-from .idp import AuthentikIdP, AuthentikError
+from .idp import AuthentikIdP, AuthentikError, authentik_enabled
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -275,7 +275,7 @@ class CommsChannelBase(models.Model):
             self.user.mobile_verified_at = now
             user_updates.append('mobile_verified_at')
 
-        if self.user.authentik_id:
+        if self.user.authentik_id and authentik_enabled():
             try:
                 AuthentikIdP().mark_email_verified(self.user.authentik_id)
             except AuthentikError as exc:
@@ -1834,7 +1834,7 @@ class CustomUserBase(CustomUserBaseBasic):
         except cls.DoesNotExist:
             django_user = None
 
-        idp_user = AuthentikIdP().find_by_email(email)
+        idp_user = AuthentikIdP().find_by_email(email) if authentik_enabled() else None
 
         if idp_user:
             return {
@@ -1859,6 +1859,8 @@ class CustomUserBase(CustomUserBaseBasic):
         a random temporary password is generated and returned (caller is
         responsible for delivering it).
         """
+        if not authentik_enabled():
+            return None
         idp = AuthentikIdP()
         try:
             idp_user = idp.create_user(
@@ -1881,7 +1883,7 @@ class CustomUserBase(CustomUserBaseBasic):
         return idp.set_temporary_password(idp_user.uuid)
 
     def update_email_verified_in_idp(self):
-        if self.authentik_id:
+        if self.authentik_id and authentik_enabled():
             AuthentikIdP().mark_email_verified(self.authentik_id)
 
     @cached_property

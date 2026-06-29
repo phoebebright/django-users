@@ -41,7 +41,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
-from .idp import AuthentikError, AuthentikIdP
+from .idp import AuthentikError, AuthentikIdP, authentik_enabled
 from .utils import get_mail_class
 
 logger = logging.getLogger(__name__)
@@ -104,7 +104,7 @@ def _sync_to_authentik(user, *, first_name: str, last_name: str) -> None:
     UUID on ``user.authentik_id``. If Authentik isn't configured or the
     call fails, we log and continue — OIDC login on first visit will
     reconcile."""
-    if not getattr(settings, 'AUTHENTIK', None):
+    if not authentik_enabled():
         return
     if not hasattr(user, 'authentik_id') or user.authentik_id:
         return
