@@ -415,10 +415,78 @@ def send_sms(recipient_user, message, user=None):
     return message.sid
 
 
-# LoginView removed on the authentik branch. mozilla-django-oidc handles the
-# OIDC authorization-code flow; settings.LOGIN_URL should resolve to
-# 'oidc_authentication_init' (or be aliased via a one-line view that
-# redirects there).
+@method_decorator(never_cache, name='dispatch')
+class LoginView(GoNextTemplateMixin, TemplateView):
+    """Email + password login using Django's session auth.
+
+    Authentik/OIDC verify credentials at their own login; this view is the
+    local Django-session path (e.g. staff, or projects that keep a password
+    login alongside SSO). We record ``ModelBackend`` as the session backend so
+    ``auth.get_user()`` keeps resolving the user for the life of the session
+    cookie — see the auth/session note in CLAUDE.md.
+    """
+    template_name = "django_users/login.html"
+
+    def post(self, request, *args, **kwargs):
+        email = normalise_email(request.POST.get('email'))
+        password = request.POST.get('password')
+        next_url = request.GET.get('next') or request.POST.get('next') or None
+
+        try:
+            user = authenticate(request, username=email, password=password)
+        except Exception as e:
+            logger.warning("authenticate() failed for %s: %s", email, e)
+            user = None
+
+        if user and user.is_active:
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            return redirect(next_url or settings.LOGIN_REDIRECT_URL)
+
+        messages.error(request, _('Invalid email or password.'))
+        context = self.get_context_data(**kwargs)
+        context['email'] = email
+        return render(request, self.template_name, context)
+
+
+class ProblemSignup(TemplateView):
+    template_name = "django_users/problem_register.html"
+    verified = False
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            messages.info(request, _("You are already signed up and logged in"))
+            return HttpResponseRedirect(reverse('users:user-profile'))
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        set_current_user(self.request, None, None)
+        context['next'] = get_legitimate_redirect(self.request)
+        context['email'] = kwargs.get('email', self.request.GET.get('email', ''))
+        return context
+
+
+@method_decorator(never_cache, name='dispatch')
+class ProblemLogin(ProblemSignup):
+    template_name = "django_users/problem_login.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        email = request.GET.get('email', None)
+        if not email:
+            return super().dispatch(request, *args, **kwargs)
+
+        User = get_user_model()
+        try:
+            django_user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            pass
+        else:
+            self.verified = django_user.is_active
+
+        if not self.verified:
+            return HttpResponseRedirect(reverse('users:problem_register') + f"?email={email}")
+
+        return super().dispatch(request, *args, **kwargs)
 
 
 @method_decorator(never_cache, name='dispatch')

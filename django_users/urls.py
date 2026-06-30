@@ -9,6 +9,9 @@ from .views import (
     NewUsers,
     UserProfileView,
     RegisterView,
+    LoginView,
+    ProblemLogin,
+    ProblemSignup,
     AddCommsChannelView,
     VerifyChannelView,
     ManageCommsChannelsView,
@@ -88,9 +91,15 @@ urlpatterns = [
 
     # Auth flow lives in mozilla-django-oidc — projects should include
     # `path('oidc/', include('mozilla_django_oidc.urls'))` in their main urls.
-    # The 'login' and 'logout' URL names below are aliases that resolve to
-    # the OIDC views.
+    # OIDC/Authentik handles SSO; LoginView below is the local Django-session
+    # email+password path. Both 'login' and 'user_login' names point at it
+    # ('user_login' is the name the login form posts to).
     path('after_login_redirect/', after_login_redirect, name='after_login_redirect'),
+
+    path('login/', LoginView.as_view(), name='login'),
+    path('login/', LoginView.as_view(), name='user_login'),
+    path('problem_login/', ProblemLogin.as_view(), name='problem_login'),
+    path('problem_register/', ProblemSignup.as_view(), name='problem_register'),
 
     path('register/', RegisterView.as_view(), name='register'),
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
