@@ -45,6 +45,31 @@ class EmailExistsSerializerBase(DynamicModelSerializer):
         return ret
 
 
+class EmailExistsSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = User
+        fields = ('is_active',  'date_joined',)
+
+    def to_representation(self, instance):
+
+        if not instance:
+            return None
+
+        ret = super().to_representation(instance)
+        ret['competitor_name'] = None
+        ret['is_active'] = instance.is_active
+        ret['verified'] = instance.is_active    # for backward compatibility
+        #ret['user_type'] = instance.user_type
+        ret['date_joined'] = instance.date_joined
+        ret['not_registered'] = False
+
+        # if instance.competitor:
+        #     ret['competitor_name'] = instance.competitor.name
+
+        return ret
+
+
 class UserShortSerializerBase(CountryFieldMixin, DynamicModelSerializer):
 
     class Meta:
@@ -102,6 +127,19 @@ class UserContactSerializerBase(DynamicModelSerializer):
         ret = super().to_representation(instance)
         ret = ret + instance.data
         return ret
+
+
+class UserContactSerializer(DynamicModelSerializer):
+    user = None
+    class Meta:
+        model = User
+        fields = ['user','contact_date']
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret = ret + instance.data
+        return ret
+
 
 class UserEmailSerializerBase(DynamicModelSerializer):
 
