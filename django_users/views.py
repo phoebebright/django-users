@@ -489,6 +489,25 @@ class ProblemLogin(ProblemSignup):
         return super().dispatch(request, *args, **kwargs)
 
 
+class Troubleshoot(UserCanAdministerMixin, View):
+    '''given an email, see what the problem is'''
+
+    def post(self, request, *args, **kwargs):
+        email = request.POST.get('email')
+
+        try:
+            django_user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            django_user = None
+
+        if django_user and django_user.is_active:
+            # fully activated — send admin to the profile
+            return HttpResponseRedirect(reverse('users:manage-user-profile') + f"?email={email}")
+
+        # still not verified
+        return HttpResponseRedirect(reverse('users:problem_register') + f"?email={email}")
+
+
 @method_decorator(never_cache, name='dispatch')
 class RegisterView(FormView):
     form_class = SignUpForm

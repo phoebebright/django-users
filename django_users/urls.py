@@ -12,6 +12,7 @@ from .views import (
     LoginView,
     ProblemLogin,
     ProblemSignup,
+    Troubleshoot,
     AddCommsChannelView,
     VerifyChannelView,
     ManageCommsChannelsView,
@@ -100,6 +101,7 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='user_login'),
     path('problem_login/', ProblemLogin.as_view(), name='problem_login'),
     path('problem_register/', ProblemSignup.as_view(), name='problem_register'),
+    path('troubleshoot/', Troubleshoot.as_view(), name='troubleshoot'),
 
     path('register/', RegisterView.as_view(), name='register'),
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
