@@ -10,6 +10,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from string import digits
 
+import httpx
 import nanoid
 from django.apps import apps
 from django.contrib.auth import authenticate, login
@@ -1834,7 +1835,18 @@ class CustomUserBase(CustomUserBaseBasic):
         except cls.DoesNotExist:
             django_user = None
 
-        idp_user = AuthentikIdP().find_by_email(email) if authentik_enabled() else None
+        idp_user = None
+        if authentik_enabled():
+            try:
+                idp_user = AuthentikIdP().find_by_email(email)
+            except (AuthentikError, httpx.HTTPError) as exc:
+                # A down or unreachable IdP must not 500 the calling page
+                # (e.g. the admin ManageUser view). Degrade to the
+                # Django-only view of the account and log for diagnosis.
+                logger.warning(
+                    "check_register_status: Authentik lookup for %s failed: %s",
+                    email, exc,
+                )
 
         if idp_user:
             return {

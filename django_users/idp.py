@@ -42,13 +42,24 @@ class AuthentikError(Exception):
 def authentik_enabled() -> bool:
     """Return True when Authentik is the active IdP for this project.
 
-    Why: this library was converted from Keycloak to Authentik, but downstream
-    projects can still run with Keycloak by setting ``USE_KEYCLOAK = True``.
-    When that flag is on, AuthentikIdP must not be instantiated at all - its
-    __init__ would raise because no AUTHENTIK dict exists in settings.
+    Resolution order:
+      * ``USE_KEYCLOAK = True``   -> always False (project is on Keycloak).
+      * ``AUTH_PROVIDER`` is set   -> True only when it equals ``"authentik"``.
+      * ``AUTH_PROVIDER`` is unset -> legacy fallback: True when an
+        ``AUTHENTIK`` dict is present in settings.
+
+    Why ``AUTH_PROVIDER`` takes precedence over dict-presence: downstream
+    projects define the ``AUTHENTIK`` config dict unconditionally so that
+    switching providers is a one-line change. Treating "dict is present" as
+    "Authentik is live" therefore fires IdP calls against a server that may
+    not be running (ConnectError) whenever the active provider is really
+    ``django`` or ``keycloak``.
     """
     if getattr(settings, "USE_KEYCLOAK", False):
         return False
+    provider = getattr(settings, "AUTH_PROVIDER", None)
+    if provider is not None:
+        return provider == "authentik"
     return bool(getattr(settings, "AUTHENTIK", None))
 
 
