@@ -440,6 +440,17 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
         if user and user.is_active:
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+            # If they signed in with an admin-issued one-time password (the value
+            # matches their activation_code), force them through change_password
+            # first - the Django equivalent of the IdP's must_change_password.
+            otp = getattr(user, 'activation_code', None)
+            if otp and str(password) == str(otp):
+                change_url = reverse('users:change_password')
+                if next_url:
+                    change_url += f"?next={next_url}"
+                return redirect(change_url)
+
             return redirect(next_url or settings.LOGIN_REDIRECT_URL)
 
         messages.error(request, _('Invalid email or password.'))
@@ -1200,39 +1211,27 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
-        if not authentik_enabled():
-            form.add_error(None, "Cannot change password: Authentik is not configured.")
-            return self.form_invalid(form)
+        if getattr(user, "authentik_id", None) and authentik_enabled():
+            # External IdP owns the credential.
+            try:
+                AuthentikIdP().set_password(user.authentik_id, new_password)
+            except AuthentikError as exc:
+                form.add_error(None, f"Failed to update password: {exc}")
+                return self.form_invalid(form)
+        else:
+            # Plain Django auth: update the Django password directly. Clear any
+            # temporary OTP credential now that the user has set a real one, and
+            # rotate the session auth hash so they stay logged in.
+            user.set_password(new_password)
+            update_fields = ['password']
+            if getattr(user, 'activation_code', None):
+                user.activation_code = None
+                update_fields.append('activation_code')
+            user.save(update_fields=update_fields)
+            update_session_auth_hash(self.request, user)
 
-        if not getattr(user, "authentik_id", None):
-            form.add_error(None, "Cannot change password: user has no IdP account.")
-            return self.form_invalid(form)
-
-        try:
-            AuthentikIdP().set_password(user.authentik_id, new_password)
-        except AuthentikError as exc:
-            form.add_error(None, f"Failed to update password: {exc}")
-            return self.form_invalid(form)
-
-            # # 3) If this code ever runs in a flow where the user isn't authenticated
-            # # (e.g., recovery form), sign them in with the new password now.
-            # if not self.request.user.is_authenticated:
-            #     # Try with username first (works for default Django backends)
-            #     auth_user = authenticate(self.request,
-            #                              username=getattr(user, "get_username", lambda: user.username)(),
-            #                              password=new_password)
-            #     if not auth_user and getattr(user, "email", None):
-            #         # Fallback for email-based backends
-            #         auth_user = authenticate(self.request, email=user.email, password=new_password)
-            #     if auth_user:
-            #         login(self.request, auth_user)
-
-            messages.success(self.request, "Password updated successfully.")
-            return super().form_valid(form)
-
-        except Exception as e:
-            form.add_error(None, f"Failed to update password: {e}")
-            return self.form_invalid(form)
+        messages.success(self.request, "Password updated successfully.")
+        return super().form_valid(form)
 
 
 # update_users (one-off authentik_id backfill) and UnverifiedUsersList
@@ -2558,9 +2557,21 @@ class AdminAddChannel(UserCanAdministerMixin, FormView):
     def get_success_url(self):
         return reverse('users:admin_user', kwargs={'pk': self.target_user.pk})
 
+    @transaction.atomic
     def form_valid(self, form):
         CommsChannel = apps.get_model('users', 'CommsChannel')
         channel_type = form.cleaned_data['channel_type']
+
+        new_mobile_obj = form.cleaned_data.get('mobile') or ''
+        new_mobile = str(new_mobile_obj) if new_mobile_obj else ''
+        if new_mobile and new_mobile != (self.target_user.mobile or ''):
+            self.target_user.mobile = new_mobile
+            self.target_user.save()  # cascades: clears mobile_verified_at / CommsChannel.verified_at
+            messages.warning(
+                self.request,
+                f"Mobile changed to {self.target_user.mobile}. The user must re-verify SMS/WhatsApp.",
+            )
+
         channel, created = CommsChannel.objects.get_or_create(
             user=self.target_user, channel_type=channel_type,
         )

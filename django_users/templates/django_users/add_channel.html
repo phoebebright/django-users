@@ -11,12 +11,19 @@
                 {% bootstrap_field form.channel_type %}
                 {% bootstrap_field form.username_code %}
 
+                {% comment %}AddCommsChannelForm only carries channel_type - only
+                render the address inputs if the form actually defines them,
+                otherwise bootstrap_field raises BootstrapError{% endcomment %}
+                {% if form.email %}
                 <div id="email_form" style="display:none;">
                     {% bootstrap_field form.email show_label=False %}
                 </div>
+                {% endif %}
+                {% if form.mobile %}
                 <div id="mobile_form" style="display:none;">
                     {% bootstrap_field form.mobile show_label=False %}
                 </div>
+                {% endif %}
                 <div id="errors" class="text-warning"></div>
                 <button type="submit" class="btn btn-primary">{% trans "Add Contact Method" %}</button>
 

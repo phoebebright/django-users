@@ -26,6 +26,10 @@
             {% bootstrap_form_errors form type='non_fields' %}
             {% bootstrap_field form.channel_type %}
 
+            <div id="mobile_field_wrapper">
+                {% bootstrap_field form.mobile %}
+            </div>
+
             <div class="action_buttons">
                 <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
                     <a href="{% url 'users:admin_user' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
@@ -33,6 +37,24 @@
                 </div>
             </div>
         </form>
+
+        <script>
+            (function () {
+                var mobileChannelTypes = ['sms', 'whatsapp'];
+                var channelTypeSelect = document.getElementById('id_channel_type');
+                var mobileWrapper = document.getElementById('mobile_field_wrapper');
+
+                function toggleMobileField() {
+                    var visible = mobileChannelTypes.indexOf(channelTypeSelect.value) !== -1;
+                    mobileWrapper.style.display = visible ? '' : 'none';
+                }
+
+                if (channelTypeSelect && mobileWrapper) {
+                    channelTypeSelect.addEventListener('change', toggleMobileField);
+                    toggleMobileField();
+                }
+            })();
+        </script>
     {% endif %}
 
 {% endblock %}

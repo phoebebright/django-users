@@ -657,16 +657,40 @@ class AdminEditContactForm(forms.ModelForm):
 class AdminAddChannelForm(forms.Form):
     """Admin opts a user into a comms channel — picks a type that's not
     already present. Verification of the underlying address (email/mobile)
-    is a separate flow."""
+    is a separate flow. Mobile-based channel types (SMS/WhatsApp) deliver to
+    ``User.mobile`` (see ``CommsChannelBase.address``), so this form also
+    collects a mobile number when one isn't already on file."""
 
     channel_type = forms.ChoiceField(label=_("Channel type"), choices=[])
+    mobile = PhoneNumberField(
+        label=_("Mobile Number"),
+        max_length=20,
+        required=False,
+        help_text=_("International format, e.g. +353 1234567"),
+    )
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user')
         super().__init__(*args, **kwargs)
+        self.user = user
         CommsChannel = apps.get_model('users', 'CommsChannel')
+        self.mobile_channels = CommsChannel.MOBILE_CHANNELS
         existing = set(user.comms_channels.values_list('channel_type', flat=True))
         self.fields['channel_type'].choices = [
             (ct, label) for (ct, label) in CommsChannel.CHANNEL_CHOICES
             if ct not in existing
         ]
+        self.mobile_channel_types = [
+            ct for ct, _label in self.fields['channel_type'].choices
+            if ct in self.mobile_channels
+        ]
+        if user.mobile:
+            self.fields['mobile'].initial = user.mobile
+
+    def clean(self):
+        cleaned_data = super().clean()
+        channel_type = cleaned_data.get('channel_type')
+        mobile = cleaned_data.get('mobile')
+        if channel_type in self.mobile_channels and not (mobile or self.user.mobile):
+            self.add_error('mobile', _("Mobile number is required for this channel type."))
+        return cleaned_data

@@ -290,9 +290,11 @@ class GenerateOTP(UserCanAdministerMixin, APIView):
 
         otp = ''.join(random.choices(string.digits, k=6))
         recipient.activation_code = otp
-        recipient.save(update_fields=['activation_code'])
 
         if getattr(recipient, 'authentik_id', None) and authentik_enabled():
+            # External IdP owns the credential; set the password there and let
+            # the IdP prompt for a change on next login.
+            recipient.save(update_fields=['activation_code'])
             try:
                 idp = AuthentikIdP()
                 idp.set_password(recipient.authentik_id, otp)
@@ -302,6 +304,11 @@ class GenerateOTP(UserCanAdministerMixin, APIView):
                     {"error": f"Failed to set IdP password: {exc}"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+        else:
+            # Plain Django auth (no external IdP): the OTP must be a usable
+            # Django password so the user can log in via ModelBackend with it.
+            recipient.set_password(otp)
+            recipient.save(update_fields=['activation_code', 'password'])
 
         sent = False
         send_via = request.data.get('send')
