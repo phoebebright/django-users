@@ -51,7 +51,8 @@ from rest_framework.throttling import SimpleRateThrottle
 from pycountry import countries
 
 
-from .idp import AuthentikIdP, AuthentikError, authentik_enabled
+from .idp import (AuthentikIdP, AuthentikError, IdPError, authentik_enabled,
+                  keycloak_enabled, get_auth_provider, get_idp)
 
 logger = logging.getLogger('django')
 

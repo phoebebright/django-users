@@ -50,7 +50,8 @@ mail = get_mail_class()
 
 import logging
 
-from .idp import AuthentikIdP, AuthentikError, authentik_enabled
+from .idp import (AuthentikIdP, AuthentikError, IdPError, authentik_enabled,
+                  keycloak_enabled, get_auth_provider, get_idp)
 
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -1780,7 +1781,12 @@ class CustomUserBase(CustomUserBaseBasic):
         'devteam': "Skorie Development Team",
     }
 
+    # One nullable UUID per external IdP rather than a single generic field:
+    # keycloak hosts already have the keycloak_id column in production, so a
+    # rename would force a risky migration; keeping both means switching
+    # provider is settings-only and host migrations stay additive.
     authentik_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
+    keycloak_id = models.UUIDField(editable=False, unique=True, null=True, blank=True)
 
     user_source = models.CharField(max_length=20, default="Unknown",
                                    help_text=_("How or where did this user get created"))
@@ -1898,11 +1904,34 @@ class CustomUserBase(CustomUserBaseBasic):
         if self.authentik_id and authentik_enabled():
             AuthentikIdP().mark_email_verified(self.authentik_id)
 
+    @property
+    def idp_id(self):
+        '''ID of this user in the ACTIVE external IdP (None for plain Django auth
+        or when the user has no account there yet).'''
+        return {
+            "keycloak": self.keycloak_id,
+            "authentik": self.authentik_id,
+        }.get(get_auth_provider())
+
+    def set_idp_id(self, value, save=True):
+        '''Store the external IdP id on the field matching the active provider.'''
+        provider = get_auth_provider()
+        if provider == "keycloak":
+            self.keycloak_id = value
+            field = "keycloak_id"
+        elif provider == "authentik":
+            self.authentik_id = value
+            field = "authentik_id"
+        else:
+            raise ValueError("set_idp_id() called with no external IdP active (AUTH_PROVIDER=django)")
+        if save:
+            self.save(update_fields=[field])
+
     @cached_property
     def user_pk(self):
-        '''return the user identifier — IdP sub if linked, else Django pk.'''
-        if self.authentik_id:
-            return str(self.authentik_id)
+        '''return the user identifier — active IdP sub if linked, else Django pk.'''
+        if self.idp_id:
+            return str(self.idp_id)
         return str(self.pk)
 
     @cached_property

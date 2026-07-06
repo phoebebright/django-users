@@ -1,7 +1,17 @@
-"""Authentik IdP adapter.
+"""Identity-provider selection and the Authentik IdP adapter.
 
-Single chokepoint for all communication with the Authentik admin REST API.
-Every other module that needs to talk to the IdP goes through here.
+Provider selection: ``get_auth_provider()`` resolves the active provider
+('django', 'keycloak' or 'authentik') from the ``AUTH_PROVIDER`` setting,
+with legacy fallbacks for hosts that predate it (``USE_KEYCLOAK`` flag,
+presence of an ``AUTHENTIK`` dict). ``get_idp()`` returns the matching
+adapter instance — ``AuthentikIdP`` here, ``KeycloakIdP`` from
+``idp_keycloak`` (imported lazily so python-keycloak stays optional), or
+``None`` for plain Django auth, where call sites fall back to local
+operations (``user.set_password`` etc.).
+
+This module is also the single chokepoint for all communication with the
+Authentik admin REST API. Every other module that needs to talk to
+Authentik goes through here.
 
 Authentik has both an integer ``pk`` and a UUID for each user. The UUID is
 what surfaces as the OIDC ``sub`` claim and is what we store on the Django
@@ -35,32 +45,79 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-class AuthentikError(Exception):
+class IdPError(Exception):
+    """Base for errors talking to any external identity provider."""
+
+
+class AuthentikError(IdPError):
     """Raised for any non-2xx response from the Authentik API."""
+
+
+VALID_AUTH_PROVIDERS = ("django", "keycloak", "authentik")
+
+
+def get_auth_provider() -> str:
+    """Return the active auth provider: 'django', 'keycloak' or 'authentik'.
+
+    Resolution order:
+      * ``AUTH_PROVIDER`` is set   -> use it verbatim (a system check in
+        ``checks.py`` validates it against ``VALID_AUTH_PROVIDERS``).
+      * ``USE_KEYCLOAK = True``    -> 'keycloak' (legacy skorie hosts — they
+        need no settings change to run on the unified branch).
+      * ``AUTHENTIK`` dict present -> 'authentik' (legacy dict-presence
+        fallback from the authentik-only era).
+      * otherwise                  -> 'django' (plain session auth).
+
+    Why ``AUTH_PROVIDER`` takes precedence over dict/flag presence: downstream
+    projects define provider config dicts unconditionally so that switching
+    providers is a one-line change. Treating "config is present" as "provider
+    is live" fires IdP calls against a server that may not be running
+    (ConnectError) whenever the active provider is really another one.
+    """
+    provider = getattr(settings, "AUTH_PROVIDER", None)
+    if provider is not None:
+        return provider
+    if getattr(settings, "USE_KEYCLOAK", False):
+        return "keycloak"
+    if getattr(settings, "AUTHENTIK", None):
+        return "authentik"
+    return "django"
 
 
 def authentik_enabled() -> bool:
     """Return True when Authentik is the active IdP for this project.
 
-    Resolution order:
-      * ``USE_KEYCLOAK = True``   -> always False (project is on Keycloak).
-      * ``AUTH_PROVIDER`` is set   -> True only when it equals ``"authentik"``.
-      * ``AUTH_PROVIDER`` is unset -> legacy fallback: True when an
-        ``AUTHENTIK`` dict is present in settings.
-
-    Why ``AUTH_PROVIDER`` takes precedence over dict-presence: downstream
-    projects define the ``AUTHENTIK`` config dict unconditionally so that
-    switching providers is a one-line change. Treating "dict is present" as
-    "Authentik is live" therefore fires IdP calls against a server that may
-    not be running (ConnectError) whenever the active provider is really
-    ``django`` or ``keycloak``.
+    Back-compat wrapper around :func:`get_auth_provider` — existing call
+    sites and host projects import this directly.
     """
-    if getattr(settings, "USE_KEYCLOAK", False):
-        return False
-    provider = getattr(settings, "AUTH_PROVIDER", None)
-    if provider is not None:
-        return provider == "authentik"
-    return bool(getattr(settings, "AUTHENTIK", None))
+    return get_auth_provider() == "authentik"
+
+
+def keycloak_enabled() -> bool:
+    """Return True when Keycloak is the active IdP for this project."""
+    return get_auth_provider() == "keycloak"
+
+
+def get_idp():
+    """Return the adapter for the active provider, or None for plain Django.
+
+    ``None`` (not a null-object) is deliberate: call sites already follow the
+    pattern ``if user.idp_id and get_idp(): <IdP op> else: <local op>``, and a
+    fake local adapter would have to invent semantics that don't exist locally
+    (recovery links, must-change flags). Returns:
+
+      * 'authentik' -> :class:`AuthentikIdP`
+      * 'keycloak'  -> :class:`django_users.idp_keycloak.KeycloakIdP`
+        (imported lazily so python-keycloak remains an optional dependency)
+      * 'django'    -> ``None``
+    """
+    provider = get_auth_provider()
+    if provider == "authentik":
+        return AuthentikIdP()
+    if provider == "keycloak":
+        from .idp_keycloak import KeycloakIdP
+        return KeycloakIdP()
+    return None
 
 
 @dataclass(frozen=True)

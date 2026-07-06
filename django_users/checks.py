@@ -1,6 +1,11 @@
-"""System checks for the Authentik integration.
+"""System checks for the identity-provider integration.
 
-Two checks:
+Checks:
+  * ``check_auth_provider`` - fast, always runs. Validates the AUTH_PROVIDER
+    setting is one of django/keycloak/authentik.
+  * ``check_keycloak_settings`` - fast, always runs. Validates KEYCLOAK_CLIENTS
+    shape and that python-keycloak is importable. Only active when the
+    resolved provider is ``keycloak``.
   * ``check_authentik_settings`` - fast, always runs. Validates the AUTHENTIK
     settings dict has the required keys. Only active when
     ``AUTH_PROVIDER == "authentik"``.
@@ -30,12 +35,75 @@ from django.core.checks import Error, Tags, Warning, register
 
 REQUIRED_KEYS = ("URL", "OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "API_TOKEN")
 
+KEYCLOAK_REQUIRED_CLIENT_KEYS = ("CLIENT_ID", "CLIENT_SECRET", "URL", "REALM")
+
+
+@register("idp")
+def check_auth_provider(app_configs, **kwargs):
+    from .idp import VALID_AUTH_PROVIDERS
+
+    provider = getattr(settings, "AUTH_PROVIDER", None)
+    if provider is not None and provider not in VALID_AUTH_PROVIDERS:
+        return [
+            Error(
+                f"AUTH_PROVIDER is {provider!r}; must be one of {', '.join(VALID_AUTH_PROVIDERS)}.",
+                hint="Set AUTH_PROVIDER in settings_local.py to 'django', 'keycloak' or 'authentik'.",
+                id="django_users.E020",
+            )
+        ]
+    return []
+
+
+@register("idp")
+def check_keycloak_settings(app_configs, **kwargs):
+    from .idp import get_auth_provider
+
+    if get_auth_provider() != "keycloak":
+        return []
+
+    errors = []
+    try:
+        import keycloak  # noqa: F401  (python-keycloak)
+    except ImportError:
+        errors.append(
+            Error(
+                "AUTH_PROVIDER is 'keycloak' but python-keycloak is not installed.",
+                hint="pip install 'django-users[keycloak]' (or add django-keycloak-admin to requirements).",
+                id="django_users.E021",
+            )
+        )
+
+    clients = getattr(settings, "KEYCLOAK_CLIENTS", None)
+    if not isinstance(clients, dict) or not clients.get("USERS"):
+        errors.append(
+            Error(
+                "KEYCLOAK_CLIENTS['USERS'] is missing.",
+                hint=(
+                    "Add a KEYCLOAK_CLIENTS dict to settings_local.py with a 'USERS' entry "
+                    "containing: " + ", ".join(KEYCLOAK_REQUIRED_CLIENT_KEYS)
+                ),
+                id="django_users.E022",
+            )
+        )
+    else:
+        for idx, key in enumerate(KEYCLOAK_REQUIRED_CLIENT_KEYS):
+            if not clients["USERS"].get(key):
+                errors.append(
+                    Error(
+                        f"KEYCLOAK_CLIENTS['USERS'][{key!r}] is missing or empty.",
+                        hint=f"Set KEYCLOAK_CLIENTS['USERS'][{key!r}] in settings_local.py.",
+                        id=f"django_users.E{30 + idx:03d}",
+                    )
+                )
+    return errors
+
 
 @register("idp")
 def check_authentik_settings(app_configs, **kwargs):
     # Only Authentik needs the AUTHENTIK config; Keycloak and plain Django auth
-    # do not.
-    if getattr(settings, "AUTH_PROVIDER", None) != "authentik":
+    # do not. Use the resolver so legacy dict-presence hosts are covered too.
+    from .idp import get_auth_provider
+    if get_auth_provider() != "authentik":
         return []
     cfg = getattr(settings, "AUTHENTIK", None)
     if cfg is None:
@@ -68,7 +136,8 @@ def check_authentik_settings(app_configs, **kwargs):
 
 @register(Tags.security, "idp", deploy=True)
 def check_authentik_reachable(app_configs, **kwargs):
-    if getattr(settings, "AUTH_PROVIDER", None) != "authentik":
+    from .idp import get_auth_provider
+    if get_auth_provider() != "authentik":
         return []
     cfg = getattr(settings, "AUTHENTIK", None)
     if not cfg:

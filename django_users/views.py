@@ -65,7 +65,8 @@ CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need
 VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
                       True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
 
-from .idp import AuthentikIdP, AuthentikError, authentik_enabled
+from .idp import (AuthentikIdP, AuthentikError, IdPError, authentik_enabled,
+                  keycloak_enabled, get_auth_provider, get_idp)
 
 
 def get_legitimate_redirect(request):
