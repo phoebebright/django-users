@@ -1,14 +1,80 @@
-# django-users — `authentik` branch
+# django-users — `unified-auth` branch
 
 Reusable Django app providing the user models, views, and helpers used by
-the Skorie family of projects. **This branch is Authentik-only**: there is
-no Keycloak code on this branch, and there are no fallback flags. For the
-Keycloak version, use `main`.
+the Skorie family of projects. **This branch unifies the three historical
+auth branches** (`skorie_users`/Keycloak, `skorie-users2`/Django,
+`authentik`/Authentik): all functionality is shared, and a single setting
+selects how authentication is handled:
+
+```python
+AUTH_PROVIDER = 'django'     # plain Django session auth (default)
+AUTH_PROVIDER = 'keycloak'   # Keycloak SSO (needs the [keycloak] extra)
+AUTH_PROVIDER = 'authentik'  # Authentik OIDC (needs the [authentik] extra)
+```
+
+Legacy settings keep working without change: `USE_KEYCLOAK = True` resolves
+to `'keycloak'`, and a defined `AUTHENTIK` dict resolves to `'authentik'`
+when `AUTH_PROVIDER` is unset. An explicit `AUTH_PROVIDER` always wins.
+
+Key modules:
+
+- `django_users/idp.py` — `get_auth_provider()`, `get_idp()`, and the
+  `AuthentikIdP` adapter.
+- `django_users/idp_keycloak.py` — `KeycloakIdP` adapter (python-keycloak is
+  imported lazily; install with `pip install 'django-users[keycloak]'`).
+- `django_users/keycloak.py` — deprecated shim over the adapter for hosts
+  that import the old function names.
+- Users carry **both** `keycloak_id` and `authentik_id` (nullable UUIDs), so
+  switching provider is settings-only and host migrations stay additive.
+- Keycloak-only routes (`migrate_login/`, `unverified/`, `update_users/`,
+  `email_exists_on_keycloak(_p)/`, `problem_register/<email>/`) are always
+  wired but return 404 unless `AUTH_PROVIDER == 'keycloak'`.
+
+Run the standalone test suites from the repo root (full suites run from a
+host project):
+
+```
+python -m tests.test_providers.runtests    # provider resolution + KeycloakIdP
+python -m tests.test_authentik.runtests    # Authentik guard tests
+```
+
+## Rollout for existing consumers
+
+Order: prove the branch on a dev host with `AUTH_PROVIDER='django'` first,
+then the Authentik consumer (near-zero diff), then skorie1/2/3 (Keycloak,
+production) **one at a time, staging first**.
+
+Per Keycloak host (skorie1/2/3):
+
+1. Repin `requirements.txt`:
+   `git+https://github.com/phoebebright/django-users@unified-auth`
+   (or a `v3.0.0` tag once cut) and add the Keycloak stack
+   (`django-keycloak-admin`) which is no longer implied.
+2. Settings: add `AUTH_PROVIDER = 'keycloak'` explicitly. Keep
+   `USE_KEYCLOAK` / `KEYCLOAK_MIGRATING` / `VERIFY_ONCE` as they are. Set
+   `KEYCLOAK_DB_ALIAS` only if the Keycloak DB alias differs from
+   `keycloak_new`.
+3. `python manage.py makemigrations users` — expect **additive only**: an
+   `authentik_id` column, plus Invite/ZammadTicketContact/EntryTicketLink
+   tables if the host subclasses those new abstract models. Dev signs off.
+4. `python manage.py check --tag idp` — validates AUTH_PROVIDER and the
+   provider's config.
+5. **Static paths:** the `static/js_no_keycloak/` tree is gone; templates
+   referencing it must point at `static/js/` (single tree, provider-aware).
+6. Smoke test: login (confirm `_auth_user_backend` is ModelBackend),
+   register, forgot-password (all 4 steps), change-password(-now), admin
+   AddUser, OTP generate/send, logout + logout_all, `unverified/` report,
+   `migrate_login/` if enabled.
+
+**Rollback:** the old branches are untouched — repin back to `skorie_users`
+and redeploy. The new migrations are additive (nullable column + new
+tables), so the old code runs against the migrated database without reverse
+migrations.
 
 This is not (yet?) a standard pip-installable app. It expects you to create
 your own `users` app in your project and use these base models.
 
-## Setup
+## Setup (Authentik)
 
 ### 1. Stand up Authentik
 
@@ -133,30 +199,28 @@ REQUIRES_APPROVAL               = False     # gate self-registered users
 
 ## What lives on this branch
 
-- `django_users.idp.AuthentikIdP` — the single chokepoint for Authentik
-  admin API calls (`create_user`, `set_password`, `mark_email_verified`,
-  `logout`, etc.). Every other module that talks to the IdP goes through
-  this class.
+- `django_users.idp` — `get_auth_provider()` / `get_idp()` provider
+  selection, plus `AuthentikIdP`, the single chokepoint for Authentik admin
+  API calls (`create_user`, `set_password`, `mark_email_verified`,
+  `logout`, etc.).
+- `django_users.idp_keycloak.KeycloakIdP` — the same interface over
+  python-keycloak, plus keycloak-only extras (`verify_login`,
+  `is_temporary_password`, `clear_required_actions`, `get_access_token`).
 - `django_users.oidc_backend.AuthentikOIDCBackend` — custom
   `mozilla_django_oidc` backend. Looks up Django users by `authentik_id`
   (the OIDC `sub` claim); seeds an email `CommsChannel` on first login.
-- `CustomUserBase.authentik_id` — the only IdP-aware field on the user
-  model. Stores the OIDC `sub` UUID.
+- `CustomUserBase.keycloak_id` / `CustomUserBase.authentik_id` — one field
+  per external IdP; `user.idp_id` resolves the active provider's one.
+- `LoginView` — Django-session email+password login. Whatever backend
+  verifies the credentials, the session always records `ModelBackend` so
+  `get_user()` isn't tied to a short-lived IdP token.
 - Standard views: `AddUser`, `RegisterView`, `ChangePasswordView`,
   `ChangePasswordNowView`, `ForgotPassword`, `TellUsAbout`, etc. All
-  password-mutating views call `AuthentikIdP.set_password` rather than
-  hashing locally.
-
-## What does NOT live on this branch
-
-- No `LoginView` — `mozilla-django-oidc` handles the auth handshake.
-- No `Troubleshoot`, `ProblemSignup`, `ProblemLogin` — Authentik admin
-  UI replaces these support paths.
-- No `UserMigrationView`, `update_users` — no realm-to-realm migration on
-  a fresh project.
-- No `UnverifiedUsersList` — relied on direct reads from KC's user table.
-- No `add_to_keycloak` admin action.
-- No `KEYCLOAK_*` settings or `USE_KEYCLOAK` flag.
+  password-mutating views dispatch through `get_idp()`: external IdP when
+  one is active and the user is linked, local hash otherwise.
+- Keycloak-only views behind `ProviderRequiredMixin`: `UserMigrationView`,
+  `UpdateUsersView`, `UnverifiedUsersList`, `CheckEmailInKeycloak(+Public)`,
+  plus `Troubleshoot` / `ProblemSignup` / `ProblemLogin` support paths.
 
 ## Health check
 
@@ -171,8 +235,13 @@ After wiring everything up, run the system check:
 
 ## Branching policy
 
-- `main` — Keycloak baseline, used by skorie1 / skorie3 / whinnie / builtair.
-- `authentik` *(this branch)* — Authentik-only, used by skorie4 first.
+- `unified-auth` *(this branch)* — the merge target: all three auth methods
+  behind `AUTH_PROVIDER`. Once every consumer has repinned here, the legacy
+  branches below are archived and fixes land in one place only.
+- `skorie_users` — legacy Keycloak production branch (skorie1/2/3 pins until
+  they repin here). Frozen except emergency back-ports.
+- `skorie-users2` — legacy Django-auth line; superseded by this branch.
+- `authentik` — legacy Authentik-only line; superseded by this branch.
 
-The two diverge hard; bug fixes that apply to both must be applied to
-both manually until `main` is retired.
+Until consumers repin, a fix needed on a legacy branch must still be
+back-ported manually — check `git branch -a` and confirm scope with Dev.
