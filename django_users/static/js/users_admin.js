@@ -104,11 +104,7 @@ function show_user_table(selection, page_length, columns, query, panes, col_reor
             var d = dt.row(this).data();
             loading_on();
             //TODO: add next and include current search.
-            if (d.keycloak_id) {
-                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
-            } else {
-                 document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
-            }
+            document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
             loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
         }
     } );
@@ -234,11 +230,7 @@ const dt = $(selection).DataTable(table_options);
             var d = dt.row(this).data();
             loading_on();
             //TODO: add next and include current search.
-            if (d.keycloak_id) {
-                document.location.href = "/users/admin_user/" + d.keycloak_id + "/?next=user-browser";
-            } else {
             document.location.href = "/users/admin_user/" + d.id + "/?next=user-browser";
-            }
             loading_off();   // if don't do this then if you go back on the entry screen, this screen remains greyed out
         }
     } );
@@ -332,38 +324,13 @@ function check_user(callback) {
 }
 
 function get_user_signup_info(email, callback) {
-    // same as version in users.js
-    $.ajax({
-        method: "POST",
-        url: USERS_API_URL + "email_exists_on_keycloak_p/",
-        data: {'email': email},
-
-        success: function (d) {
-
-            d.not_registered = !(d.django_is_active && d.keycloak_enabled);
-
-            let output = "Created: "+(new Date(d.keycloak_created).toLocaleString()).toString()+"<br>";
-            output += "Django is active: " + (d.django_active ? 'Yes' : 'No') + "<br>";
-            if (d.django_user_keycloak_id) {
-                output += "Django linked to Keycloak: " + d.django_user_keycloak_id + "<br>";
-            }
-            output += "Keycloak verified: " + (d.verified ? 'Yes' : 'No') + "<br>";
-            output += "Keycloak enabled: " + (d.enabled ? 'Yes' : 'No') + "<br>";
-            if (d.keycloak_actions) {
-                output += "Keycloak Actions: " + d.keycloak_actions.length ? d.keycloak_actions.join(', ') : 'None' + "<br>";
-            }
-            d.output = output;
-            callback(d);
-
-
-        },
-        error: function () {
-            // If there's an error, show the error message
-            $('#apiError').show();
-            $('#apiResponse').hide();
-        }
-    });
-
+    // NEUTRALISED on the authentik branch: the email_exists_on_keycloak_p/ endpoint
+    // was removed. The admin "Check if already setup" button is disabled until the
+    // add-user/invite wizard is rebuilt against the Authentik admin API (TODO 3a06749).
+    // Original built a Keycloak status string (created/verified/enabled/actions) from
+    // that endpoint; see git history before this commit for the full implementation.
+    console.warn("get_user_signup_info: disabled pending Authentik integration");
+    if (callback) { callback({ django_user_id: 0, not_registered: true, output: "" }); }
 }
 function send_otp_via_channel(payload) {
     return new Promise((resolve, reject) => {
@@ -382,18 +349,19 @@ function send_otp_via_channel(payload) {
 
 
 function email_exists_keycloak(email, callback) {
-    $.ajax({
-        method: "POST",
-        url: USERS_API_URL + "email_exists_on_keycloak/",
-        data: {'email': email},
-
-    })
-        .done(function (data) {
-            callback(data);
-        })
-        .fail(function (xhr, status, error) {
-            console.log('failed' + status)
-        });
+    // NEUTRALISED on the authentik branch: the email_exists_on_keycloak/ endpoint
+    // was removed. The admin "Check if already setup" button is disabled until the
+    // add-user/invite wizard is rebuilt against the Authentik admin API (TODO 3a06749).
+    console.warn("email_exists_keycloak: disabled pending Authentik integration");
+    if (callback) { callback(null); }
+    // --- original Keycloak implementation (endpoint removed) ---
+    // $.ajax({
+    //     method: "POST",
+    //     url: USERS_API_URL + "email_exists_on_keycloak/",
+    //     data: {'email': email},
+    // })
+    //     .done(function (data) { callback(data); })
+    //     .fail(function (xhr, status, error) { console.log('failed' + status) });
 }
 
 function patch_user(pk, payload) {
@@ -550,8 +518,9 @@ function get_user_roles(email) {
 }
 
 function activate_user(userid) {
-    // we are activating both django and keycloak here
-    // previously just doing active
+    // Activates the user in Django and marks their email verified in the IdP.
+    // Hits the live UserViewset.activate_both DRF action (router-routed, guarded
+    // by authentik_enabled() server-side). Currently has no callers.
     const url = USERS_API_URL + "users/" + userid + "/activate_both/";
     $.ajax({
         method: "GET",

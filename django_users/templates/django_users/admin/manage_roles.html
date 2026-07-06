@@ -68,7 +68,7 @@
                             <td>{{ item.user.get_full_name }}</td>
                             <td>{{ item.user.email }}</td>
                             <td>{{ item.user.last_login }}</td>
-                         <td>{% if item.user %}<a href="{% if item.user.keycloak_id %}{% url "users:admin_user" item.user.keycloak_id %}{% else %}{% url "users:admin_user" item.user.pk %}{% endif %}" class="btn btn-sm btn-outline-primary">Admin</a>{% endif %}</td>                        </tr>
+                         <td>{% if item.user %}<a href="{% url "users:admin_user" item.user.pk %}" class="btn btn-sm btn-outline-primary">Admin</a>{% endif %}</td>                        </tr>
                     {% endfor %}
                     </tbody>
                 </table>
