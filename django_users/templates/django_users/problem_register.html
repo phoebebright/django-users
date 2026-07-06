@@ -1,0 +1,373 @@
+{% extends "django_users/users_narrow_base.html" %}
+{% load i18n %}
+{% load static %}
+
+
+{% block content %}
+
+{% if user.is_authenticated %}
+<p>You are successfully logged in as {{ user }}</p>
+{% else %}
+<h1>Help me {{ REGISTER_TERM }}</h1>
+
+<p>
+    If you have tried to Register, and haven't received a verification email,
+    check if it's in your SPAM folder.
+</p>
+
+<p>
+    <a class="text-decoration-underline"
+       data-bs-toggle="collapse"
+       href="#why-explanation"
+       role="button"
+       aria-expanded="false"
+       aria-controls="why-explanation">
+        Why are we sending you a verification email?
+    </a>
+</p>
+
+<div class="collapse" id="why-explanation">
+    <div class="mt-2">
+       <p>
+            In order to make sure we are able to send you important information about your entries, we send you an
+            email with a verification link. Clicking the link confirms you can
+            receive emails from us. While this usually works, there can be problems
+            with some email providers, particularly BigPond, that can be too
+            enthusiastic in labeling emails as spam and may put the verification
+            email in your spam folder or not deliver them at all.
+            If you are unable to receive the email,
+            <a href="{% url 'contact' %}" class="text-decoration-underline">contact us directly</a>.
+        </p>
+    </div>
+</div>
+
+<p>Start by entering the email you used to {{ REGISTER_TERM }}:</p>
+
+
+
+<form id="emailForm">
+    <div class="mb-3">
+        <input type="hidden" id="keycloak_id" value="">
+        <input type="hidden" id="user_id" value="">
+        <input type="email" class="form-control" id="entered_email" name="email" placeholder="enter email..." required value="{{ email }}">
+        <div class="invalid-feedback">
+            Please enter the email you used to {{ REGISTER_TERM }}.
+        </div>
+    </div>
+    <div class="d-grid">
+        <input type="submit" id="submitBtn" class="btn btn-primary" value="Find Account..." disabled>
+    </div>
+</form>
+
+<div id="result" class="mt-4"></div>
+
+<div id="login_form_div" style="display:none;">
+    {% include "django_users/include_login_form.html" %}
+</div>
+<!-- Placeholder for displaying API response -->
+<div id="apiResponse" class="mt-4" style="display: none;">
+    <h4>Status Information</h4>
+    <ul class="list-group">
+        <li class="list-group-item"><strong>Account Created:</strong> <span id="created"></span></li>
+        <li class="list-group-item"><strong>Enabled:</strong> <span id="enabled"></span></li>
+        <li class="list-group-item"><strong>Required Actions:</strong> <span id="actions"></span></li>
+        <li class="list-group-item"><strong>Email Verified:</strong> <span id="verified"></span></li>
+    </ul>
+</div>
+
+<!-- Error message -->
+<div id="apiError" class="alert alert-danger mt-4" style="display: none;">
+    There was an error processing your request. Please try again later.
+</div>
+
+
+
+<div id="verify_how" style="display:none;">
+    {#            <h4>Verify your Account:</h4>#}
+    {#            <p>Choose how you would like to verify your account:</p>#}
+    {##}
+    {##}
+    {#            <div id="existing_channels"></div>#}
+    {##}
+    {#            <a class="btn btn-primary w-100 mt-3" href='{% url "users:add_channel" %}'><i class="bi bi-plus"></i>{% trans "Add Another Contact Method" %}</a>#}
+
+    <button id="resend-btn" type="button" class="btn btn-primary w-100 mt-3">
+        <i class="bi bi-plus"></i>{% trans "Resend Verification Email" %}
+    </button>
+</div>
+
+
+
+{% endif %}
+{% endblock %}
+
+{% block js %}
+<script src="{% static 'js/users.js' %}"></script>
+<script>
+
+    let emailInput = $('#entered_email');
+    let submitBtn = $('#submitBtn');
+    const verify_channel_url = "{% url 'users:verify_channel' 0 %}";
+
+    $(document).ready(function () {
+
+        let pin = 0;
+
+        checkEmail();
+
+        // Function to check if the email is valid
+        function validateEmail(email) {
+            let emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            return emailPattern.test(email);
+        }
+
+        // Check the email validity and update form state accordingly
+        function checkEmail() {
+            let email = emailInput.val();
+            if (validateEmail(email)) {
+                emailInput.removeClass('is-invalid').addClass('is-valid');
+                submitBtn.prop('disabled', false);
+            } else if (email) {
+                // Only show invalid state if user has entered something
+                emailInput.removeClass('is-valid').addClass('is-invalid');
+                submitBtn.prop('disabled', true);
+            } else {
+                // Empty field on load - no validation styling
+                emailInput.removeClass('is-valid is-invalid');
+                submitBtn.prop('disabled', true);
+            }
+        }
+
+        // Validate email input on any change
+        emailInput.on('input', function () {
+            checkEmail();
+        });
+
+        // On page load, check if email is already valid (for query param prefill)
+        if (emailInput.val()) {
+            checkEmail();
+        }
+
+        $('.verify_by_sms').on('click', function () {
+            // Show the phone input field when the button is clicked
+            $('#phoneInputContainer').slideDown();
+
+            // Enable the phone number input field to be required
+            $('#phone_number').prop('required', true);
+        });
+
+        // Function to validate phone number (basic regex for international numbers)
+        function validatePhoneNumber(phoneNumber) {
+            let phonePattern = /^\+?[1-9]\d{1,14}$/;  // Basic pattern for international phone numbers
+            return phonePattern.test(phoneNumber);
+        }
+
+        // Validate phone number and show 'Send SMS' button
+        $('#phone_number').on('input', function () {
+            let phoneNumber = $(this).val();
+            let sendSmsBtn = $('#sendSmsBtn');
+            let submitBtn = $('#submitBtn');
+
+            if (validatePhoneNumber(phoneNumber)) {
+
+                $(this).removeClass('is-invalid').addClass('is-valid');
+
+                sendSmsBtn.show();  // Show the 'Send SMS' button once phone number is valid
+            } else {
+                $(this).removeClass('is-valid').addClass('is-invalid');
+                sendSmsBtn.hide();  // Hide the 'Send SMS' button if the phone number becomes invalid
+                submitBtn.prop('disabled', true);
+            }
+        });
+
+        // Handle 'Send SMS' button click
+        $('#sendSmsBtn').on('click', function () {
+            const user_id = $('#user_id').val();
+            const phone_no = $('#phone_number').val();
+
+            if (user_id && phone_no) {
+                $.ajax({
+                    method: "POST",
+                    url: USERS_API_URL + "send_verification_sms/",
+                    data: {'user_id': user_id, 'phone_no': phone_no},
+
+                    success: function (d) {
+                        pin = d.pin
+                        $('#sendSmsContainer').hide();
+                        $('#pinInputContainer').slideDown();
+                    },
+                    fail: function(d) {
+                        $('#sendSmsContainer').hide();
+                        $('#pinInputContainer').slideDown();
+
+                    }
+                });
+            }
+
+        });
+
+        // Validate the PIN input when entered
+        $('#pin').on('input', function () {
+            let enteredPin = $(this).val();
+            let submitBtn = $('#submitBtn');
+            const user_id = $('#user_id').val();
+            const phone_no = $('#phone_number').val();
+
+            if (enteredPin.length === 6 && enteredPin === pin) {
+                $(this).removeClass('is-invalid').addClass('is-valid');
+
+                $.ajax({
+                    method: "POST",
+                    url: USERS_API_URL + "verify_user_with_sms/",
+                    data: {'user_id': user_id, 'phone_no':phone_no },
+                    success: function (d) {
+                        $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href={% url LOGIN_URL %} class="btn btn-success-outline">{{LOGIN_TERM}}</a></div>');
+                    },
+                    error: function () {
+                        $('#result').html('<div class="alert alert-danger" role="alert">There was an error verifying your account</div>');
+                    }
+                });
+            } else {
+                $(this).removeClass('is-valid').addClass('is-invalid');
+
+            }
+        });
+    });
+
+    function clear_feedback() {
+
+        // tidy from earlier calls
+        $("#result").slideUp();
+        $("#verify_how").slideUp();
+        $("#apiError").slideUp();
+        $("#user_id").val(0);
+        $("#keycloak_id").val(0);
+    }
+
+    clear_feedback();
+
+    $(document).on('submit', '#emailForm', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const email = emailInput.val();
+        $('#apiError').html("").hide();
+        $('#apiResponse').html("").hide();
+        check_user_exists(email,
+            function(d) {
+
+                $("#result").slideUp();
+                $("#verify_how").slideUp();
+                $(".login_form").slideUp();
+                $("#apiResponse").slideUp();
+
+                const keycloak_id = $('#keycloak_id').val();
+                $("#user_id").val(d.user_id);
+                $("#keycloak_id").val(d.django_user);
+
+
+                // check django keycloak_id is the same as the one in keycloak - if there is one
+                if (d.channels ) {
+                    // for each d.channel create a button to click
+                    $('#existing_channels').html(show_channels(d.channels));
+
+
+                }  else if (d.not_registered) {
+                    $('#result').html('<div class="alert alert-danger" role="alert">This email was not found .  Check you have entered the email correctly above or {{ REGISTER_URL }} again. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</div>');
+                    $("#result").slideDown();
+                    return;
+                } else if (d.user_id && d.django_user ) { // TODO: need to check another way I think
+                    if (d.user_id != d.django_user) {
+                        $('#result').html('<div class="alert alert-danger" role="alert">The email you entered is already in use by another account.</div>');
+                        $("#result").slideDown();
+                        return;
+                    }
+                }
+                // If the API call is successful, display the data
+
+                $("#apiResponse").html(d.output).slideDown();
+
+                const encoded_email = encodeURIComponent(email);
+                if (d.is_active) {
+
+                    let link = "{{PASSWORD_RESET}}?email=" + encoded_email;
+                    $('#result').html(`
+  <div class="alert alert-success" role="alert">
+    Your account is verified and ready to use.
+  </div>
+  <div class="d-flex justify-content-between mt-3">
+    <a class="btn btn-secondary" href="${link}">Forgot Password?</a>
+    <a class="btn btn-primary" href="{% url LOGIN_URL %}?email=${encoded_email}">{{LOGIN_TERM}}</a>
+  </div>
+`).slideDown();
+                    $("#id_email").val(email);
+                    $("#id_password").focus();
+                    $(".login_form").slideDown();
+
+                } else {
+                    $('#result').html('<div class="alert alert-warning" role="alert">Your account is not yet verified.</div>').slideDown();
+                    $("#verify_how").slideDown();
+
+                }
+                $("#result").slideDown();
+
+            },
+            function(error){
+
+                $("#result").slideUp();
+                $("#verify_how").slideUp();
+                $(".login_form").slideUp();
+                $("#apiResponse").slideUp();
+
+                // If there's an error, show the error message
+                $('#result').html('<div class="alert alert-warning" role="alert">'+error+'</div>').slideDown();
+            });
+
+    });
+
+    $(document).on('click', '.verify', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const user_id = $('#user_id').val();
+
+        var channel_pk = $(this).data('channel_pk');
+        document.location.href=verify_channel_url.replace("0", channel_pk);
+    });
+
+    $(document).on('click', '#resend-btn', function () {
+        const email = emailInput.val();
+$("#resend-btn").html("Resending...").prop("disabled", true);
+
+        $.ajax({
+            url: '{% url "usersapi:resend_verify_code" %}',
+            type: 'GET',                      // use 'GET' if your view only accepts GET
+            dataType: 'json',
+            data: { email: email },
+            success: function (resp, status, xhr) {
+                const verificationType = encodeURIComponent(resp.verification_type || '');
+                const targetUrl = `${verify_channel_url}/?resend=true&verification_type=${verificationType}`;
+
+
+
+                // Prefer server returning a redirect URL or channel_id
+                if (resp && resp.redirect_url) {
+                    window.location.href = resp.redirect_url;
+                } else if (resp && resp.channel_id) {
+
+                    window.location.href = targetUrl.replace('0', resp.channel_id);
+                } else {
+                    // Fallback: honor a Location header if your view sets it
+                    const loc = xhr.getResponseHeader('Location');
+                    if (loc) return window.location.assign(loc);
+
+                    $("#resend-btn").html("Verification email resent").prop("disabled", true);
+                }
+            },
+            error: function (xhr) {
+                const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Failed to resend verification email.';
+                alert(msg);
+            }
+        });
+    });
+
+</script>
+{% endblock %}
