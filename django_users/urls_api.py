@@ -8,7 +8,8 @@ from django.urls import path, include
 from django_users.api import UserViewset, UserListViewset, CheckEmail, UserCountry, CreateUser, SendOTP2User, \
     GenerateOTP, GenerateRecoveryLink, UserProfileUpdate, SetTemporaryPassword, toggle_role, \
     resend_activation, ChangePassword, CommsChannelViewSet, PersonViewSet, RoleViewSet, OrganisationViewSet, \
-     SendVerificationCode, CheckUserPublic, PagedUserListViewset, email_exists_or_404
+     SendVerificationCode, CheckUserPublic, PagedUserListViewset, email_exists_or_404, \
+    CheckEmailInKeycloak, CheckEmailInKeycloakPublic
 from django_users.views import login_with_token
 
 # Use DRF's DefaultRouter, not django.db.router
@@ -30,8 +31,10 @@ urlpatterns = [
     #these are prepended with api/u1
     path('change_pw/', ChangePassword.as_view(), name="change_pw"),
     path('resend_activation/', resend_activation, name="resend_activation"),
-    # email_exists_on_keycloak / _p removed on the authentik branch — Authentik
-    # admin UI replaces these support endpoints.
+    # Keycloak-only endpoints: wired under every provider, 404 unless
+    # AUTH_PROVIDER == 'keycloak' (driven by the admin troubleshoot JS).
+    path('email_exists_on_keycloak/', CheckEmailInKeycloak.as_view(), name='email_exists_on_keycloak'),
+    path('email_exists_on_keycloak_p/', CheckEmailInKeycloakPublic.as_view(), name='email_exists_on_keycloak_p'),
     path('set_temp_password/', SetTemporaryPassword.as_view(), name='set_temp_password'),
     path('toggle_role/', toggle_role, name="toggle_role"),
 

@@ -53,6 +53,23 @@ def get_next(request, event_ref):
     return url if url else "/"
 
 
+class ProviderRequiredMixin:
+    """404 unless the active AUTH_PROVIDER matches ``required_provider``.
+
+    Used so provider-specific routes (e.g. Keycloak admin reports) can stay
+    permanently in urls.py — reverse()/{% url %} always resolve — while the
+    views refuse to serve under the wrong provider.
+    """
+    required_provider = None
+
+    def dispatch(self, request, *args, **kwargs):
+        from django.http import Http404
+        from ..idp import get_auth_provider
+        if self.required_provider and get_auth_provider() != self.required_provider:
+            raise Http404(f"Not available: requires AUTH_PROVIDER={self.required_provider!r}")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class GoNextMixin():
     '''used for event views to work out where to go next'''
 

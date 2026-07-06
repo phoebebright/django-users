@@ -277,12 +277,13 @@ class CommsChannelBase(models.Model):
             self.user.mobile_verified_at = now
             user_updates.append('mobile_verified_at')
 
-        if self.user.authentik_id and authentik_enabled():
+        idp = get_idp()
+        if self.user.idp_id and idp:
             try:
-                AuthentikIdP().mark_email_verified(self.user.authentik_id)
-            except AuthentikError as exc:
+                idp.mark_email_verified(self.user.idp_id)
+            except IdPError as exc:
                 logging.getLogger(__name__).warning(
-                    "Could not mark email verified in Authentik for user %s: %s",
+                    "Could not mark email verified in IdP for user %s: %s",
                     self.user.pk, exc,
                 )
 
@@ -1870,39 +1871,45 @@ class CustomUserBase(CustomUserBaseBasic):
             "django_user_id": django_user.pk if django_user else 0,
         }
 
-    def create_authentik_user_from_user(self, password=None, requester=None):
-        """Create the user in Authentik and store the resulting UUID locally.
+    def create_idp_user_from_user(self, password=None, requester=None):
+        """Create the user in the active external IdP and store its id locally.
 
         If `password` is supplied, sets it on the new IdP user. If omitted,
         a random temporary password is generated and returned (caller is
-        responsible for delivering it).
+        responsible for delivering it). Returns None when no external IdP is
+        active or the create fails.
         """
-        if not authentik_enabled():
+        idp = get_idp()
+        if idp is None:
             return None
-        idp = AuthentikIdP()
         try:
             idp_user = idp.create_user(
                 email=self.email,
                 first_name=self.first_name,
                 last_name=self.last_name,
             )
-        except AuthentikError as exc:
+        except IdPError as exc:
             logging.getLogger(__name__).error(
-                "Failed to create Authentik user for %s: %s", self.email, exc,
+                "Failed to create IdP user for %s: %s", self.email, exc,
             )
             return None
 
-        self.authentik_id = idp_user.uuid
-        self.save()
+        # Authentik identifies users by uuid, Keycloak by id.
+        idp_user_id = getattr(idp_user, 'uuid', None) or idp_user.id
+        self.set_idp_id(idp_user_id)
 
         if password:
-            idp.set_password(idp_user.uuid, password)
+            idp.set_password(idp_user_id, password)
             return password
-        return idp.set_temporary_password(idp_user.uuid)
+        return idp.set_temporary_password(idp_user_id)
+
+    # Back-compat name — host projects call this directly.
+    create_authentik_user_from_user = create_idp_user_from_user
 
     def update_email_verified_in_idp(self):
-        if self.authentik_id and authentik_enabled():
-            AuthentikIdP().mark_email_verified(self.authentik_id)
+        idp = get_idp()
+        if self.idp_id and idp:
+            idp.mark_email_verified(self.idp_id)
 
     @property
     def idp_id(self):

@@ -173,11 +173,12 @@ class UserViewset(viewsets.ModelViewSet):
 
         logger.info(f"Activating user {user} in django by {request.user}")
 
-        if user.authentik_id and authentik_enabled():
+        idp = get_idp()
+        if user.idp_id and idp:
             try:
-                AuthentikIdP().mark_email_verified(user.authentik_id)
+                idp.mark_email_verified(user.idp_id)
                 logger.info(f"Marked email verified in IdP for {user} by {request.user}")
-            except AuthentikError as exc:
+            except IdPError as exc:
                 logger.warning(f"Could not mark email verified in IdP for {user}: {exc}")
 
         return Response("OK")
@@ -203,10 +204,10 @@ class UserViewset(viewsets.ModelViewSet):
         '''ensure the user has an Authentik record; create one if missing.'''
         user = self.get_object()
 
-        if not user.authentik_id:
-            password = user.create_authentik_user_from_user(requester=self.request.user)
-            if password and authentik_enabled():
-                AuthentikIdP().mark_email_verified(user.authentik_id)
+        if not user.idp_id:
+            password = user.create_idp_user_from_user(requester=self.request.user)
+            if password and get_idp():
+                get_idp().mark_email_verified(user.idp_id)
                 messages.info(self.request, f"Created IdP account — temporary password is {password}")
             else:
                 messages.error(self.request, _('Failed to create user account in IdP.'))
@@ -292,15 +293,17 @@ class GenerateOTP(UserCanAdministerMixin, APIView):
         otp = ''.join(random.choices(string.digits, k=6))
         recipient.activation_code = otp
 
-        if getattr(recipient, 'authentik_id', None) and authentik_enabled():
+        idp = get_idp()
+        if recipient.idp_id and idp:
             # External IdP owns the credential; set the password there and let
-            # the IdP prompt for a change on next login.
+            # the IdP prompt for a change on next login. Keycloak refuses
+            # direct-grant logins on must-change credentials, so there the OTP
+            # also stays usable via the activation_code login fallback.
             recipient.save(update_fields=['activation_code'])
             try:
-                idp = AuthentikIdP()
-                idp.set_password(recipient.authentik_id, otp)
-                idp.set_must_change_password(recipient.authentik_id, True)
-            except AuthentikError as exc:
+                idp.set_password(recipient.idp_id, otp)
+                idp.set_must_change_password(recipient.idp_id, True)
+            except IdPError as exc:
                 return Response(
                     {"error": f"Failed to set IdP password: {exc}"},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -349,25 +352,42 @@ class GenerateRecoveryLink(UserCanAdministerMixin, APIView):
     def post(self, request, pk):
         recipient = get_object_or_404(User, pk=pk)
 
-        if not authentik_enabled():
+        provider = get_auth_provider()
+        if provider == "authentik":
+            if not getattr(recipient, 'authentik_id', None):
+                return Response(
+                    {"error": "User has no IdP account; cannot generate a recovery link."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                link = AuthentikIdP().generate_recovery_link(recipient.authentik_id)
+            except AuthentikError as exc:
+                return Response(
+                    {"error": f"Failed to generate recovery link: {exc}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif provider == "keycloak":
+            # Keycloak's equivalent (execute-actions email) sends its own mail
+            # with different semantics; use the OTP endpoint for keycloak hosts.
             return Response(
-                {"error": "Recovery link requires Authentik to be configured."},
+                {"error": "Recovery links are not supported with Keycloak; generate an OTP instead."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        if not getattr(recipient, 'authentik_id', None):
-            return Response(
-                {"error": "User has no IdP account; recovery link requires Authentik."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            link = AuthentikIdP().generate_recovery_link(recipient.authentik_id)
-        except AuthentikError as exc:
-            return Response(
-                {"error": f"Failed to generate recovery link: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        else:
+            # Plain Django auth: reuse the package's single-use, time-limited
+            # magic-link machinery (same links the forgot-password flow sends).
+            CommsChannel = apps.get_model('users', 'CommsChannel')
+            VerificationCode = apps.get_model('users', 'VerificationCode')
+            channel = CommsChannel.objects.filter(
+                user=recipient, channel_type='email').first()
+            if not channel:
+                return Response(
+                    {"error": "User has no email channel to attach a recovery link to."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            vc, context = VerificationCode.create_for_magic_link(
+                user=recipient, channel=channel, purpose="forgot_password")
+            link = context['magic_link']
 
         sent = False
         send_via = request.data.get('send')
@@ -873,6 +893,152 @@ class CheckUserPublicBase(CheckUserPublic):
     pass
 
 
+# ---------------------------------------------------------------------------
+# Keycloak-only API views (ported from the skorie_users branch). Gated so the
+# routes stay wired under every provider but 404 unless AUTH_PROVIDER is
+# 'keycloak'. The admin troubleshoot JS (users.js/users_admin.js) drives these.
+# ---------------------------------------------------------------------------
+
+class _KeycloakOnlyAPIView(APIView):
+    def initial(self, request, *args, **kwargs):
+        from .idp import get_auth_provider
+        if get_auth_provider() != 'keycloak':
+            raise Http404("Not available: requires AUTH_PROVIDER='keycloak'")
+        super().initial(request, *args, **kwargs)
+
+
+class CheckEmailInKeycloak(_KeycloakOnlyAPIView):
+    '''
+    check if an email has already been registered in keycloak
+    '''
+    throttle_classes = [CustomOrdinaryUserRateThrottle, ]
+
+    def get_throttle_classes(self):
+        if self.request.user.is_administrator:
+            return [AdminUserRateThrottle, ]
+        else:
+            return [CustomOrdinaryUserRateThrottle, ]
+
+    def post(self, request, *args, **kwargs):
+        from .keycloak import search_user_by_email_in_keycloak
+
+        email = normalise_email(request.POST.get('email'))
+        if email:
+            user = search_user_by_email_in_keycloak(email, request.user)
+            if user:
+                return Response(user, status=status.HTTP_200_OK)
+            else:
+                return Response({"status": "N"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"status": "N"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CheckEmailInKeycloakPublic(_KeycloakOnlyAPIView):
+    '''
+    check if an email has already been registered in keycloak, cross-linking
+    the django user (creating or linking keycloak_id where needed)
+    '''
+
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomAnonRateThrottle]
+
+    def get_throttle_classes(self):
+        """
+        Dynamically assign throttles based on user type.
+        """
+        if self.request.user.is_authenticated:
+            if self.request.user.is_administrator:
+                return [AdminUserRateThrottle()]
+            else:
+                return [CustomOrdinaryUserRateThrottle()]
+        else:
+            return [CustomAnonRateThrottle()]
+
+    def post(self, request, *args, **kwargs):
+        from .keycloak import search_user_by_email_in_keycloak
+
+        User = get_user_model()
+        create_in_django = True  # for now we are defaulting to creating the django user if the keycloak one is created
+        email = request.POST.get('email', None)
+        updated_keycloak_id = False
+
+        if not email:
+            return Response({"status": "N"}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = normalise_email(email)
+        channels = []
+
+        try:
+            django_user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            django_user = None
+        else:
+            set_current_user(request, django_user.id, "PROBLEM")
+
+            # migrate existing channels
+            django_user.migrate_channels()
+
+            for item in django_user.comms_channels.all():
+                channels.append(
+                    {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
+                     'verified': item.is_verified})
+
+        keycloak_user = search_user_by_email_in_keycloak(email, request.user)
+
+        # make sure we can link users
+        if (django_user and keycloak_user) and not str(django_user.keycloak_id) == keycloak_user['id']:
+            django_user.keycloak_id = keycloak_user['id']
+            django_user.save(update_fields=['keycloak_id', ])
+            updated_keycloak_id = True
+
+        elif not django_user and keycloak_user and create_in_django:
+            # remove this code when all users transitioned to new signup system as should not apply
+            with transaction.atomic():
+                # create user in django
+                django_user = User.objects.create_user(email=email.lower(), username=email,
+                                                       first_name=keycloak_user['firstName'],
+                                                       last_name=keycloak_user['lastName'],
+                                                       )
+                django_user.keycloak_id = keycloak_user['id']
+                django_user.save(update_fields=['keycloak_id', ])
+
+                for item in django_user.comms_channels.all():
+                    channels.append(
+                        {'channel_id': item.pk, 'channel_type': item.channel_type, 'value': item.value,
+                         'verified': item.is_verified})
+
+            set_current_user(request, django_user.id, "REGISTER")
+
+        if keycloak_user:
+            data = {
+                'updated_keycloak_id': updated_keycloak_id,
+                "keycloak_created": keycloak_user['createdTimestamp'],
+                "keycloak_enabled": keycloak_user['enabled'],
+                "keycloak_actions": keycloak_user['requiredActions'],
+                "keycloak_verified": keycloak_user['emailVerified'],
+                "django_is_active": django_user.is_active,
+                "formal_name": django_user.person.formal_name,
+                "friendly_name": django_user.person.friendly_name or django_user.person.formal_name,
+                "channels": channels,
+            }
+            if request.user.is_authenticated and request.user.is_organiser:
+                data.update({
+                    "keycloak_user_id": keycloak_user['id'],
+                    "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+                    "django_user_id": django_user.pk if django_user else 0,
+                })
+            return JsonResponse(data)
+
+        return JsonResponse({
+            'updated_keycloak_id': updated_keycloak_id,
+            "keycloak_user_id": '',
+            "django_user_keycloak_id": django_user.keycloak_id if django_user else 0,
+            "django_user_id": django_user.pk if django_user else 0,
+            "django_is_active": django_user.is_active if django_user else False,
+            "channels": channels,
+        })
+
+
 class SetTemporaryPassword(APIView):
     """Set a temporary password on an existing IdP user."""
     permission_classes = [IsAuthenticated, IsAdministratorPermission]
@@ -884,12 +1050,14 @@ class SetTemporaryPassword(APIView):
         if not sub or not new_password:
             return Response({"error": "username (sub) and new_password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not authentik_enabled():
-            return Response({"error": "Authentik is not configured."}, status=status.HTTP_400_BAD_REQUEST)
+        idp = get_idp()
+        if not idp:
+            return Response({"error": "No external IdP is configured (AUTH_PROVIDER=django)."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            AuthentikIdP().set_password(sub, new_password)
-        except AuthentikError as exc:
+            idp.set_password(sub, new_password)
+        except IdPError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"message": "Temporary password set successfully."})
@@ -1087,10 +1255,10 @@ class CreateUser(APIView):
         email = data['email']
         password = (data.get('password') or '').replace(' ', '')
 
-        if not authentik_enabled():
-            return Response({"error": "Authentik is not configured."}, status=HTTP_400_BAD_REQUEST)
-
-        idp = AuthentikIdP()
+        idp = get_idp()
+        if not idp:
+            return Response({"error": "No external IdP is configured (AUTH_PROVIDER=django)."},
+                            status=HTTP_400_BAD_REQUEST)
 
         try:
             idp_user = idp.create_user(
@@ -1098,23 +1266,27 @@ class CreateUser(APIView):
                 first_name=data.get('first_name', ''),
                 last_name=data.get('last_name', ''),
             )
-        except AuthentikError as exc:
+        except IdPError as exc:
             logger.error(f"Failed to create IdP user for {email}: {exc}")
             return Response({"error": "Failed to create IdP user"}, status=HTTP_400_BAD_REQUEST)
 
+        # Authentik identifies users by uuid, Keycloak by id.
+        idp_user_id = getattr(idp_user, 'uuid', None) or idp_user.id
+        idp_field = 'keycloak_id' if get_auth_provider() == 'keycloak' else 'authentik_id'
+
         if password:
-            idp.set_password(idp_user.uuid, password)
-        idp.mark_email_verified(idp_user.uuid)
+            idp.set_password(idp_user_id, password)
+        idp.mark_email_verified(idp_user_id)
 
         try:
-            user = User.objects.get(authentik_id=idp_user.uuid)
+            user = User.objects.get(**{idp_field: idp_user_id})
         except User.DoesNotExist:
             try:
                 user = User.objects.get(email=email)
                 logger.warning(
-                    f"User {user.pk} already exists with email but no authentik_id; linking to {idp_user.uuid}"
+                    f"User {user.pk} already exists with email but no {idp_field}; linking to {idp_user_id}"
                 )
-                user.authentik_id = idp_user.uuid
+                setattr(user, idp_field, idp_user_id)
                 user.save()
                 serializer = UserSerializer(user)
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1124,9 +1296,9 @@ class CreateUser(APIView):
                     username=email,
                     first_name=data.get('first_name', ''),
                     last_name=data.get('last_name', ''),
-                    authentik_id=idp_user.uuid,
                     creator=requester,
                     activation_code=password,
+                    **{idp_field: idp_user_id},
                 )
                 serializer = UserSerializer(user)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)

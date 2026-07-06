@@ -48,7 +48,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
                                  update_session_auth_hash)
 
 from .tools.permission_mixins import UserCanAdministerMixin
-from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
+from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
 from .utils import normalise_email, get_mail_class
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -64,6 +64,10 @@ LOGIN_REGISTER = getattr(settings, 'LOGIN_REGISTER', 'users:register')
 CHANNEL_EMAIL = getattr(settings, 'CHANNEL_EMAIL', 'email')  # should never need to change this
 VERIFY_ONCE = getattr(settings, 'VERIFY_ONCE',
                       True)  # if True then user will be auto verified  - currently does not handle VERIFY_ONCE = False
+
+# Dual-write window while a host migrates users from Keycloak to Django
+# passwords: successful Keycloak logins also set the Django password hash.
+KEYCLOAK_MIGRATING = getattr(settings, 'KEYCLOAK_MIGRATING', False)
 
 from .idp import (AuthentikIdP, AuthentikError, IdPError, authentik_enabled,
                   keycloak_enabled, get_auth_provider, get_idp)
@@ -127,42 +131,52 @@ class AddUser(generic.CreateView):
         return kwargs
 
     def form_valid(self, form):
-        '''Create the IdP user first, then the Django user pointing at it.'''
+        '''Create the IdP user first (when an external IdP is active), then
+        the Django user pointing at it. Plain Django auth skips the IdP and
+        stores the initial password locally.'''
         me = self.request.user
         data = form.cleaned_data
         password = (data.get('password') or '').replace(' ', '')
 
-        if not authentik_enabled():
-            form.add_error(None, _('Authentik is not configured for this project.'))
-            return self.form_invalid(form)
+        idp = get_idp()
+        idp_user_id = None
+        if idp:
+            try:
+                idp_user = idp.create_user(
+                    email=data['email'],
+                    first_name=data.get('first_name', ''),
+                    last_name=data.get('last_name', ''),
+                )
+            except IdPError as exc:
+                logger.error("Failed to create IdP user for %s: %s", data['email'], exc)
+                form.add_error(None, _('Could not create user account in IdP.'))
+                return self.form_invalid(form)
 
-        idp = AuthentikIdP()
-        try:
-            idp_user = idp.create_user(
-                email=data['email'],
-                first_name=data.get('first_name', ''),
-                last_name=data.get('last_name', ''),
-            )
-        except AuthentikError as exc:
-            logger.error("Failed to create Authentik user for %s: %s", data['email'], exc)
-            form.add_error(None, _('Could not create user account in IdP.'))
-            return self.form_invalid(form)
-
-        if password:
-            idp.set_password(idp_user.uuid, password)
-        idp.mark_email_verified(idp_user.uuid)
+            # Authentik identifies users by uuid, Keycloak by id.
+            idp_user_id = getattr(idp_user, 'uuid', None) or idp_user.id
+            if password:
+                idp.set_password(idp_user_id, password)
+            idp.mark_email_verified(idp_user_id)
 
         user = form.save(commit=False)
         if not isinstance(user, User):
             user = user.instance
 
-        user.authentik_id = idp_user.uuid
+        if idp_user_id:
+            if get_auth_provider() == "keycloak":
+                user.keycloak_id = idp_user_id
+            else:
+                user.authentik_id = idp_user_id
         self.otp_code = password
         user.attributes = {'temporary_password': self.otp_code}
         user.activation_code = self.otp_code
         user.creator = me
         if not user.username:
             user.username = user.email
+        if not idp and password:
+            # Local auth owns the credential: the emailed one-time password
+            # must also work as the login password.
+            user.set_password(password)
         user.save()
 
         self.new_user = user
@@ -257,21 +271,31 @@ def send_test_email(request):
 
 
 def logout(request):
-    """GET-accepting logout.
+    """GET-accepting, provider-aware logout.
 
-    1. Clear the Django session.
-    2. Redirect the browser to Authentik's end-session endpoint so the IdP
-       session is also terminated and the user is sent back to
-       LOGOUT_REDIRECT_URL.
-
-    Falls back to a local-only logout if OIDC_OP_LOGOUT_ENDPOINT is not
-    configured.
+    * keycloak  — end the user's Keycloak session server-side, then clear the
+      Django session (replaces the old logout_user_from_keycloak_and_django
+      URL wiring from the skorie_users branch).
+    * authentik — clear the Django session, then redirect the browser to the
+      OIDC end-session endpoint so the IdP session dies too.
+    * django    — local-only logout.
     """
     nextpage = get_legitimate_redirect(request)
+
+    if keycloak_enabled():
+        user = request.user
+        if user.is_authenticated and getattr(user, 'keycloak_id', None):
+            try:
+                get_idp().logout(user.keycloak_id)
+            except IdPError as exc:
+                logger.error("Failed to end Keycloak session for %s: %s", user.pk, exc)
+        log_out(request)
+        return HttpResponseRedirect(nextpage)
+
     log_out(request)
 
     end_session = getattr(settings, "OIDC_OP_LOGOUT_ENDPOINT", "")
-    if end_session:
+    if authentik_enabled() and end_session:
         from urllib.parse import urlencode
         params = {"post_logout_redirect_uri": request.build_absolute_uri(nextpage)}
         return HttpResponseRedirect(f"{end_session}?{urlencode(params)}")
@@ -373,13 +397,6 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
 
 @method_decorator(never_cache, name='dispatch')
-# Troubleshoot, ProblemSignup, ProblemLogin removed on the authentik branch.
-# These were Keycloak-specific debugging flows. Authentik's admin UI replaces
-# the support paths; for users with login problems, point them at the IdP's
-# password-reset flow.
-
-
-@method_decorator(never_cache, name='dispatch')
 class NewUsers(UserCanAdministerMixin, TemplateView):
     template_name = "django_users/admin/new_users.html"
 
@@ -398,9 +415,175 @@ class NewUsers(UserCanAdministerMixin, TemplateView):
         return context
 
 
-# get_keycloak_signup_url and UserMigrationView removed on the authentik branch.
-# OIDC discovery handles authorize URLs; old-realm migration is N/A on a fresh
-# project.
+# ---------------------------------------------------------------------------
+# Keycloak-only views (ported from the skorie_users branch). Kept behind
+# ProviderRequiredMixin / keycloak_enabled() so the routes stay wired under
+# every provider but only serve when AUTH_PROVIDER == 'keycloak'.
+# ---------------------------------------------------------------------------
+
+def get_keycloak_signup_url(email):
+    """Construct the hosted Keycloak signup URL with the email pre-filled."""
+    base_url = f"{settings.KEYCLOAK_CLIENTS['DEFAULT']['URL']}/realms/{settings.KEYCLOAK_CLIENTS['DEFAULT']['REALM']}/protocol/openid-connect/auth"
+    params = {
+        'client_id': settings.KEYCLOAK_CLIENTS['DEFAULT']['CLIENT_ID'],
+        'response_type': 'code',
+        'scope': 'email',
+        'redirect_uri': f"{settings.SITE_URL}/keycloak/login-complete/",
+        'login_hint': email,
+        'action': 'register'
+    }
+    signup_url = f"{base_url}?{urlencode(params)}"
+    return signup_url
+
+
+@method_decorator(never_cache, name='dispatch')
+class UserMigrationView(ProviderRequiredMixin, View):
+    '''Migrate a user from an old Keycloak realm to the current one at login
+    time, then log them in. POST only. Keycloak hosts only.'''
+    required_provider = 'keycloak'
+    http_method_names = ['post', ]
+
+    def authenticate_old_keycloak(self, email, password):
+        try:
+            assert settings.OLD_KEYCLOAK_URL and settings.OLD_REALM and settings.OLD_CLIENT_ID and settings.OLD_CLIENT_SECRET
+        except (AssertionError, AttributeError):
+            logger.error("Old Keycloak URL, realm, client ID, or client secret not set.")
+            return False
+
+        token_url = f"{settings.OLD_KEYCLOAK_URL}/realms/{settings.OLD_REALM}/protocol/openid-connect/token"
+        data = {
+            'client_id': settings.OLD_CLIENT_ID,
+            'client_secret': settings.OLD_CLIENT_SECRET,
+            'grant_type': 'password',
+            'username': email,
+            'password': password,
+        }
+        response = requests.post(token_url, data=data)
+        return response.status_code == 200
+
+    def update_password_new_keycloak(self, email, password):
+        from keycloak import KeycloakAdmin
+        from keycloak.exceptions import KeycloakGetError
+
+        try:
+            # Initialize KeycloakAdmin for the new Keycloak instance
+            new_keycloak_admin = KeycloakAdmin(
+                server_url=settings.KEYCLOAK_CLIENTS['ADMIN']['URL'],
+                username=settings.KEYCLOAK_ADMIN_USERNAME,
+                password=settings.KEYCLOAK_ADMIN_PASSWORD,
+                realm_name=settings.KEYCLOAK_CLIENTS['ADMIN']['REALM'],
+                client_id=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_ID'],
+                client_secret_key=settings.KEYCLOAK_CLIENTS['ADMIN']['CLIENT_SECRET'],
+                verify=True
+            )
+        except KeycloakGetError as e:
+            logger.error(f"Failed to connect to new Keycloak: {e}")
+            return False
+
+        try:
+            # Find the user by email
+            users = new_keycloak_admin.get_users({"email": email})
+            if users:
+                user_id = users[0]['id']
+                new_keycloak_admin.set_user_password(user_id, password, temporary=False)
+                return True
+            else:
+                logger.warning(f"User with email {email} not found in new Keycloak.")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update password in new Keycloak: {e}")
+
+        return False
+
+    def post(self, request, *args, **kwargs):
+        from django_keycloak_admin.backends import KeycloakPasswordCredentialsBackend
+        User = get_user_model()
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # check if user has signup in new keycloak and if so proceed with login first time
+            user = None
+        else:
+            do_migration = getattr(settings, 'USER_MIGRATION_DATE', None)
+            if do_migration and user.last_login:
+                if user.last_login < timezone.make_aware(datetime(*settings.USER_MIGRATION_DATE)):
+
+                    # try authenticating with old keycloak
+                    if self.authenticate_old_keycloak(email, password):
+                        if self.update_password_new_keycloak(email, password):
+                            logger.info(f"User {email} has been migrated successfully.")
+                        else:
+                            logger.info(f"User {email} Failed to update password in the new system.")
+                            return redirect(settings.FORGOT_PASSWORD_URL)
+
+        # need to sign in user with new keycloak
+        backend = KeycloakPasswordCredentialsBackend()
+        authenticated_user = backend.authenticate(self.request, username=email, password=password)
+        if authenticated_user:
+            # Record ModelBackend (not the Keycloak backend) as the session's auth
+            # backend. get_user() then resolves the user from the DB for the life of
+            # the week-long Django session instead of being tied to the short-lived
+            # Keycloak token. Keycloak still verifies the password above; recording
+            # the Keycloak backend made get_user() return None once the token lapsed,
+            # silently logging the user out (API requests 403 with user=None while the
+            # session cookie still looked valid).
+            login(request, authenticated_user,
+                  backend='django.contrib.auth.backends.ModelBackend')
+            messages.success(request, "You have been successfully logged in.")
+            return redirect(settings.LOGIN_REDIRECT_URL)
+        else:
+            messages.error(self.request, "Authentication failed. Please check your credentials.")
+            return redirect(LOGIN_URL)
+
+
+class UpdateUsersView(ProviderRequiredMixin, UserCanAdministerMixin, View):
+    '''One-off backfill: set keycloak_id on Django users missing it. Was a
+    bare function view on skorie_users; now admin-only and keycloak-gated.'''
+    required_provider = 'keycloak'
+
+    def get(self, request, *args, **kwargs):
+        from .keycloak import keycloak_admin
+        User = get_user_model()
+        updated = 0
+        for user in User.objects.filter(keycloak_id__isnull=True):
+            try:
+                user.keycloak_id = keycloak_admin.get_user_id(user.email)
+            except Exception as e:
+                logger.warning(f"update_users: no keycloak id for {user.email}: {e}")
+            else:
+                if user.keycloak_id:
+                    user.save(update_fields=['keycloak_id', ])
+                    updated += 1
+        return HttpResponse(f"Updated {updated} users with keycloak_id")
+
+
+class UnverifiedUsersList(ProviderRequiredMixin, UserCanAdministerMixin, ListView):
+    '''Unverified users from the last month, read directly from Keycloak's own
+    database (UserEntity maps Keycloak's user table). Keycloak hosts only —
+    needs a DATABASES alias for the Keycloak DB (KEYCLOAK_DB_ALIAS, default
+    "keycloak_new").'''
+    required_provider = 'keycloak'
+    template_name = 'django_users/unverified_users_report.html'
+    context_object_name = 'users'
+
+    def get_queryset(self):
+        from .keycloak_models import UserEntity
+        alias = getattr(settings, 'KEYCLOAK_DB_ALIAS', 'keycloak_new')
+        # Calculate one month ago as a timestamp in milliseconds
+        one_month_ago = datetime.now() - timedelta(days=30)
+        one_month_ago_timestamp = int(one_month_ago.timestamp() * 1000)
+        return UserEntity.objects.using(alias).filter(
+            email_verified=False,
+            created_timestamp__gte=one_month_ago_timestamp
+        ).order_by('-created_timestamp')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = 'Unverified Users (Last Month)'
+        return context
 
 
 def send_sms(recipient_user, message, user=None):
@@ -434,13 +617,34 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         next_url = request.GET.get('next') or request.POST.get('next') or None
 
         try:
+            UserHistory = apps.get_model('users', 'UserHistory')
+        except LookupError:
+            UserHistory = None  # host app has not subclassed UserHistoryBase
+
+        try:
+            # Under keycloak the host's AUTHENTICATION_BACKENDS include a
+            # Keycloak credentials backend, so this verifies against Keycloak;
+            # under django it verifies against the local hash.
             user = authenticate(request, username=email, password=password)
         except Exception as e:
             logger.warning("authenticate() failed for %s: %s", email, e)
             user = None
 
         if user and user.is_active:
+            # Always record ModelBackend as the session backend, whatever
+            # backend verified the credentials: get_user() then resolves the
+            # user from the DB for the life of the session cookie instead of
+            # being tied to a short-lived IdP token (see CLAUDE.md).
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+            if keycloak_enabled() and KEYCLOAK_MIGRATING and user.activation_code != password:
+                # Dual-write window: mirror the Keycloak-verified password to
+                # the Django hash so the host can eventually switch provider.
+                user.set_password(password)
+                user.save()
+
+            if UserHistory:
+                UserHistory.log(user, "login_success", request=request)
 
             # If they signed in with an admin-issued one-time password (the value
             # matches their activation_code), force them through change_password
@@ -453,6 +657,27 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 return redirect(change_url)
 
             return redirect(next_url or settings.LOGIN_REDIRECT_URL)
+
+        # authenticate() failed — allow an admin-issued one-time password
+        # (activation_code) to log the user in once, then force a change.
+        # External IdPs refuse direct grants on temporary credentials, so this
+        # path is Django-session only, whatever the provider.
+        fallback_user = User.objects.filter(email=email).first()
+        if fallback_user and fallback_user.activation_code and password == fallback_user.activation_code:
+            login(request, fallback_user, backend='django.contrib.auth.backends.ModelBackend')
+            fallback_user.activation_code = None
+            fallback_user.save(update_fields=['activation_code'])
+            if UserHistory:
+                UserHistory.log(fallback_user, "login_success_temporary", request=request)
+            messages.warning(request,
+                             _('Your temporary password cannot be used again. Please change your password.'))
+            return redirect('users:change_password_now')
+
+        if UserHistory:
+            if fallback_user:
+                UserHistory.log(fallback_user, "login_failed", details={"reason": "invalid_password"}, request=request)
+            else:
+                UserHistory.log(None, "login_failed", details={"email": email, "reason": "user_not_found"}, request=request)
 
         messages.error(request, _('Invalid email or password.'))
         context = self.get_context_data(**kwargs)
@@ -568,12 +793,12 @@ class RegisterView(FormView):
                                _(f'Failed to create user account with error {e}. Please try again later.'))
                 raise
         else:
-            if not user.is_active and user.authentik_id and authentik_enabled():
+            if not user.is_active and user.idp_id and get_idp():
                 # User exists in IdP but never finished verification. Reset
                 # their password so they can complete registration.
                 try:
-                    AuthentikIdP().set_password(user.authentik_id, password)
-                except AuthentikError as exc:
+                    get_idp().set_password(user.idp_id, password)
+                except IdPError as exc:
                     logger.warning("Could not reset IdP password during re-registration of %s: %s",
                                    user.email, exc)
             elif user.is_active:
@@ -583,10 +808,15 @@ class RegisterView(FormView):
 
         set_current_user(self.request, user.id, "REGISTER")
 
-        if not user.authentik_id:
-            if user.create_authentik_user_from_user(password, self.request.user) is None:
-                messages.error(self.request, _('Failed to create user account. Please try again later.'))
-                return HttpResponseRedirect(reverse(LOGIN_REGISTER))
+        if get_idp():
+            if not user.idp_id:
+                if user.create_idp_user_from_user(password, self.request.user) is None:
+                    messages.error(self.request, _('Failed to create user account. Please try again later.'))
+                    return HttpResponseRedirect(reverse(LOGIN_REGISTER))
+        else:
+            # Plain Django auth: the local hash IS the credential.
+            user.set_password(password)
+            user.save(update_fields=['password'])
 
         self.create_comms_channels(CHANNEL_EMAIL, user)
         if mobile and preferred_channel in CommsChannel.MOBILE_CHANNELS:
@@ -911,19 +1141,26 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
         user = self.request.user
         new_password = form.cleaned_data["new_password"]
 
-        if not authentik_enabled():
-            form.add_error(None, "Cannot update password: Authentik is not configured.")
-            return self.form_invalid(form)
-
-        if not user.authentik_id:
-            form.add_error(None, "Cannot update password: user has no IdP account.")
-            return self.form_invalid(form)
-
-        try:
-            AuthentikIdP().set_password(user.authentik_id, new_password)
-        except AuthentikError as exc:
-            form.add_error(None, f"Failed to update password: {exc}")
-            return self.form_invalid(form)
+        idp = get_idp()
+        if idp and user.idp_id:
+            try:
+                idp.set_password(user.idp_id, new_password)
+            except IdPError as exc:
+                form.add_error(None, f"Failed to update password: {exc}")
+                return self.form_invalid(form)
+            if keycloak_enabled() and KEYCLOAK_MIGRATING:
+                user.set_password(new_password)
+                user.save(update_fields=['password'])
+        else:
+            # Plain Django auth (or user has no IdP account yet): update the
+            # local hash, clear any one-time credential, keep them logged in.
+            user.set_password(new_password)
+            update_fields = ['password']
+            if getattr(user, 'activation_code', None):
+                user.activation_code = None
+                update_fields.append('activation_code')
+            user.save(update_fields=update_fields)
+            update_session_auth_hash(self.request, user)
 
         messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
@@ -1141,20 +1378,27 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('confirm_password', 'Passwords do not match.')
                 return self.form_invalid(form)
 
-            # ---- password update via the IdP ----
-            if not authentik_enabled():
-                form.add_error('confirm_password', 'Password reset via this form requires Authentik.')
-                return self.form_invalid(form)
-            if not getattr(user, "authentik_id", None):
-                logger.error("User %s does not have an authentik_id.", user.pk)
-                form.add_error('confirm_password', 'There is an issue with your account.')
-                return self.form_invalid(form)
-            try:
-                AuthentikIdP().set_password(user.authentik_id, new_password)
+            # ---- password update: IdP owns the credential when one is active ----
+            idp = get_idp()
+            if idp:
+                if not user.idp_id:
+                    logger.error("User %s has no id for the active IdP (%s).", user.pk, get_auth_provider())
+                    form.add_error('confirm_password', 'There is an issue with your account.')
+                    return self.form_invalid(form)
+                try:
+                    idp.set_password(user.idp_id, new_password)
+                    success = True
+                except IdPError as exc:
+                    logger.error("Failed to set IdP password for user %s: %s", user.pk, exc)
+                    success = False
+                if success and keycloak_enabled() and KEYCLOAK_MIGRATING:
+                    user.set_password(new_password)
+                    user.save(update_fields=['password'])
+            else:
+                # Plain Django auth: local hash is the credential.
+                user.set_password(new_password)
+                user.save(update_fields=['password'])
                 success = True
-            except AuthentikError as exc:
-                logger.error("Failed to set IdP password for user %s: %s", user.pk, exc)
-                success = False
 
             if success:
                 # Keep user logged-in if they're changing their own password while authenticated (rare in this flow)
@@ -1212,13 +1456,17 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
-        if getattr(user, "authentik_id", None) and authentik_enabled():
+        idp = get_idp()
+        if user.idp_id and idp:
             # External IdP owns the credential.
             try:
-                AuthentikIdP().set_password(user.authentik_id, new_password)
-            except AuthentikError as exc:
+                idp.set_password(user.idp_id, new_password)
+            except IdPError as exc:
                 form.add_error(None, f"Failed to update password: {exc}")
                 return self.form_invalid(form)
+            if keycloak_enabled() and KEYCLOAK_MIGRATING:
+                user.set_password(new_password)
+                user.save(update_fields=['password'])
         else:
             # Plain Django auth: update the Django password directly. Clear any
             # temporary OTP credential now that the user has set a real one, and
@@ -1233,11 +1481,6 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
 
         messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
-
-
-# update_users (one-off authentik_id backfill) and UnverifiedUsersList
-# (read directly from Keycloak's UserEntity table) removed on the authentik
-# branch. Authentik's admin UI provides equivalent visibility.
 
 
 class SendOTP(UserCanAdministerMixin, DocServeMixin, TemplateView):

@@ -43,6 +43,10 @@ from .views import (
     WhoAmIView,
     ResetSessionView,
     login_with_remote_token,
+    logout,
+    UserMigrationView,
+    UpdateUsersView,
+    UnverifiedUsersList,
     AdminInviteView,
     AcceptInvite,
     EnterOTP,
@@ -99,9 +103,22 @@ urlpatterns = [
 
     path('login/', LoginView.as_view(), name='login'),
     path('login/', LoginView.as_view(), name='user_login'),
+    # Provider-aware logout: keycloak ends the Keycloak session server-side,
+    # authentik redirects through the OIDC end-session endpoint, django is
+    # local-only. Replaces skorie_users' logout_user_from_keycloak_and_django.
+    path('logout/', logout, name='logout'),
+    path('logout_all/', logout, name='logout_all'),
     path('problem_login/', ProblemLogin.as_view(), name='problem_login'),
     path('problem_register/', ProblemSignup.as_view(), name='problem_register'),
+    path('problem_register/<str:email>/', user_passes_test(has_role_administrator)(ProblemSignup.as_view()),
+         name='problem_register_admin'),
     path('troubleshoot/', Troubleshoot.as_view(), name='troubleshoot'),
+
+    # Keycloak-only routes — always wired so reverse()/{% url %} resolve under
+    # every provider; the views 404 unless AUTH_PROVIDER == 'keycloak'.
+    path('migrate_login/', UserMigrationView.as_view(), name='migrate_login'),
+    path('update_users/', UpdateUsersView.as_view(), name='update_users'),
+    path('unverified/', UnverifiedUsersList.as_view(), name='unverified_users_report'),
 
     path('register/', RegisterView.as_view(), name='register'),
     path("forgot_password/", ForgotPassword.as_view(), name="forgot_password"),
