@@ -242,3 +242,18 @@ class CustomLoginViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse('users:verify', args=[self.inactive_user.id]))
         self.assertContains(response, 'Your account is inactive. Please verify your account.')
+
+    def test_login_records_modelbackend_as_session_backend(self):
+        """Regression: the session must record ModelBackend, never an IdP
+        backend. Recording a Keycloak/OIDC backend ties get_user() to the
+        short-lived IdP token; when it lapsed, requests silently became
+        AnonymousUser and API writes 403'd while the session cookie still
+        looked valid (see CLAUDE.md auth/session note)."""
+        self.client.post(reverse('login'), data={
+            'email': 'active@example.com',
+            'password': 'password123'
+        })
+        self.assertEqual(
+            self.client.session.get('_auth_user_backend'),
+            'django.contrib.auth.backends.ModelBackend',
+        )

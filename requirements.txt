@@ -1,5 +1,4 @@
 Django
-mozilla-django-oidc
 httpx
 twilio
 nanoid
@@ -15,3 +14,9 @@ pycountry
 
 git+https://github.com/phoebebright/django-yamlfield
 django-timezone-field
+
+# --- provider-specific (install the one matching AUTH_PROVIDER) ---
+# AUTH_PROVIDER = 'authentik':
+mozilla-django-oidc
+# AUTH_PROVIDER = 'keycloak' (uncomment):
+# git+https://github.com/phoebebright/django-keycloak-admin

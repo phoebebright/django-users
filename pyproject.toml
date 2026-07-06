@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-users"
-version = "2.0.4"
-description = "A reusable Django app to manage users with Authentik as the OIDC provider (authentik branch)."
+version = "3.0.0"
+description = "A reusable Django app to manage users; AUTH_PROVIDER selects django, keycloak or authentik auth (unified-auth branch)."
 readme = "README.md"
 license = {text = "MIT License"}
 authors = [
@@ -21,6 +21,18 @@ classifiers = [
 dependencies = [
     "Django>=5.1,<7.0",
     "setuptools>=65.5.1",
+    # idp.py (imported everywhere) uses httpx for the Authentik REST adapter,
+    # so it is a core dependency even for keycloak/django hosts.
+    "httpx",
+]
+
+[project.optional-dependencies]
+# Install the extra matching your AUTH_PROVIDER; plain django auth needs neither.
+keycloak = [
+    "django-keycloak-admin @ git+https://github.com/phoebebright/django-keycloak-admin",
+]
+authentik = [
+    "mozilla-django-oidc",
 ]
 
 [project.urls]
