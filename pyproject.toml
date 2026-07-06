@@ -24,6 +24,17 @@ dependencies = [
     # idp.py (imported everywhere) uses httpx for the Authentik REST adapter,
     # so it is a core dependency even for keycloak/django hosts.
     "httpx",
+    # The models -> utils import chain imports all of these at module top
+    # level, so the app fails to import if any is missing. They were only in
+    # requirements.txt, which pip ignores on git+https installs — pip reads
+    # this list instead. (twilio is also imported top-level in utils.py but is
+    # deliberately left out for now — declare it here if a clean install
+    # starts failing on it.)
+    "email-validator",
+    "nanoid",
+    "django-countries",
+    "django-timezone-field",
+    "django-yamlfield @ git+https://github.com/phoebebright/django-yamlfield",
 ]
 
 [project.optional-dependencies]
