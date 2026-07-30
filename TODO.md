@@ -71,3 +71,42 @@ admin API.
 
 (Add new items below this line — keep entries short, link to the relevant
 commit, ticket, or ADR if there is one.)
+
+### `normalise_email` raises out of `LoginView.post` — 500 instead of a form error
+
+`normalise_email` (`utils.py:286`) converts an `EmailNotValidError` into a
+Django `ValidationError`, but the callers don't catch it. In
+`LoginView.post` (`views.py:615`) it is the very first statement, outside
+any try, so a badly-formed address 500s the login page instead of
+re-rendering it with "Invalid email or password".
+
+Reproduced on skorie1 (dressagecalculator, 30 Jul 2026): posting
+`nosuchuser@example.invalid` to `/users/login/` →
+`ValidationError: ['The part after the @-sign is a special-use or reserved
+name that cannot be used with email.']`. Any typo'd or reserved domain
+(`.invalid`, `.test`, `.local`, a domain that fails the deliverability
+check) does it. Real users hit this by mistyping their address.
+
+Fix: wrap the call and fall through to the existing invalid-credentials
+path rather than letting it escape:
+
+```python
+try:
+    email = normalise_email(request.POST.get('email'))
+except ValidationError:
+    messages.error(request, _('Invalid email or password.'))
+    return render(request, self.template_name, {'email': request.POST.get('email')})
+```
+
+Deliberately reuse the same generic message as a wrong password — saying
+"that email is malformed" is a small enumeration/behaviour tell and the
+user's next action is identical either way.
+
+Then audit the other unguarded callers — `views.py` lines 765, 1234, 1236,
+1267, 1285, 1333, 1364, 1672. The `form_valid` ones (765, 1267, 1672) are
+the next most likely to bite: the form's own `EmailField` validation is
+looser than `email_validator`'s deliverability check, so a value can pass
+`is_valid()` and still raise here, after the form has been cleaned and with
+no form to attach the error to. Those want `form.add_error('email', ...)`
+and a `form_invalid(form)` return rather than the message-and-render shape
+above.

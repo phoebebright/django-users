@@ -12,7 +12,6 @@ from rest_framework import serializers
 
 # assume that all user models have been subclass in users app in target system to allow for customisation
 from users.models import Person, Role, Organisation
-from web.models import EventRole
 
 User = get_user_model()
 
