@@ -213,9 +213,12 @@ class CommsChannelBase(models.Model):
         self.verified_at = timezone.now()
         self.save()
 
+        # Nothing to check against when keycloak is off, so treat it as not
+        # verified there - without this the test below raises NameError.
+        keycloak_verified = False
+
         if settings.USE_KEYCLOAK:
             # at the moment we can't trust that is_active in django will match active in keycloak, so lets check
-            keycloak_verified = False
 
             # do we have keycloak user setup yet?
             keycloak_user = None
@@ -244,7 +247,8 @@ class CommsChannelBase(models.Model):
         if not self.user.is_active or not keycloak_verified:
             self.user.is_active = True
             self.user.save()
-            verify_user_without_email(self.user.keycloak_id)
+            if settings.USE_KEYCLOAK:
+                verify_user_without_email(self.user.keycloak_id)
 
 
     def send_msg(self, msg, subject=None):
