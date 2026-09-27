@@ -9,6 +9,37 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.1.1 (27 Sep 2026)
+
+Found moving BuiltAir onto 3.1.0 (BuiltAir ticket HD-0154). Both faults stopped
+a non-skorie host from starting at all.
+
+- **Skorie role mixins moved** from `django_users.tools.permission_mixins` to
+  `django_users.skorie.permission_mixins`: `UserCanAdministerOrIssuerMixin`,
+  `UserCanAdministerOrganise`, `UserCanJudgeMixin`, `UserCanCompeteMixin` and
+  `UserCanOrganiserMixin`. They read skorie roles (`ROLE_ISSUER`,
+  `ROLE_ORGANISER`, `ROLE_JUDGE`, `JUDGE_ROLES`, `ROLE_COMPETITOR`) when defined,
+  so importing the generic module crashed for any host without them. This is
+  the first piece of decision 002's `django_users.skorie` subpackage.
+- **`pycountry` declared** as a dependency. `django_users.api` imports it at the
+  top, but it was never listed, so a host that lacked it could not start.
+- **New `tests/test_boundary`:** a host with generic roles only must be able to
+  import the generic modules, and no generic module may import
+  `django_users.skorie`.
+
+**Affects:** skorie hosts, and non-skorie hosts, which can now start.
+
+**Host action:** skorie hosts change these imports when they pin 3.1.1:
+
+```python
+# was
+from django_users.tools.permission_mixins import UserCanJudgeMixin
+# now
+from django_users.skorie.permission_mixins import UserCanJudgeMixin
+```
+
+Other hosts: none (`pycountry` installs with the package).
+
 ## 3.1.0 (27 Sep 2026)
 
 The first tagged release from the trunk. `main` now carries it.

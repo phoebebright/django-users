@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-users"
-version = "3.1.0"
+version = "3.1.1"
 description = "A reusable Django app to manage users; AUTH_PROVIDER selects django, keycloak or authentik auth (unified-auth branch)."
 readme = "README.md"
 license = {text = "MIT License"}
@@ -35,6 +35,8 @@ dependencies = [
     "django-countries",
     "django-timezone-field",
     "django-yamlfield @ git+https://github.com/phoebebright/django-yamlfield",
+    # api.py imports pycountry at module top level (3.1.1: was undeclared).
+    "pycountry",
 ]
 
 [project.optional-dependencies]

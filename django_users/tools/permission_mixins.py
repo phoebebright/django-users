@@ -101,34 +101,6 @@ class UserCanAdministerMixin(HasRoleMixin):
 
     role_required = ModelRoles.ROLE_ADMINISTRATOR
 
-class UserCanAdministerOrIssuerMixin(HasRoleMixin):
-
-    role_required = [ModelRoles.ROLE_ADMINISTRATOR, ModelRoles.ROLE_ISSUER]
-
-class UserCanAdministerOrganise(HasRoleMixin):
-
-    role_required = [ModelRoles.ROLE_ADMINISTRATOR, ModelRoles.ROLE_ORGANISER]
-    mode_role = ModelRoles.ROLE_ORGANISER
-
-class UserCanJudgeMixin(HasRoleMixin):
-
-    role_required = ModelRoles.JUDGE_ROLES
-    also_allow = [ModelRoles.ROLE_MANAGER, ModelRoles.ROLE_ADMINISTRATOR]
-    mode_role = ModelRoles.ROLE_JUDGE
-
-class UserCanCompeteMixin(HasRoleMixin):
-
-    role_required = ModelRoles.ROLE_COMPETITOR
-    mode_role = ModelRoles.ROLE_COMPETITOR
-
-    def get_permission_denied_message(self):
-        return f"Rider access is currently in Beta.  If you would like to try the new pages for Riders, please email phoebe@skor.ie to request access to this page - {self.request.path}."
-
-
-class UserCanOrganiserMixin(HasRoleMixin):
-
-    role_required = ModelRoles.ROLE_ORGANISER
-
 # for django views
 class CanUpdateHelpdeskMixin(AccessMixin):
 

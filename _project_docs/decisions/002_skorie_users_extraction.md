@@ -270,6 +270,14 @@ Therefore, for v1:
 
 ## Sequencing (tracer bullet)
 
+*27Sep26, django-users 3.1.1: started.* Moving BuiltAir onto the trunk found
+five skorie role mixins in generic `tools/permission_mixins.py` that crashed any
+non-skorie host on import. They moved to `django_users/skorie/permission_mixins.py`
+with no compatibility shim (Dev), and `tests/test_boundary` holds the line: it
+checks the generic import for a generic-roles host, and that no generic module
+imports `django_users.skorie`. It covers only that subpackage so far; widen it
+to `web.`, `skorie_` and `rosettes` as those references are extracted.
+
 Runs on the trunk agreed in decision 003, after it is brought up to date.
 
 1. Add the boundary test and check (*Keeping the boundary*), marked
