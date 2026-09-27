@@ -71,3 +71,36 @@ class PlainHostTests(TestCase):
 
     def test_D_forgot_password_without_the_magic_link_setting(self):
         self.assertEqual(Client().get(reverse("users:forgot_password")).status_code, 200)
+
+
+class LoginNormalisationTests(TestCase):
+    """3.1.3: login looked up the account with a DNS deliverability check, and an
+    address that failed it made login a 500. BuiltAir's own password-reset tests
+    use pwtest.com, which accepts no mail, and caught it."""
+    PASSWORD = "testpass123"
+
+    def setUp(self):
+        User.objects.create_user(email="someone@pwtest.com", password=self.PASSWORD)
+
+    def test_login_does_not_ask_dns(self):
+        from unittest import mock
+        import django_users.utils as utils
+        with mock.patch.object(utils, "validate_email", wraps=utils.validate_email) as spy:
+            response = Client().post(reverse("users:login"), {
+                "email": "someone@pwtest.com", "password": self.PASSWORD})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(spy.call_args.kwargs["check_deliverability"])
+
+    def test_an_unusable_address_is_a_failed_login_not_a_500(self):
+        response = Client().post(reverse("users:login"), {"email": "not an email", "password": "x"})
+        self.assertEqual(response.status_code, 200)
+        response = Client().post(reverse("users:login"), {"password": "x"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_new_addresses_are_still_checked(self):
+        from unittest import mock
+        import django_users.utils as utils
+        with mock.patch.object(utils, "validate_email") as fake:
+            fake.return_value.normalized = "new@pwtest.com"
+            utils.normalise_email("new@pwtest.com")
+        self.assertTrue(fake.call_args.kwargs["check_deliverability"])

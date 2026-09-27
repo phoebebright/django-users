@@ -348,12 +348,21 @@ def get_subscription_analytics():
     }
 
 ALLOWED_FAKE_DOMAINS = {"example.com", "test.com",}
-def normalise_email(addr: str) -> str:
+def normalise_email(addr: str, check_deliverability: bool = True) -> str:
+    """Validate and normalise an email address.
+
+    ``check_deliverability`` asks DNS whether the domain accepts mail. Use it
+    only when accepting a NEW address (registration, contact form). Looking up
+    an EXISTING account (login, forgot password, email checks) must pass False:
+    a DNS failure there made login a 500 for everyone on that domain (3.1.3).
+    """
+    if not addr:
+        raise ValidationError("Enter an email address.")
     domain = addr.split("@")[-1].lower()
     try:
         v = validate_email(addr,
                            allow_smtputf8=True,
-                           check_deliverability=domain not in ALLOWED_FAKE_DOMAINS
+                           check_deliverability=check_deliverability and domain not in ALLOWED_FAKE_DOMAINS
                            )
         # v.normalized in v2; v.email in v1 – support both:
         return getattr(v, "normalized", v.email).lower()

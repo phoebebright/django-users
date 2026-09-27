@@ -9,6 +9,28 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.1.3 (27 Sep 2026)
+
+Found by BuiltAir's full test run on 3.1.2 (HD-0154).
+
+- **Login no longer depends on DNS.** `LoginView` passed the address through
+  `normalise_email()`, which asked DNS whether the domain accepts mail, and an
+  address that failed made login a 500. A DNS outage was a login outage, and a
+  user on a domain with no mail server could never log in. 0.2.x did not check
+  at login.
+  - `normalise_email()` takes `check_deliverability` (default True).
+  - The 15 call sites that look up an EXISTING account pass False: login,
+    forgot password, the check-email APIs, sending a code.
+  - The two that accept a NEW address keep the check: `RegisterView` and
+    `ContactView`.
+- **A bad or empty address at login is a failed login**, answered "Invalid
+  email or password", not a 500. `normalise_email(None)` now raises
+  `ValidationError` instead of `AttributeError`.
+- `tests/test_plain_host` gains three login tests. Two fail on 3.1.2.
+
+**Affects:** all hosts.
+**Host action:** none.
+
 ## 3.1.2 (27 Sep 2026)
 
 Found testing BuiltAir on 3.1.1 (BuiltAir HD-0154). BuiltAir is a plain-Django

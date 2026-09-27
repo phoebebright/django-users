@@ -34,6 +34,7 @@ import requests
 from django.contrib.auth.decorators import login_required, user_passes_test
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
@@ -619,7 +620,15 @@ class LoginView(GoNextTemplateMixin, TemplateView):
     template_name = "django_users/login.html"
 
     def post(self, request, *args, **kwargs):
-        email = normalise_email(request.POST.get('email'))
+        # A lookup, not a new address: no DNS check, and an unusable address
+        # is just a failed login, never a 500 (3.1.3).
+        try:
+            email = normalise_email(request.POST.get('email'), check_deliverability=False)
+        except ValidationError:
+            messages.error(request, _('Invalid email or password.'))
+            context = self.get_context_data(**kwargs)
+            context['email'] = request.POST.get('email', '')
+            return render(request, self.template_name, context)
         password = request.POST.get('password')
         next_url = request.GET.get('next') or request.POST.get('next') or None
 
@@ -1247,9 +1256,9 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         if step == 1:
             email = self.request.GET.get('email') or self.request.POST.get('email')
             if email:
-                kwargs['initial'] = {'email': normalise_email(email)}
+                kwargs['initial'] = {'email': normalise_email(email, check_deliverability=False)}
         else:
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, "")) if self.request.session.get(self.SK_EMAIL) else ""
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False) if self.request.session.get(self.SK_EMAIL) else ""
             kwargs.setdefault('initial', {})
             kwargs['initial']['email'] = email
 
@@ -1280,7 +1289,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
         if step == 1:
             # Step 1: verify email exists (no enumeration wording leaked to UI)
-            email = normalise_email(form.cleaned_data['email'])
+            email = normalise_email(form.cleaned_data['email'], check_deliverability=False)
             user = User.objects.filter(email=email).first()
 
             if not user:
@@ -1298,7 +1307,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
         elif step == 2:
             # Step 2: choose channel and send code or magic link
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Email not found.')
@@ -1346,7 +1355,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Step 3: verify the code (code flow) OR accept magic-link completion
             CommsChannel, VerificationCode = self._models()
 
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Session expired. Please start again.')
@@ -1377,7 +1386,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
         elif step == 4:
             # Step 4: set the new password
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Session expired. Please start again.')
