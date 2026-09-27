@@ -20,6 +20,7 @@ proposed (2026-09-27). Nothing moved yet.
 | Date | What changed | Why |
 | :--- | :--- | :--- |
 | 27Sep26 | Proposed | Adding one feature (QR phone login) meant writing it twice, for two branches that had drifted apart, and a third app could not use it at all |
+| 27Sep26 | Step 1 done: `skorie_users` ported; `main` needed nothing, and its user-search change was rejected as a security regression | Commit-by-commit review against the trunk |
 | 27Sep26 | Added *Versions and pinning*; the skorie layer is a subpackage on the trunk (002 revised) | Dev. Hosts floating on branch names picked up the phone login on their next deploy without choosing it, and version numbers on different branches collided (1.4.x, 0.2.x, 3.0.0) |
 
 Detail is in git: `git log --follow _project_docs/decisions/003_one_branch_for_every_host.md`.
@@ -148,6 +149,31 @@ host's own `users` app cannot carry the difference. Such a branch:
 No host needs one today.
 
 ## 1. Bring the trunk up to date
+
+**Done 27Sep26** (details in `CHANGELOG.md`, *Unreleased*). The review of each
+commit changed the list below:
+- **Ported from `skorie_users`:**
+  - bot detection and `drop_bot_users`;
+  - `drop_expired`, moved out of `management/command/`, a folder Django never
+    looked in;
+  - the phone login.
+
+  Each has a standalone test suite (`tests/test_bot_names`,
+  `tests/test_phone_login`).
+- **Already on the trunk:** the ModelBackend fix. The "try to import keycloak"
+  change was superseded by the provider adapters. The root `runtests.py` was
+  superseded by the per-suite runners.
+- **Not taken:** *updates - from a while ago* (546d904). It deletes
+  `helpdesk.py` and `zammad_service.py`, so it is Zammad work (deferred).
+- **`main` needed nothing:**
+  - the invite base, serializers and email normalising are already here in a
+    newer form;
+  - the post-office changes are workarounds for an old version, and read the
+    removed `CommsChannel.value`;
+  - *improving user search* (d9efc2e) is **rejected**: it made `MemberViewSet`
+    a writable `ModelViewSet` over every user with no scoping.
+
+  So `main` is not a source for any port. Step 2 replaces it with the trunk.
 
 Port onto `unified-auth` what live branches have that it lacks, each with a test.
 

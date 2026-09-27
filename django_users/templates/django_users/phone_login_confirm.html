@@ -1,0 +1,68 @@
+{% extends "django_users/users_narrow_base.html" %}
+{% load i18n %}
+{% comment %}
+The phone's side of a QR login. The code arrives after '#' in the URL, so the
+server never sees it in a request line or a log; this page reads it, drops it
+from the address bar, asks the server whose it is (spending nothing) and only
+spends it when "Log in" is pressed. See django_users.views_phone_login.
+{% endcomment %}
+
+{% block title %}{% trans "Log in on this phone" %}{% endblock %}
+
+{% block content %}
+<h2 class="h4">{% trans "Log in on this phone" %}</h2>
+
+<div class="alert alert-warning{% if not error %} d-none{% endif %}" role="alert" data-phone-error>{{ error }}</div>
+
+<form method="post" class="d-none" data-phone-form
+      data-text-no-code="{% trans 'Open this page by scanning the QR code on your computer.' %}"
+      data-text-failed="{% trans 'Could not check the code. Please try again.' %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="login">
+    <input type="hidden" name="token" value="" data-phone-token>
+    <p>{% trans "Log in as" %} <strong data-phone-email></strong>?</p>
+    {% if user.is_authenticated %}
+        <p class="small text-muted">{% blocktrans with email=user.email %}This phone is logged in as {{ email }} now. If that is a different account, logging in here replaces it.{% endblocktrans %}</p>
+    {% endif %}
+    <div class="action_buttons">
+        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+            <a href="/" class="btn btn-outline-secondary mt-3">{% trans "Cancel" %}</a>
+            <button type="submit" class="btn btn-primary mt-3">{% trans "Log in" %}</button>
+        </div>
+    </div>
+</form>
+
+{% if not error %}
+<script>
+(function () {
+    'use strict';
+    var form = document.querySelector('[data-phone-form]');
+    var errorBox = document.querySelector('[data-phone-error]');
+    var token = window.location.hash.slice(1);
+    // Off the address bar and out of history before anything else happens.
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+    }
+    function fail(message) {
+        errorBox.textContent = message;
+        errorBox.classList.remove('d-none');
+    }
+    if (!token) { fail(form.dataset.textNoCode); return; }
+
+    var body = new FormData();
+    body.append('action', 'check');
+    body.append('token', token);
+    body.append('csrfmiddlewaretoken', form.querySelector('[name=csrfmiddlewaretoken]').value);
+    fetch(window.location.pathname, {method: 'POST', body: body, credentials: 'same-origin'})
+        .then(function (resp) { return resp.json(); })
+        .then(function (res) {
+            if (res.error) { fail(res.error); return; }
+            form.querySelector('[data-phone-email]').textContent = res.email;
+            form.querySelector('[data-phone-token]').value = token;
+            form.classList.remove('d-none');
+        })
+        .catch(function () { fail(form.dataset.textFailed); });
+})();
+</script>
+{% endif %}
+{% endblock %}
