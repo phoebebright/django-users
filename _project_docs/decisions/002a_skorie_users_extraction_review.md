@@ -3,6 +3,15 @@
 Companion to decision [002 — Extract a `skorie-users` layer](002_skorie_users_extraction.md).
 Status: review (2026-07-06). Feeds the extraction tickets.
 
+> **Read with 002 as revised 27Sep26.** The skorie layer is now the
+> `django_users.skorie` subpackage on the same trunk, not a separate
+> `skorie-users` package. Where this review says "`skorie-users` owns …",
+> read "`django_users.skorie` holds …". The rulings, seams and per-host
+> findings below are unchanged. Two points are simplified by the revision:
+> - seams on the user model become mixin overrides rather than settings
+>   hooks (002, *Make the generic code generic*);
+> - the "Host model resolution" seam matters only inside the generic code.
+
 This document records the deeper per-project review of the `users/` apps of
 skorie1–skorie4 (one reviewer per host), the resulting shared-surface and
 seam inventory, and Dev's rulings on the model/behaviour reconciliation

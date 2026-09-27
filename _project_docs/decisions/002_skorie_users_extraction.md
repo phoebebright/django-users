@@ -1,8 +1,25 @@
-# 002 Extract a `skorie-users` layer between `django-users` and the hosts
+# 002 A skorie layer between the generic `django-users` and the skorie hosts
 
 # Status
 
-proposed (2026-07-06)
+**Accepted in revised form, 27Sep26: one repo, one package.** The skorie
+layer is the `django_users.skorie` subpackage, on the same trunk as the
+generic code (decision 003). Hosts opt in by **inheriting its mixins**, not by
+installing a second library or setting feature flags. Nothing is built yet.
+
+Proposed 2026-07-06 as a separate `skorie-users` package (Option 2 below). That
+choice is **corrected in place, not superseded**: see *History*. Wherever this
+document or 002a says "`skorie-users`", read "the `django_users.skorie`
+subpackage".
+
+# History
+
+| Date | What changed | Why |
+| :--- | :--- | :--- |
+| 6Jul26 | Proposed: separate `skorie-users` package on a skorie-free `django-users` (Option 2). A skorie section inside `django-users` (Option 1) was rejected, mainly for its feature flags | The library reached into skorie's models; the hosts copied a shared band of skorie code between them |
+| 27Sep26 | **Option 1 reshaped and adopted: one repo, one package, `django_users.skorie` opted into by mixins.** Inheritance preferred over settings hooks | Dev. Mixins are opt-in by the host's own class definition, which removes the flag sprawl that sank Option 1. A second package would double the branch-and-pin cost that decision 003 exists to remove, and a change crossing the generic/skorie seam would need two coordinated commits in two repos |
+
+Detail is in git: `git log --follow _project_docs/decisions/002_skorie_users_extraction.md`.
 
 # Context
 
@@ -57,7 +74,7 @@ when a **non-skorie** host (`gadget_admin`) tried to install and import
 
 Conversation with Dev on 2026-07-06 in which the shape below was agreed:
 `django-users` stays generic; a new `skorie-users` app builds on it and
-holds the common skorie functions; each host is then tidied to consume it.
+holds the common skorie functions; each host is then tidied to consume it. *(Revised 27Sep26: the skorie layer is a subpackage of `django-users`, not a separate app — see History.)*
 
 **Cross-host similarity of the `users/` apps** (SequenceMatcher ratio on file
 text; `1.00` = identical). skorie3/skorie4 are the current generation;
@@ -94,98 +111,123 @@ making the library generic):
 
 # Change Proposed
 
-Introduce a three-layer stack:
+A three-layer stack. The middle layer is the question:
 
 ```
-django-users     generic auth / user / invite / referral / helpdesk glue
-      ▲ builds on   — NO reference to `web`, `skorie_*`, `rosettes`
-skorie-users     skorie domain glue shared by every skorie host      (NEW)
-      ▲ builds on
-skorie1..N       only genuine per-project divergence remains
+django_users            generic auth / user / organisation / invite / referral
+      ^ opted into by      NO reference to `web`, `skorie_*`, `rosettes`
+django_users.skorie     skorie domain code shared by every skorie host
+      ^ inherited by
+skorie1..N users app    only genuine per-host divergence remains
 ```
 
-`skorie-users` is a new reusable app (own repo/package, installed by the
-skorie hosts, itself depending on `django-users`). It absorbs the code the
-hosts currently copy between each other. `django-users` is simultaneously
-cleaned of skorie coupling so it satisfies its original "runs anywhere"
-contract (proven by `gadget_admin` importing it with no skorie apps present).
+The generic package must satisfy its "runs anywhere" contract. The proof is
+`gadget_admin` importing it with no skorie apps present. Two shapes were
+considered for *where* the shared skorie code lives.
 
-Two shapes were considered for *where* the common skorie code should live.
+# Option 1: A skorie subpackage inside `django-users`, opted into by mixins (adopted 27Sep26)
 
-# Option 1: A "skorie section" inside `django-users`
+The skorie code lives in `django_users/skorie/`, in the same package and on the
+same trunk. Nothing in the generic code imports it. A skorie host opts in:
+- in its own class definition, e.g.
+  `class CustomUser(SkorieUserMixin, CustomUserBase)`;
+- in its URLs;
+- and, only if the subpackage carries templates or commands, in its
+  `INSTALLED_APPS`.
 
-Keep everything in `django-users`, but gate the skorie-specific parts behind
-feature flags / settings and optional sub-modules (e.g.
-`django_users/skorie/`). Non-skorie hosts leave the flags off.
+A non-skorie host never imports it, so none of it runs.
+
+*As first proposed on 6Jul26 this option gated the skorie code behind feature
+flags, and was rejected for that. Opting in by inheritance needs no flags.*
 
 ## Pros
 
-- One repository, one release to manage.
-- No new package for hosts to install.
-- Shared code moves out of the hosts immediately.
+- One repository, one package, one trunk, one version sequence. Hosts pin
+  one library.
+- A change that moves code across the generic/skorie seam is one commit and
+  cannot drift between packages.
+- No feature flags: opting in is the host's own class definition, so there
+  are no flag combinations to test.
+- Shared skorie code gets a real home immediately.
 
 ## Cons
 
-- `django-users` stays conceptually impure — it still *contains* skorie
-  domain knowledge, just switched off. The "generic library" claim becomes
-  "generic if you set the right flags."
-- Every skorie feature change is a `django-users` release, coupling the
-  generic library's cadence to skorie's product cadence.
-- Flag sprawl: newsletters, payments, rosettes, event-roles each need a
-  gate, and the combinations are hard to test.
-- Does not give the skorie hosts a natural place for concrete skorie models
-  and admin that are clearly *skorie's*, not the generic library's.
+- The package *contains* skorie domain knowledge, even though a non-skorie
+  host never runs it. It ships as dead weight to BuiltAir.
+- "Generic code never imports `django_users.skorie`" is enforced by a test,
+  not by a package boundary (see *Keeping the boundary*).
+- A skorie-only change produces a new release. Hosts pin a tag (003,
+  *Versions and pinning*) and the changelog says who a release affects, so a
+  non-skorie host skips it knowingly.
 
-# Option 2: A separate `skorie-users` app on top of `django-users`
+# Option 2: A separate `skorie-users` package on top of `django-users` (proposed 6Jul26, not adopted)
 
-`django-users` becomes strictly generic (skorie coupling removed / inverted
-behind hooks). A new `skorie-users` app depends on `django-users` and holds
-the shared skorie behaviour. Hosts install both and subclass `skorie-users`.
+`django-users` becomes strictly generic. A new `skorie-users` package, in its
+own repo, depends on it and holds the shared skorie behaviour. Hosts install
+both and subclass `skorie-users`.
 
 ## Pros
 
-- Clean separation of concerns: generic library vs skorie domain vs host.
-- `django-users` can be released and reasoned about without skorie in view;
-  non-skorie hosts (`gadget_admin`) depend on it with zero dead weight.
-- The shared skorie code gets a real home with its own tests and release
-  cadence, decoupled from the generic library.
-- Mirrors the pattern already working elsewhere (thin host over reusable
-  abstract app).
+- Clean separation enforced by the package boundary itself.
+- Non-skorie hosts download nothing skorie.
+- Generic and skorie release cadences are independent.
 
 ## Cons
 
-- A third layer to install and version — hosts pin two libraries, and the
-  branch-topology discipline in `CLAUDE.md` now applies to two repos.
-- Migration risk if `skorie-users` owns concrete models (AUTH_USER_MODEL).
-- Larger up-front move than flag-gating in place.
+- Hosts pin two libraries, and the branch-and-back-port discipline spans two
+  repositories. That is the cost decision 003 exists to remove.
+- A change touching a generic hook and its skorie implementation needs
+  coordinated releases across two repos; version skew breaks at the seam.
+- Migration risk if `skorie-users` owns concrete models (`AUTH_USER_MODEL`).
 
 # Decision
 
-Go with **Option 2 — a separate `skorie-users` app on top of a
-skorie-free `django-users`.**
+**Option 1, as reshaped (27Sep26): one package, with the skorie layer as
+`django_users.skorie`, opted into by mixins.**
 
-## `django-users` cleanup (make it generic)
+## Make the generic code generic
 
-`django-users` must stop naming `web`, `skorie_*`, and `rosettes`. Coupling
-is inverted the same way Decision 001 handled referrals:
+The generic code must stop naming `web`, `skorie_*` and `rosettes`. **Plain
+inheritance first; a settings hook only where generic code has to call into
+skorie behaviour it cannot reach through the user object.**
 
-- **Domain model lookups** → a settings-driven resolver, e.g.
-  `get_domain_model('eventrole')` reading `settings.DJUSERS_DOMAIN_MODELS`
-  (`{'eventrole': 'web.EventRole', ...}`); returns `None` when unwired, and
-  callers guard on `None`. Replaces every hardcoded `apps.get_model('web',
-  ...)` / `apps.get_model('skorie_*', ...)`.
-- **Event-domain methods on `CustomUser`** (`footprint`, `is_deleteable`,
-  current-roles, outstanding-teams) → a **usage-provider hook**
-  (`settings.DJUSERS_USAGE_PROVIDER`, default a null provider returning
-  empty). `django-users` ships the null provider; `skorie-users` ships the
-  event-backed one.
-- **Skorie-only forms/views/data** (`SkorieUserCreationForm`, newsletter /
-  subscription / payment views, `ref.py` event-ref grammar, root
-  `default_roles_and_disciplines.py`, `tools/api_mixins.py`) → move to
-  `skorie-users`; `django-users` keeps only the generic base
-  (`CustomUserCreationForm`) and the hook points.
+- **Methods on the user model** (`footprint`, `is_deleteable`,
+  `change_names_email`, `current_roles`, `user_roles`, `user_modes_list`,
+  `outstanding_event_invites`, `make_order`, `my_paid_orders`,
+  `attach_competitor`, `match_user2competitor`):
+  - the generic base keeps a neutral default where generic code calls the
+    method, e.g. `is_deleteable()` returns `True`;
+  - otherwise the method leaves the base altogether;
+  - `SkorieUserMixin` overrides or adds them, and may name `web.EventTeam`
+    and the rest directly, because it is skorie code.
 
-## `skorie-users` scope
+  No `DJUSERS_USAGE_PROVIDER` setting is needed for these.
+- **Views that mix generic and skorie content** (`ManageUser`, `TellUsAbout`)
+  gain a small hook such as `get_extra_context()`, and the skorie subclass fills
+  it with Competitor, Entry and newsletter data.
+- **A settings hook stays only where generic code must reach a domain model
+  itself.** Use `get_domain_model()` over `settings.DJUSERS_DOMAIN_MODELS`,
+  returning `None` when a host has not wired it. Expect few or none once the
+  above is done.
+- **Skorie-only code moves into `django_users/skorie/` whole:**
+  - `SkorieUserCreationForm`;
+  - the newsletter, subscription and payment views;
+  - `ref.py`'s event-reference grammar;
+  - `default_roles_and_disciplines.py`;
+  - `activate_event_timezone` (`tools/decorators.py`), which imports
+    `web.models.Event`. On a non-skorie host with its own unrelated `web.Event`,
+    it would load the wrong model rather than fail;
+  - `tools/api_mixins.py`.
+
+## Keeping the boundary
+
+- A test imports every generic module with only Django's own apps installed.
+- A check fails the build if a generic module names `web.`, `skorie_`,
+  `rosettes` or `django_users.skorie`.
+
+Without these, the coupling creeps back.
+
+## `django_users.skorie` scope
 
 Absorbs the cross-host-common code (evidence in Related Information). The
 non-model glue is pure code with no migration cost and is hoisted wholesale;
@@ -205,7 +247,7 @@ the models are handled conservatively (see below):
 - The skorie forms/views/ref/roles-and-disciplines moved out of
   `django-users`.
 
-## Models: abstract in `skorie-users`, concrete stays in the host
+## Models: abstract mixins in `django_users.skorie`, concrete stays in the host
 
 The concrete host models (`CustomUser`, `Person`, `Role`, `Organisation`,
 `UserContact`, `CommsChannel`, `VerificationCode`, `PersonOrganisation`,
@@ -216,33 +258,37 @@ minefield Django is designed to resist.
 
 Therefore, for v1:
 
-- `skorie-users` provides **abstract bases / mixins** carrying the shared
+- `django_users.skorie` provides **abstract bases / mixins** carrying the shared
   model body.
 - Each host keeps a **thin** concrete `users/models.py` (e.g.
-  `class CustomUser(SkorieCustomUserBase): pass`), so hosts keep their own
+  `class CustomUser(SkorieUserMixin, CustomUserBase): pass`), so hosts keep their own
   tables and `AUTH_USER_MODEL` — **zero migration risk** — while still
   deduplicating ~90% of the body.
-- Owning the concrete models in `skorie-users` (hosts drop `users/models.py`
-  and point `AUTH_USER_MODEL` at `skorie_users.CustomUser`) is explicitly
+- Owning concrete skorie models in the package (hosts drop `users/models.py`
+  and point `AUTH_USER_MODEL` at a package-owned model) is explicitly
   **out of scope for v1** and revisited only if a greenfield host appears.
 
 ## Sequencing (tracer bullet)
 
-1. Land the `django-users` de-skorie-ification behind hooks (this is a
-   prerequisite and can ship first; `gadget_admin` is the proof it worked).
-2. Scaffold `skorie-users` (package, `apps.py`, depends on `django-users`).
-3. **Tracer:** hoist the single highest-dup / lowest-risk file
-   (`signals.py` or `serializers.py`) into `skorie-users`, wire **one** host
-   (skorie3) to import it, delete the local copy, confirm green. Proves the
-   layering end-to-end before committing to the full move.
-4. Roll the rest of the glue (admin, notifications, api, keycloak).
-5. Introduce the abstract model bases; convert hosts to thin subclasses one
-   at a time, skorie3/skorie4 first (they are the reference generation).
+Runs on the trunk agreed in decision 003, after it is brought up to date.
+
+1. Add the boundary test and check (*Keeping the boundary*), marked
+   expected-to-fail. They are the measure of steps 2–3.
+2. Create `django_users/skorie/`. Move the skorie-only code into it whole,
+   and move the Event-domain user methods into `SkorieUserMixin`.
+3. **Tracer:** convert **one** host (skorie3) to inherit `SkorieUserMixin` and
+   import from `django_users.skorie`, with its tests green. Confirm
+   `gadget_admin` imports the generic package with no skorie apps present. The
+   boundary test now passes.
+4. Hoist the cross-host glue (admin, serializers, signals, notifications, api,
+   keycloak glue), highest duplication first.
+5. Convert the other hosts to thin subclasses one at a time, skorie3/skorie4
+   first (they are the reference generation).
 
 ## Per-host tidy-up (first pass — to be verified per repo before editing)
 
 - **skorie3 / skorie4** — the modern pair; serve as the reference for
-  `skorie-users`. After extraction their `users/` apps shrink to thin
+  `django_users.skorie`. After extraction their `users/` apps shrink to thin
   subclasses plus genuine locals (`middleware.py`, `api_keycloak.py` for s3;
   `hooks.py` for s4, which is on the authentik line and has no `keycloak.py`).
 - **skorie2** — adopts the hoisted glue; its `keycloak.py` (identical to s1)
@@ -254,7 +300,7 @@ Therefore, for v1:
 
 ## Out of scope for v1
 
-- `skorie-users` owning concrete models / `AUTH_USER_MODEL` swaps.
+- The package owning concrete skorie models / `AUTH_USER_MODEL` swaps.
 - Consolidating the hosts' `web` apps (this decision is about the `users`
   layer only).
 - A declared registry of domain-model keys (start with a plain settings
@@ -264,53 +310,43 @@ Therefore, for v1:
 
 ## Easier
 
-- `django-users` becomes genuinely reusable — a non-skorie host installs and
-  imports it with no skorie apps present.
+- `django-users` becomes genuinely reusable: a non-skorie host installs and
+  imports it with no skorie apps present, and never runs the skorie code.
 - One place to fix and test shared skorie user behaviour instead of four
   copy-pasted `users/` apps.
-- New skorie host = install `skorie-users`, add thin subclasses; no more
+- New skorie host = inherit the skorie mixins and add thin subclasses; no more
   copying an existing host's `users` app as a starting point.
-- Generic-library and skorie-domain release cadences decouple.
+- One library to pin, one trunk, one version sequence (003).
 
 ## Harder
 
-- Hosts now pin two libraries (`django-users` **and** `skorie-users`), and
-  the "back-port to every active consumer branch" discipline in `CLAUDE.md`
-  now spans two repositories.
-- A change touching both the generic hook and its skorie implementation
-  crosses a package boundary — needs coordinated releases.
+- The generic/skorie boundary is a rule kept by tests rather than a package
+  boundary; it has to be treated as a build failure, not a style point.
 - During the transition, hosts run a mix of local and hoisted code; the
   order of extraction matters to keep each host green.
 
 ## Risks
 
 - **AUTH_USER_MODEL migration.** Mitigated by keeping concrete models in the
-  hosts for v1 (abstract bases only in `skorie-users`).
+  hosts (abstract mixins only in `django_users.skorie`).
 - **Hidden per-host divergence** behind high similarity scores — two files
   can be 0.93 similar and differ in exactly the line that matters.
   Mitigation: a per-repo file-by-file review before deleting any host code;
   the similarity matrix guides, it does not authorise deletion.
-- **Branch topology.** `django-users` has many long-lived branches; the
-  de-skorie-ification must be back-ported to every active consumer branch,
-  not just the one in hand. Mitigation: agree the branch scope with Dev up
-  front and use worktrees (per `CLAUDE.md`).
-- **Two-repo version skew.** A host on an old `django-users` with a new
-  `skorie-users` (or vice-versa) could break at the hook boundary.
-  Mitigation: `skorie-users` declares a minimum `django-users` version and
-  the hook contract is documented in one place.
+- **Boundary erosion.** A convenient import from generic code into
+  `django_users.skorie` quietly re-couples the library. Mitigation: the
+  boundary test and check fail the build.
 
 ## Future work created
 
-- Optional v2: `skorie-users` owns concrete models for greenfield hosts.
-- A declared domain-model / event-name registry if stringly-typed keys bite.
+- Optional v2: concrete skorie models for greenfield hosts.
+- A declared domain-model registry if `DJUSERS_DOMAIN_MODELS` keys bite.
 - Consolidating the hosts' `web` apps (separate, larger decision).
-- Applying the same hook inversion to any other domain coupling later found
-  in `django-users`.
 
 # Who is involved
 
 | Name | Why/When |
 | :---- | :---- |
 | Phoebe (Dev) | Vision, approval of this decision, acceptance testing, branch-scope sign-off |
-| Claude | Implementation of the de-skorie-ification and `skorie-users` scaffold, tests, docs |
-| Host-app owners | Adopt `skorie-users`, convert local `users` apps to thin subclasses, delete duplicated code |
+| Claude | Implementation of the de-skorie-ification and `django_users.skorie`, boundary tests, docs |
+| Host-app owners | Inherit the `django_users.skorie` mixins, convert local `users` apps to thin subclasses, delete duplicated code |

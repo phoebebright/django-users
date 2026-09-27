@@ -9,12 +9,18 @@ proposed (2026-09-27). Nothing moved yet.
 - **A separate branch is allowed only when a host's requirements differ enough
   to justify one.** Small differences go in that host's own `users` app.
 - **Zammad integration is left out for now**, to be taken up later.
+- **The skorie layer is part of the trunk**: the `django_users.skorie` subpackage,
+  opted into by mixins (002 as revised 27Sep26). There is no second package to
+  branch.
+- **Hosts pin a released version (a tag), never a branch** (*Versions and
+  pinning*).
 
 # History
 
 | Date | What changed | Why |
 | :--- | :--- | :--- |
 | 27Sep26 | Proposed | Adding one feature (QR phone login) meant writing it twice, for two branches that had drifted apart, and a third app could not use it at all |
+| 27Sep26 | Added *Versions and pinning*; the skorie layer is a subpackage on the trunk (002 revised) | Dev. Hosts floating on branch names picked up the phone login on their next deploy without choosing it, and version numbers on different branches collided (1.4.x, 0.2.x, 3.0.0) |
 
 Detail is in git: `git log --follow _project_docs/decisions/003_one_branch_for_every_host.md`.
 
@@ -67,8 +73,9 @@ README already gives a host migration order.
 
 ## Related Decisions/Issues
 
-- **002, Extract a `skorie-users` layer.** 002 decides *what code lives in which
-  layer*: generic `django-users`, then `skorie-users`, then the host. This
+- **002, A skorie layer.** 002 decides *what code lives in which layer*:
+  generic `django_users`, then the `django_users.skorie` subpackage (revised
+  27Sep26 from a separate `skorie-users` package), then the host. This
   decision is about *which branch* the generic layer is, and it comes first.
   Extracting skorie code once, from one trunk, is far cheaper than extracting
   it from four branches. 002's proof that the library stands alone is
@@ -100,8 +107,9 @@ This is the arrangement 001 and 002 already assume.
 ## Cons
 
 - A breaking change on the trunk reaches every host. That needs tests that
-  cover all three providers (`tests/test_providers` is a start), and hosts pinned
-  to commits rather than to a moving branch name.
+  cover all three providers (`tests/test_providers` is a start), and hosts
+  pinned to released tags rather than to a moving branch name (*Versions and
+  pinning*).
 - Each move is real work: import renames, and on older hosts a `users`
   migration (see gadget_admin below).
 
@@ -168,7 +176,7 @@ For each: check whether `unified-auth` already has it. If not, port it.
 
 **Then make the trunk the default:**
 - merge `unified-auth` into `main`;
-- make `main` the branch hosts pin, from then on by commit;
+- tag the first release from it (see *Versions and pinning*);
 - keep the `unified-auth` name as an alias until every host has moved.
 
 ## 2. Move the hosts
@@ -178,10 +186,10 @@ then the Authentik host, then the Keycloak hosts one at a time, on staging first
 
 | Order | Host | Provider | Work |
 |---|---|---|---|
-| 1 | skorie2 | `django` | Already on it. Re-pin to the new trunk commit |
+| 1 | skorie2 | `django` | Already on it. Re-pin to the first tag |
 | 2 | gadget_admin | `django` | See below |
-| 3 | skorie4 | `authentik` | `skorie-users2` is wholly contained in the trunk. Re-pin and set `AUTH_PROVIDER='authentik'` |
-| 4 | skorie3 | `keycloak` | Re-pin; add `AUTH_PROVIDER='keycloak'`; the `[keycloak]` extra |
+| 3 | skorie4 | `authentik` | `skorie-users2` is wholly contained in the trunk. Pin a tag and set `AUTH_PROVIDER='authentik'` |
+| 4 | skorie3 | `keycloak` | Pin a tag; add `AUTH_PROVIDER='keycloak'`; the `[keycloak]` extra |
 | 5 | skorie-news, whinnie | per host | as skorie3 |
 | 6 | skorie1 | `keycloak` | Last: the heaviest `users` app (002a) |
 
@@ -201,6 +209,10 @@ then the Authentik host, then the Keycloak hosts one at a time, on staging first
 - **It currently packages no templates.** Its `MANIFEST.in` names
   `django-users/static`. gadget_admin supplies its own, which keeps working.
 
+Every move ends with the host's requirements line changed from a branch name
+to a tag. Until then, a host floating on a branch takes whatever was last
+pushed there.
+
 ## 3. Retire the dead branches
 
 - **Retire:** `authentik`, `skorie-users2` (once skorie4 has moved), `builtair`,
@@ -211,6 +223,56 @@ then the Authentik host, then the Keycloak hosts one at a time, on staging first
 
 Retiring means tagging the branch tip, e.g. `archive/skorie_users`, then
 deleting the branch, so a commit a host is still pinned to stays reachable.
+
+## 4. Versions and pinning
+
+*Added 27Sep26.* One trunk only helps if a host can choose *when* it takes a
+change.
+
+**One version sequence, on the trunk only.** `MAJOR.MINOR.PATCH`:
+- **MAJOR:** a host must act to upgrade, e.g. a migration in its `users`
+  app, renamed imports (as in 3.0), or a new required setting.
+- **MINOR:** new features that are safe to take, e.g. the phone login.
+- **PATCH:** fixes only.
+
+Maintenance branches (below) patch the release they came from and never
+start a sequence of their own.
+
+**Every release is tagged, and tags never move.**
+- The tag is `v<version>`, e.g. `v3.1.0`, and matches `version` in
+  `pyproject.toml`. A test fails if they differ.
+- Tags are protected on GitHub so they cannot be moved or deleted.
+
+**Hosts pin a tag, never a branch:**
+
+```
+git+https://github.com/phoebebright/django-users@v3.1.0
+```
+
+Upgrading is a deliberate edit to that line, made and reviewed like any
+other change.
+
+**Every release has a changelog entry saying who it affects:**
+
+```
+## 3.2.0
+Affects: skorie hosts only (django_users.skorie) - no change for non-skorie hosts
+Host action: none
+```
+
+- `Affects` is one of: all hosts, a provider (`django` / `keycloak` /
+  `authentik`), or skorie hosts only.
+- `Host action` names every migration, setting or import change a host must
+  make, or says `none`.
+- A non-skorie host such as BuiltAir can then skip a skorie-only release knowingly.
+
+**A fix for a host that cannot take the latest version:**
+1. Branch `release/<major>.<minor>` from that host's tag.
+2. Fix it there, tag it (e.g. `v3.1.1`) and merge the fix to the trunk.
+3. Delete the branch once no host pins that line.
+
+This is the routine exception to "one branch". Any other long-lived branch
+needs its reason recorded in this document (see *Decision*).
 
 # Consequences
 
@@ -223,7 +285,8 @@ deleting the branch, so a commit a host is still pinned to stays reachable.
 - The trunk must not break any provider. Before step 2 starts, the test
   suite should run each provider's login path; `tests/test_providers` covers
   resolution and `KeycloakIdP` today.
-- Hosts pin commits and move deliberately, instead of floating on a branch name.
+- Hosts pin tags and move deliberately, instead of floating on a branch name.
+  Every release needs a tag and a changelog entry.
 
 **Risks:**
 - gadget_admin's `CommsChannel.value` → `user.mobile` copy is the one step that
