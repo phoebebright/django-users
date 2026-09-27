@@ -20,6 +20,7 @@ proposed (2026-09-27). Nothing moved yet.
 | Date | What changed | Why |
 | :--- | :--- | :--- |
 | 27Sep26 | Proposed | Adding one feature (QR phone login) meant writing it twice, for two branches that had drifted apart, and a third app could not use it at all |
+| 27Sep26 | Step 2 done: `main` = trunk, `v3.1.0` tagged | First tagged release; hosts can now pin it |
 | 27Sep26 | Step 1 done: `skorie_users` ported; `main` needed nothing, and its user-search change was rejected as a security regression | Commit-by-commit review against the trunk |
 | 27Sep26 | Added *Versions and pinning*; the skorie layer is a subpackage on the trunk (002 revised) | Dev. Hosts floating on branch names picked up the phone login on their next deploy without choosing it, and version numbers on different branches collided (1.4.x, 0.2.x, 3.0.0) |
 
@@ -204,6 +205,17 @@ For each: check whether `unified-auth` already has it. If not, port it.
 - merge `unified-auth` into `main`;
 - tag the first release from it (see *Versions and pinning*);
 - keep the `unified-auth` name as an alias until every host has moved.
+
+**Done 27Sep26: `v3.1.0`.**
+- `main` was merged with the *ours* strategy. Its 11 commits are recorded as
+  merged but none of their changes are taken, so nothing rejected in step 1
+  came back. `main` then fast-forwarded to the trunk, with no force-push.
+- `main` and `unified-auth` point at the same commit. From here, work lands
+  on `main`.
+- `tests/test_release` checks that the tag, `pyproject.toml` and
+  `CHANGELOG.md` agree.
+- Before moving `main`, confirmed that no host installs `django-users`
+  without a pin, so moving it reached no host.
 
 ## 2. Move the hosts
 

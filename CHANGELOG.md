@@ -9,7 +9,9 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
-## Unreleased
+## 3.1.0 (27 Sep 2026)
+
+The first tagged release from the trunk. `main` now carries it.
 
 Trunk ports from `skorie_users` (decision 003, step 1). Nothing from `main`
 needed porting: its changes are already on this branch in a newer form, or are
