@@ -350,10 +350,14 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         # but only if we have the page set
         self.user = request.user
 
-        goto = reverse(getattr(settings, 'CONFIRM_USER_PAGE', "users:tell_us_about"))
         if not self.user.is_authenticated:
-            return HttpResponseRedirect(f"{reverse_lazy(settings.LOGIN_URL)}?next={goto}")
+            return self.handle_no_permission()   # LoginRequiredMixin: to LOGIN_URL?next=
 
+        # Only when the host has a confirm-your-details page. Defaulting to
+        # skorie's users:tell_us_about made the profile page a 500 on hosts
+        # without one (3.1.2).
+        confirm_page = getattr(settings, 'CONFIRM_USER_PAGE', None)
+        goto = reverse(confirm_page) if confirm_page else None
         if goto and self.user.status < self.user.USER_STATUS_CONFIRMED:
             # redirect early if user not allowed
             return redirect(f"{goto}?next={reverse_lazy('users:user-profile')}")  # or any URL name/path
@@ -371,10 +375,13 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
     def get_context_data(self, **kwargs):
         self.user = self.request.user if self.request.user.is_authenticated else None
-        Subscription = apps.get_model('skorie_news.Subscription')
         context = super().get_context_data(**kwargs)
-        context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
-        if settings.USE_NEWSLETTER:
+        context['USE_SUBSCRIBE'] = getattr(settings, 'USE_SUBSCRIBE', False)
+        # Newsletters are skorie_news. Looked up only when the host uses them:
+        # an unconditional lookup made the profile page a 500 on hosts without
+        # skorie_news (3.1.2).
+        if getattr(settings, 'USE_NEWSLETTER', False) and apps.is_installed('skorie_news'):
+            Subscription = apps.get_model('skorie_news.Subscription')
             context['subscriptions'] = Subscription.objects.filter(user=self.user).order_by('-created')
         context['now'] = timezone.now()
         context['roles'] = self.request.user.user_roles(descriptions=True)
@@ -1262,7 +1269,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         ctx = super().get_context_data(**kwargs)
         ctx['step'] = self.get_step()
         ctx['verification_sent'] = bool(self.request.session.get(self.SK_VC_PK))
-        ctx['magic_link'] = bool(settings.USE_MAGIC_LINK_FOR_FORGOT)
+        ctx['magic_link'] = bool(getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False))
         ctx['user'] = self.user
         return ctx
 
@@ -1311,7 +1318,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
             # Create verification
             purpose = "forgot_password"
-            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+            if getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False) and channel.channel_type == "email":
                 vc, context = VerificationCode.create_for_magic_link(user=user, channel=channel, purpose=purpose)
             else:
                 vc, context = VerificationCode.create_for_code(user=user, channel=channel, purpose=purpose)
@@ -1325,7 +1332,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Store vc pk (NOT the raw code)
             self.request.session[self.SK_VC_PK] = str(vc.pk)
 
-            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+            if getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False) and channel.channel_type == "email":
                 # For magic link, go straight to step 3 page that waits for link or offers "enter code" fallback if you want.
                 messages.info(self.request, 'We’ve sent you a verification link. Please check your email.')
                 # Optionally you could allow a fallback code entry if your email also includes the code.

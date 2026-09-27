@@ -9,6 +9,55 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.1.2 (27 Sep 2026)
+
+Found testing BuiltAir on 3.1.1 (BuiltAir HD-0154). BuiltAir is a plain-Django
+host: the user model is built on `CustomUserBaseBasic` and tracks field
+changes, and `django_users` is not an installed app. Every fault below broke
+such a host outright, and none showed on a skorie host.
+
+- **Users could not be saved.** `CustomUserBaseBasic.save()` read the previous
+  row with `.only()`; a user model that tracks field changes recursed without
+  end. It now uses `.values()`.
+- **Codes could not be issued or verified.** Four `UserHistory` lookups called
+  `apps.get_app_config('django_users')`, which raises when the app is not
+  installed. They now check `apps.is_installed()` first; skorie behaviour is
+  unchanged.
+- **Verification failed on the Basic base.** `idp_id` existed only on
+  `CustomUserBase`. It is now on `CustomUserBaseBasic` too, returning None
+  under `AUTH_PROVIDER='django'`.
+- **The profile page was a 500:**
+  - it redirected through skorie's `users:tell_us_about` by default. It now
+    redirects only when `CONFIRM_USER_PAGE` is set;
+  - anonymous users now go through `LoginRequiredMixin` instead of a
+    hand-built URL;
+  - `skorie_news.Subscription` is looked up only when `USE_NEWSLETTER` is on
+    and `skorie_news` is installed;
+  - `USE_SUBSCRIBE` and `USE_NEWSLETTER` now default to False.
+- **Forgot-password was a 500:** it read `USE_MAGIC_LINK_FOR_FORGOT` with no
+  default. It now defaults to False.
+- **`EXTRA_ROLES`** defaults to `{}` on `CustomUserBaseBasic`, which
+  `user_roles()` reads.
+- **New `tests/test_plain_host`:** a reference plain-Django host in BuiltAir's
+  shape. Each fault above has a test. All 8 fail on 3.1.1 and pass here.
+
+**Affects:** all hosts. Only plain-Django hosts on `CustomUserBaseBasic` were broken.
+
+**Host action:** none.
+
+**Documented here, for any host:** `django_users` needs these installed in
+`INSTALLED_APPS`:
+- `django.contrib.sites` and `django.contrib.flatpages` (models import them);
+- `django_countries`, `rest_framework` and `rest_framework_api_key`
+  (`django_users.urls` imports them).
+
+The host's users app must be importable as the top-level module `users`,
+because `serializers.py` imports `users.models`.
+
+**Noticed, not fixed:** `user_roles(descriptions=True)` calls `.update()` on
+the class-level `ModelRoles.ROLE_DESCRIPTIONS`, so extra roles leak into it for
+every later caller.
+
 ## 3.1.1 (27 Sep 2026)
 
 Found moving BuiltAir onto 3.1.0 (BuiltAir ticket HD-0154). Both faults stopped
