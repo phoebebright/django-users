@@ -8,6 +8,7 @@ from .views import SubscribeView, ProblemSignup, NewUsers, UserMigrationView, Us
     ChangePasswordView, ProblemLogin, ChangePasswordNowView, ForgotPassword, ManagerUserProfile, AddUser, update_users, \
     Troubleshoot, UnverifiedUsersList, SendOTP, QRLogin, login_with_token
 from .keycloak import logout_user_from_keycloak_and_django
+from .views_phone_login import PhoneLoginQRView, PhoneLoginView
 
 app_name = 'users'
 
@@ -60,7 +61,11 @@ urlpatterns = [
 
     path('logout/', logout_user_from_keycloak_and_django, name='logout'),
     path('logout_all/', logout_user_from_keycloak_and_django, name='logout_all'),
-    path('qr_login/', QRLogin.as_view(), name='qr-login'),
+    # Log in on a phone from a QR code: single-use, two minutes, token kept out
+    # of URLs the server sees (django_users.phone_login). Replaces QRLogin, whose
+    # token could be reused for its whole window and needed a keycloak_id.
+    path('qr_login/', PhoneLoginQRView.as_view(), name='qr-login'),
+    path('phone/', PhoneLoginView.as_view(), name='phone_login'),
     path('lwt/', login_with_token, name='qr-login'),
     path('login/', LoginView.as_view(), name='login'),
     path('register/', RegisterView.as_view(), name='register'),
