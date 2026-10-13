@@ -104,3 +104,128 @@ class LoginNormalisationTests(TestCase):
             fake.return_value.normalized = "new@pwtest.com"
             utils.normalise_email("new@pwtest.com")
         self.assertTrue(fake.call_args.kwargs["check_deliverability"])
+
+
+class ForgotPasswordTests(TestCase):
+    """3.1.4: ForgotPassword kept "verified" as a bare True in the session.
+    Starting again with another email didn't clear it, and problem_register
+    reset the step and email but not the flag. So: verify your own address,
+    open problem_register, enter anyone's email, and step 3 skipped the code -
+    step 4 set their password. Found in skorie1's bug hunt (C5)."""
+    NEW_PASSWORD = "Correct-horse-42"
+
+    def setUp(self):
+        from unittest import mock
+        self.attacker = User.objects.create_user(email="attacker@test.com", password="attacker-old-pw")
+        self.victim = User.objects.create_user(email="victim@test.com", password="victim-old-pw")
+
+        # keep each code that is "sent", instead of sending it
+        self.codes = {}
+        create_for_code = VerificationCode.create_for_code
+
+        def keep_code(**kwargs):
+            row, info = create_for_code(**kwargs)
+            self.codes[kwargs["user"].pk] = info["code"]
+            return row, info
+
+        for patcher in (mock.patch.object(VerificationCode, "create_for_code", side_effect=keep_code),
+                        mock.patch.object(VerificationCode, "send_verification", return_value=True)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        self.url = reverse("users:forgot_password")
+        self.client.get(self.url)
+
+    def post(self, **data):
+        # each step's form also wants the earlier steps' fields, as the page re-posts them
+        self.fields.update(data)
+        return self.client.post(self.url, self.fields)
+
+    def verify(self, user, code=None):
+        channel = CommsChannel.objects.get(user=user, channel_type="email")  # made on create
+        self.fields = {}
+        self.post(email=user.email)
+        self.post(channel=str(channel.pk))
+        self.post(verification_code=code or self.codes[user.pk])
+
+    def set_password(self):
+        return self.post(new_password=self.NEW_PASSWORD, confirm_password=self.NEW_PASSWORD)
+
+    def assert_password_unchanged(self, user, old):
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(old))
+        self.assertFalse(user.check_password(self.NEW_PASSWORD))
+
+    def test_user_can_reset_their_own_password(self):
+        self.verify(self.attacker)
+        self.set_password()
+
+        self.attacker.refresh_from_db()
+        self.assertTrue(self.attacker.check_password(self.NEW_PASSWORD))
+
+    def test_verifying_your_own_email_does_not_reset_someone_elses(self):
+        self.verify(self.attacker)
+
+        self.client.get(reverse("users:problem_register"))
+        self.verify(self.victim, code="000000")
+        self.set_password()
+
+        self.assert_password_unchanged(self.victim, "victim-old-pw")
+
+    def test_wrong_code_does_not_reset_password(self):
+        self.verify(self.victim, code="000000")
+        self.set_password()
+
+        self.assert_password_unchanged(self.victim, "victim-old-pw")
+
+
+class LoginUrlIsAPathTests(TestCase):
+    """3.1.4: five places did reverse(settings.LOGIN_URL), which only takes a
+    url name. A host may set LOGIN_URL to a path, as this one does, and each
+    of them was a 500 there. Forgot Password's is covered above."""
+    LOGIN = "/users/login/"
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="plain@test.com", password="testpass123")
+
+    def request(self, method="get", path="/", **data):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.test import RequestFactory
+        request = getattr(RequestFactory(), method)(path, data)
+        SessionMiddleware(lambda r: None).process_request(request)
+        request._messages = FallbackStorage(request)
+        return request
+
+    def test_login_redirect(self):
+        from django_users.views import login_redirect
+        response = login_redirect(self.request(next="/somewhere/"))
+        self.assertEqual(response["Location"], f"{self.LOGIN}?next=%2Fsomewhere%2F")
+
+    def test_register_with_an_existing_account_goes_to_login(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from django_users.views import RegisterView
+        view = RegisterView()
+        view.setup(self.request("post"))
+        form = SimpleNamespace(cleaned_data={
+            "preferred_channel": "email", "email": self.user.email, "mobile": "",
+            "password": "whatever", "first_name": "Plain", "last_name": "Host"})
+        with mock.patch("django_users.views.normalise_email", side_effect=lambda e, **kw: e):
+            response = view.form_valid(form)
+        self.assertEqual(response["Location"], f"{self.LOGIN}?email=plain%40test.com")
+
+    def test_reset_session_goes_to_login(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("users:reset-session"), {"next": "/back/"})
+        self.assertEqual(response["Location"], f"{self.LOGIN}?next=/back/")
+
+    def test_send_otp_links_to_login(self):
+        from unittest import mock
+        from django.conf import settings
+        from django_users.utils import send_otp
+        channel = CommsChannel.objects.get(user=self.user, channel_type="email")  # made on create
+        with mock.patch("django_users.utils.get_mail_class") as mail_class:
+            send_otp(channel, "123456")
+        context = mail_class.return_value.send.call_args.kwargs["context"]
+        self.assertEqual(context["login_url"], f"{settings.SITE_URL}{self.LOGIN}?email=plain%40test.com")

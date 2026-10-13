@@ -38,7 +38,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
-from django.shortcuts import redirect, get_object_or_404, render
+from django.shortcuts import redirect, get_object_or_404, render, resolve_url
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
@@ -305,7 +305,7 @@ def logout(request):
 
 
 def login_redirect(request):
-    url = reverse(settings.LOGIN_URL)
+    url = resolve_url(settings.LOGIN_URL)
     if 'next' in request.GET.urlencode():
         url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
@@ -829,7 +829,7 @@ class RegisterView(FormView):
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
-                return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
+                return HttpResponseRedirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(email)}")
 
         set_current_user(self.request, user.id, "REGISTER")
 
@@ -914,6 +914,8 @@ def set_current_user(request, user_id=None, user_login_mode=None):
         request.session.pop('forgot_channel', None)
         request.session.pop('forgot_email', None)
         request.session.pop('forgot_password_step', None)
+        request.session.pop('forgot_vc_pk', None)
+        request.session.pop('forgot_verified', None)
         request.session.pop('verification_code', None)
 
     else:
@@ -1116,7 +1118,7 @@ class VerifyForgotPasswordLinkView(View):
         request.session[ForgotPassword.SK_EMAIL] = vc.user.email
         request.session[ForgotPassword.SK_CHANNEL] = str(vc.channel_id)
         request.session[ForgotPassword.SK_VC_PK] = str(vc.pk)
-        request.session[ForgotPassword.SK_VERIFIED] = True
+        request.session[ForgotPassword.SK_VERIFIED] = str(vc.user.pk)
         request.session[ForgotPassword.SK_STEP] = 4  # jump to password entry
 
         messages.success(request, "Your email has been verified. Please set a new password.")
@@ -1215,7 +1217,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     SK_EMAIL = "forgot_email"
     SK_CHANNEL = "forgot_channel"         # channel id (int/uuid)
     SK_VC_PK = "forgot_vc_pk"             # verification code pk (uuid)
-    SK_VERIFIED = "forgot_verified"       # bool set by code or magic link
+    SK_VERIFIED = "forgot_verified"       # pk of the user a code or magic link verified
 
     def dispatch(self, request, *args, **kwargs):
         # Ensure user is redirected if already logged in
@@ -1234,6 +1236,12 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     def reset_flow(self):
         for k in (self.SK_STEP, self.SK_EMAIL, self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
             self.request.session.pop(k, None)
+
+    def is_verified_for(self, user):
+        # Verification belongs to the user it was done for. It used to be a bare
+        # True, which survived starting again with another email - verify your
+        # own address, then reset anyone's password.
+        return self.request.session.get(self.SK_VERIFIED) == str(user.pk)
 
     def _models(self):
         CommsChannel = apps.get_model('users', 'CommsChannel')
@@ -1301,7 +1309,10 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('email', 'This email does not have an active account. Please contact the administrators.')
                 return self.form_invalid(form)
 
-            # Persist email and continue
+            # Persist email and continue - a new email starts a new flow, so
+            # nothing verified or sent for an earlier one carries over
+            for k in (self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
+                self.request.session.pop(k, None)
             self.request.session[self.SK_EMAIL] = email
             self.set_step(2)
 
@@ -1362,7 +1373,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # If magic link was used and already verified, skip code entry
-            if self.request.session.get(self.SK_VERIFIED):
+            if self.is_verified_for(user):
                 self.set_step(4)
                 return self._render_next_step(form)
 
@@ -1381,7 +1392,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # Mark as verified for this flow
-            self.request.session[self.SK_VERIFIED] = True
+            self.request.session[self.SK_VERIFIED] = str(user.pk)
             self.set_step(4)
 
         elif step == 4:
@@ -1392,7 +1403,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
 
-            if not self.request.session.get(self.SK_VERIFIED):
+            if not self.is_verified_for(user):
                 form.add_error(None, 'Please verify your contact method before changing password.')
                 self.set_step(3)
                 return self.form_invalid(form)
@@ -1434,7 +1445,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                                  'Your password has been reset. You can now log in with your new password.')
                 # clear flow
                 self.reset_flow()
-                return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
+                return redirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(user.email)}")
 
             form.add_error('confirm_password', 'Unable to reset password. Please try a different password.')
             return self.form_invalid(form)
@@ -2451,7 +2462,7 @@ class ResetSessionView(TemplateView):
         request.session.flush()
 
         next_url = request.POST.get("next") or "/"
-        login_url = reverse(settings.LOGIN_URL)
+        login_url = resolve_url(settings.LOGIN_URL)
         response = HttpResponseRedirect(
             f"{login_url}?next={next_url}"
         )

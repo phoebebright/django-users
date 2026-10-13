@@ -9,6 +9,40 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.1.4 (13 Oct 2026)
+
+Found in skorie1's bug hunt (C5). The same fix is on `skorie_users` as 1.4.8.
+
+- **Forgot Password could reset anyone's password.** The session kept
+  "verified" as a bare True. Entering another email at step 1 did not clear
+  it, and `set_current_user()` (run by `problem_register`) reset the step and
+  email but not the flag, and step 3 skipped the code whenever it was set. So:
+  verify your own address, open `problem_register`, enter anyone's email, and
+  step 4 set their password. Administrators too.
+  - `forgot_verified` now holds the pk of the user a code or link verified,
+    and steps 3 and 4 check it against the user being reset
+    (`ForgotPassword.is_verified_for`).
+  - Step 1 clears any earlier channel, code and verification.
+    `set_current_user()` clears `forgot_verified` and `forgot_vc_pk` with the
+    rest of the flow.
+- **`LOGIN_URL` may be a path.** Five places did `reverse(settings.LOGIN_URL)`,
+  which only takes a url name, so each was a 500 on a host that sets a path:
+  - Forgot Password, after a successful reset. The password was already
+    saved, so the user saw an error after a reset that had worked.
+  - `RegisterView`, for an email that already has an active account.
+  - `ResetSessionView`.
+  - `login_redirect`.
+  - `send_otp()`, so no login code email could be sent.
+
+  They now use `resolve_url()`, which takes a url name or a path; a url name
+  gives the same result as before.
+- `tests/test_plain_host` gains three forgot-password tests and four
+  `LOGIN_URL` tests. On 3.1.3 all fail except the wrong-code test.
+
+**Affects:** all hosts that route `users:forgot_password`; the `LOGIN_URL`
+fixes, hosts that set it to a path.
+**Host action:** none.
+
 ## 3.1.3 (27 Sep 2026)
 
 Found by BuiltAir's full test run on 3.1.2 (HD-0154).

@@ -18,6 +18,7 @@ from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 from django.utils.module_loading import import_string
+from django.shortcuts import resolve_url
 
 from email_validator import validate_email, EmailNotValidError
 
@@ -100,7 +101,7 @@ def send_otp(channel, code):
     to_email = channel.user.email
     context = {
         'verification_code': code,
-        'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?' + urlencode({'email': to_email}),
+        'login_url': settings.SITE_URL + resolve_url(settings.LOGIN_URL) + '?' + urlencode({'email': to_email}),
     }
     mail = get_mail_class()
     mail.send(
