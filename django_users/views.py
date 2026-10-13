@@ -873,6 +873,8 @@ def set_current_user(request, user_id=None, user_login_mode=None):
         request.session.pop('forgot_channel', None)
         request.session.pop('forgot_email', None)
         request.session.pop('forgot_password_step', None)
+        request.session.pop('forgot_vc_pk', None)
+        request.session.pop('forgot_verified', None)
         request.session.pop('verification_code', None)
 
     else:
@@ -1075,7 +1077,7 @@ class VerifyForgotPasswordLinkView(View):
         request.session[ForgotPassword.SK_EMAIL] = vc.user.email
         request.session[ForgotPassword.SK_CHANNEL] = str(vc.channel_id)
         request.session[ForgotPassword.SK_VC_PK] = str(vc.pk)
-        request.session[ForgotPassword.SK_VERIFIED] = True
+        request.session[ForgotPassword.SK_VERIFIED] = str(vc.user.pk)
         request.session[ForgotPassword.SK_STEP] = 4  # jump to password entry
 
         messages.success(request, "Your email has been verified. Please set a new password.")
@@ -1163,7 +1165,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     SK_EMAIL = "forgot_email"
     SK_CHANNEL = "forgot_channel"         # channel id (int/uuid)
     SK_VC_PK = "forgot_vc_pk"             # verification code pk (uuid)
-    SK_VERIFIED = "forgot_verified"       # bool set by code or magic link
+    SK_VERIFIED = "forgot_verified"       # pk of the user a code or magic link verified
 
     def dispatch(self, request, *args, **kwargs):
         # Ensure user is redirected if already logged in
@@ -1182,6 +1184,12 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     def reset_flow(self):
         for k in (self.SK_STEP, self.SK_EMAIL, self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
             self.request.session.pop(k, None)
+
+    def is_verified_for(self, user):
+        # Verification belongs to the user it was done for. It used to be a bare
+        # True, which survived starting again with another email - verify your
+        # own address, then reset anyone's password.
+        return self.request.session.get(self.SK_VERIFIED) == str(user.pk)
 
     def _models(self):
         CommsChannel = apps.get_model('users', 'CommsChannel')
@@ -1249,7 +1257,10 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('email', 'This email does not have an active account. Please contact the administrators.')
                 return self.form_invalid(form)
 
-            # Persist email and continue
+            # Persist email and continue - a new email starts a new flow, so
+            # nothing verified or sent for an earlier one carries over
+            for k in (self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
+                self.request.session.pop(k, None)
             self.request.session[self.SK_EMAIL] = email
             self.set_step(2)
 
@@ -1310,7 +1321,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # If magic link was used and already verified, skip code entry
-            if self.request.session.get(self.SK_VERIFIED):
+            if self.is_verified_for(user):
                 self.set_step(4)
                 return self._render_next_step(form)
 
@@ -1329,7 +1340,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # Mark as verified for this flow
-            self.request.session[self.SK_VERIFIED] = True
+            self.request.session[self.SK_VERIFIED] = str(user.pk)
             self.set_step(4)
 
         elif step == 4:
@@ -1340,7 +1351,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
 
-            if not self.request.session.get(self.SK_VERIFIED):
+            if not self.is_verified_for(user):
                 form.add_error(None, 'Please verify your contact method before changing password.')
                 self.set_step(3)
                 return self.form_invalid(form)
