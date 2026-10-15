@@ -2138,7 +2138,7 @@ def dedupe_role(request, role_ref):
     NOTE - ignores organisation
     '''
     Role = apps.get_model('users.Role')
-    EventRole = apps.get_model('web.EventRole')
+    EventRole = apps.get_model('web.CourseRole')
     Competitor = apps.get_model('web.Competitor')
 
     role = Role.objects.get(ref=role_ref)

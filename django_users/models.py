@@ -937,14 +937,14 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     @property
     def EventTeam(self):
         if not self._EventTeam:
-            self._EventTeam = apps.get_model('web', 'EventTeam')
+            self._EventTeam = apps.get_model('web', 'CourseTeam')
         return self._EventTeam
 
     _EventRole = None
     @property
     def EventRole(self):
         if not self._EventRole:
-            self._EventRole = apps.get_model('web', 'EventRole')
+            self._EventRole = apps.get_model('web', 'CourseRole')
         return self._EventRole
 
     _Competitor = None
@@ -2873,7 +2873,7 @@ class OrganisationBase(CreatedUpdatedMixin):
 #     email = models.EmailField(blank=True, null=True)
 #     user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.CASCADE)
 #     comms_template = models.ForeignKey("CommsTemplate", blank=True, null=True, on_delete=models.CASCADE)
-#     eventrole = models.ForeignKey("web.EventRole", blank=True, null=True, on_delete=models.CASCADE)
+#     eventrole = models.ForeignKey("web.CourseRole", blank=True, null=True, on_delete=models.CASCADE)
 #     competitor = models.ForeignKey("web.Competitor", blank=True, null=True, on_delete=models.CASCADE)
 #     entries = models.ManyToManyField("Entry")
 #     comm_group = models.CharField(max_length=12, default="competitor")  # group sent to
