@@ -9,6 +9,41 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.1 (15 Oct 2026)
+
+- **Open redirects closed.** A link to the login page with
+  `?next=https://evil.example` signed the user in, then sent them off-site.
+  Every redirect to a URL taken from the request now goes through
+  `django_users.redirects.safe_next()`. It allows only this site, via Django's
+  `url_has_allowed_host_and_scheme`; anything else falls back to the view's
+  usual default. The places fixed:
+  - `LoginView` (both paths) and `VerifyMagicLinkView`
+  - `SendComms` and `ResetSessionView`
+  - `logout`, and `ProblemSignup`, through `get_legitimate_redirect()`, which
+    only rejected values starting `http` and missed `//host`, `/\host` and
+    `HTTP://`
+  - every `GoNextMixin` view, through `get_next()`, which accepted any value
+    containing a `/`
+  - the `next` that `GoNextTemplateMixin` puts in the template context (the
+    login, change password and Send Comms pages), where `href="{{ next }}"`
+    could carry `javascript:`. `AdminInviteView` builds its own context and
+    is not covered yet.
+  - `subscribe_only` / `unsubscribe_only`, which followed the client's
+    Referer
+- **No more 500s on a bad `next` at sign-in or magic-link login.** Before,
+  `next=javascript:...` or a bare word such as `next=foo` made `redirect()`
+  raise. A checked `next` is now always redirected to as a URL.
+- Hand-built `?next=` query strings are URL-encoded (slashes kept), and so is
+  `get_next()`'s `anchor`.
+- **Affects:** all hosts.
+- **Host action:** none, unless a host relies on either of these, which no
+  longer work:
+  - redirecting to another site through `next`, which now lands on the
+    default page instead
+  - passing a namespaced url name as `next` to these views (e.g.
+    `next=users:user-profile`), which Django reads as a URL scheme, so it
+    falls back. `get_next()`'s `go_next` url names still work.
+
 ## 3.2.0 (15 Oct 2026)
 
 - **Limit on failed sign-ins** (`django_users/login_limits.py`, used by

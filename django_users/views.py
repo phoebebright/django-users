@@ -53,6 +53,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
 from .login_limits import clear_login_limit, login_wait_seconds, record_failed_login
+from .redirects import safe_next
 from .utils import normalise_email, get_mail_class, looks_like_bot_name
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -78,11 +79,7 @@ from .idp import (AuthentikIdP, AuthentikError, IdPError, authentik_enabled,
 
 
 def get_legitimate_redirect(request):
-    nextpage = request.GET.get('next', '/')
-    if nextpage.startswith('http'):
-        # prevent malicious redirects
-        nextpage = '/'
-    return nextpage
+    return safe_next(request, request.GET.get('next'), '/')
 
 
 class GoNextTemplateMixin(TemplateView):
@@ -92,7 +89,7 @@ class GoNextTemplateMixin(TemplateView):
         '''some forms put a url name in 'go_next' - respect this, otherwise go to event home'''
         context = super().get_context_data(**kwargs)
 
-        context['next'] = self.request.GET.get('next', "")
+        context['next'] = safe_next(self.request, self.request.GET.get('next'), "")
 
         return context
 
@@ -237,7 +234,7 @@ def unsubscribe_only(request):
     if request.user.is_authenticated:
         request.user.update_subscribed(False)
 
-    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+    return HttpResponseRedirect(safe_next(request, request.META.get('HTTP_REFERER'), '/'))
 
 
 @never_cache
@@ -245,7 +242,7 @@ def subscribe_only(request):
     if request.user.is_authenticated:
         request.user.update_subscribed(True)
 
-    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+    return HttpResponseRedirect(safe_next(request, request.META.get('HTTP_REFERER'), '/'))
 
 
 @login_required()
@@ -312,7 +309,7 @@ def login_redirect(request):
     if 'next' in request.GET.urlencode():
         url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
-        url += f"?next={request.GET.urlencode()}"
+        url += "?" + urlencode({'next': request.GET.urlencode()}, safe='/')
     return HttpResponseRedirect(url)
 
 
@@ -321,7 +318,7 @@ def signup_redirect(request):
     if 'next' in request.GET.urlencode():
         url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
-        url += f"?next={request.GET.urlencode()}"
+        url += "?" + urlencode({'next': request.GET.urlencode()}, safe='/')
     return HttpResponseRedirect(url)
 
 
@@ -636,7 +633,7 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             context['email'] = request.POST.get('email', '')
             return render(request, self.template_name, context)
         password = request.POST.get('password')
-        next_url = request.GET.get('next') or request.POST.get('next') or None
+        next_url = safe_next(request, request.GET.get('next') or request.POST.get('next'), None)
 
         try:
             UserHistory = apps.get_model('users', 'UserHistory')
@@ -681,10 +678,14 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             if otp and str(password) == str(otp):
                 change_url = reverse('users:change_password')
                 if next_url:
-                    change_url += f"?next={next_url}"
+                    change_url += "?" + urlencode({'next': next_url}, safe='/')
                 return redirect(change_url)
 
-            return redirect(next_url or settings.LOGIN_REDIRECT_URL)
+            # A checked next is a URL, never a url name: redirect() would try
+            # to reverse a bare word like 'foo' and raise NoReverseMatch.
+            if next_url:
+                return HttpResponseRedirect(next_url)
+            return redirect(settings.LOGIN_REDIRECT_URL)
 
         # authenticate() failed — allow an admin-issued one-time password
         # (activation_code) to log the user in once, then force a change.
@@ -2368,8 +2369,10 @@ class VerifyMagicLinkView(View):
             messages.success(request, _(f"Your link has been verified and you are now logged in."))
 
             # do we have a next url?
-            next = request.GET.get("next", settings.LOGIN_REDIRECT_URL)
-            return redirect(next)
+            next = safe_next(request, request.GET.get("next"), None)
+            if next:
+                return HttpResponseRedirect(next)
+            return redirect(settings.LOGIN_REDIRECT_URL)
         else:
             messages.success(request, _("Your link has been verified."))
             return redirect(settings.LOGIN_URL)
@@ -2429,7 +2432,7 @@ class SendComms(UserCanAdministerMixin, GoNextTemplateMixin, TemplateView):
             message=message,
         )
 
-        return HttpResponseRedirect(request.POST.get('next', "/"))
+        return HttpResponseRedirect(safe_next(request, request.POST.get('next'), "/"))
 
 
 class WhoAmIView(TemplateView):
@@ -2490,10 +2493,10 @@ class ResetSessionView(TemplateView):
         logout(request)
         request.session.flush()
 
-        next_url = request.POST.get("next") or "/"
+        next_url = safe_next(request, request.POST.get("next"), "/")
         login_url = resolve_url(settings.LOGIN_URL)
         response = HttpResponseRedirect(
-            f"{login_url}?next={next_url}"
+            f"{login_url}?{urlencode({'next': next_url}, safe='/')}"
         )
 
 

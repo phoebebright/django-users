@@ -1,4 +1,6 @@
 import logging
+from urllib.parse import quote
+
 from django.conf import settings
 # mixins.py
 
@@ -11,6 +13,8 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
+
+from ..redirects import safe_next
 
 User = get_user_model()
 
@@ -29,11 +33,11 @@ def get_next(request, event_ref):
 
 
 
-    # next is a url
+    # next is a url - only followed if it stays on this site
     if next and '/' in next:
-        url = next
-        if 'anchor' in request.GET:
-          url += f"#{request.GET['anchor']}"
+        url = safe_next(request, next, fallback=None)
+        if url and 'anchor' in request.GET:
+            url += f"#{quote(request.GET['anchor'])}"
 
     # go to next url if specified
     if not url and next:
