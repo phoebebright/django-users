@@ -1632,7 +1632,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
         Competitor = apps.get_model('web.Student')
-        Entry = apps.get_model('web.Entry')
+        Entry = apps.get_model('web.Assignment')
         Payment = apps.get_model('skorie_payments.Payment')
         DirectEmail = apps.get_model('skorie_news.DirectEmail')
         user = None

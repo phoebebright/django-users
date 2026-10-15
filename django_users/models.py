@@ -2124,7 +2124,7 @@ class CustomUserBase(CustomUserBaseBasic):
         or retrieve existing order
         """
         Order = apps.get_model('skorie_payments', 'order')  #
-        Entry = apps.get_model('web', 'entry')  #
+        Entry = apps.get_model('web', 'assignment')  #
         try:
             order, created = Order.objects.get_or_create(user=self,
                                                          payid=None)
@@ -2856,7 +2856,7 @@ class OrganisationBase(CreatedUpdatedMixin):
 #     @property
 #     def Entry(self):
 #         if not self._Entry:
-#             self._Entry = apps.get_model('web', 'Entry')
+#             self._Entry = apps.get_model('web', 'Assignment')
 #         return self._Entry
 #
 #     _CommsTemplate = None
