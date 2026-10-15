@@ -266,7 +266,7 @@ class IDorNameMixin(object):
         assert name or pk or bridle_no, "ID or name or bridle_no required"
 
         obj = None
-        Event = apps.get_model(app_label='web', model_name='Event')
+        Event = apps.get_model(app_label='web', model_name='Course')
         event = Event.objects.get(ref=event_ref)
         assert event.status > Event.EVENT_STATUS_PUBLISHED, "Event details cannot be changed once it is published"
 

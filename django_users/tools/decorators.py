@@ -10,8 +10,8 @@ from django.utils import timezone
 def activate_event_timezone(method):
     @wraps(method)
     def wrapper(request, *args, **kwargs):
-        from web.models import Event
-        event = Event.objects.get(ref=kwargs['event_ref'])
+        from web.models import Course
+        event = Course.objects.get(ref=kwargs['event_ref'])
 
         if event.timezone:
             timezone.activate(event.timezone)
