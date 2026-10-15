@@ -5,6 +5,7 @@ from django.urls import path, register_converter
 
 from .api import SendVerificationCode
 from .ref import EventRefConverter
+from .views_phone_login import PhoneLoginQRView, PhoneLoginView
 from .views import (
     NewUsers,
     UserProfileView,
@@ -128,7 +129,11 @@ urlpatterns = [
     path('channels/add/', AddCommsChannelView.as_view(), name='add_channel'),
     path('channels/verify/<int:channel_id>/', VerifyChannelView.as_view(), name='verify_channel'),
 
-    path('qr_login/', QRLogin.as_view(), name='qr-login'),
+    # Log in on a phone from a QR code: single-use, two minutes, token kept out
+    # of URLs the server sees (django_users.phone_login). Replaces QRLogin, whose
+    # token could be reused for its whole window and needed a keycloak_id.
+    path('qr_login/', PhoneLoginQRView.as_view(), name='qr-login'),
+    path('phone/', PhoneLoginView.as_view(), name='phone_login'),
     path('lwt/', login_with_token, name='lwt'),
     path('lwrt/', login_with_remote_token, name='lwrt'),
 

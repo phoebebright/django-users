@@ -36,10 +36,11 @@ import requests
 from django.contrib.auth.decorators import login_required, user_passes_test
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
-from django.shortcuts import redirect, get_object_or_404, render
+from django.shortcuts import redirect, get_object_or_404, render, resolve_url
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
@@ -51,7 +52,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
-from .login_limits import clear_login_limit, login_wait_seconds, record_failed_login
+from .login_limits import clear_login_limit, login_wait_seconds, record_failed_login, looks_like_bot_name
 from .utils import normalise_email, get_mail_class
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -307,7 +308,7 @@ def logout(request):
 
 
 def login_redirect(request):
-    url = reverse(settings.LOGIN_URL)
+    url = resolve_url(settings.LOGIN_URL)
     if 'next' in request.GET.urlencode():
         url += f"?{request.GET.urlencode()}"
     elif request.GET.urlencode():
@@ -353,10 +354,14 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
         # but only if we have the page set
         self.user = request.user
 
-        goto = reverse(getattr(settings, 'CONFIRM_USER_PAGE', "users:tell_us_about"))
         if not self.user.is_authenticated:
-            return HttpResponseRedirect(f"{reverse_lazy(settings.LOGIN_URL)}?next={goto}")
+            return self.handle_no_permission()   # LoginRequiredMixin: to LOGIN_URL?next=
 
+        # Only when the host has a confirm-your-details page. Defaulting to
+        # skorie's users:tell_us_about made the profile page a 500 on hosts
+        # without one (3.1.2).
+        confirm_page = getattr(settings, 'CONFIRM_USER_PAGE', None)
+        goto = reverse(confirm_page) if confirm_page else None
         if goto and self.user.status < self.user.USER_STATUS_CONFIRMED:
             # redirect early if user not allowed
             return redirect(f"{goto}?next={reverse_lazy('users:user-profile')}")  # or any URL name/path
@@ -374,10 +379,13 @@ class UserProfileView(LoginRequiredMixin, GoNextMixin, FormView):
 
     def get_context_data(self, **kwargs):
         self.user = self.request.user if self.request.user.is_authenticated else None
-        Subscription = apps.get_model('skorie_news.Subscription')
         context = super().get_context_data(**kwargs)
-        context['USE_SUBSCRIBE'] = settings.USE_SUBSCRIBE
-        if settings.USE_NEWSLETTER:
+        context['USE_SUBSCRIBE'] = getattr(settings, 'USE_SUBSCRIBE', False)
+        # Newsletters are skorie_news. Looked up only when the host uses them:
+        # an unconditional lookup made the profile page a 500 on hosts without
+        # skorie_news (3.1.2).
+        if getattr(settings, 'USE_NEWSLETTER', False) and apps.is_installed('skorie_news'):
+            Subscription = apps.get_model('skorie_news.Subscription')
             context['subscriptions'] = Subscription.objects.filter(user=self.user).order_by('-created')
         context['now'] = timezone.now()
         context['roles'] = self.request.user.user_roles(descriptions=True)
@@ -618,7 +626,15 @@ class LoginView(GoNextTemplateMixin, TemplateView):
     template_name = "django_users/login.html"
 
     def post(self, request, *args, **kwargs):
-        email = normalise_email(request.POST.get('email'))
+        # A lookup, not a new address: no DNS check, and an unusable address
+        # is just a failed login, never a 500 (3.1.3).
+        try:
+            email = normalise_email(request.POST.get('email'), check_deliverability=False)
+        except ValidationError:
+            messages.error(request, _('Invalid email or password.'))
+            context = self.get_context_data(**kwargs)
+            context['email'] = request.POST.get('email', '')
+            return render(request, self.template_name, context)
         password = request.POST.get('password')
         next_url = request.GET.get('next') or request.POST.get('next') or None
 
@@ -792,6 +808,15 @@ class RegisterView(FormView):
         email = normalise_email(form.cleaned_data['email'])
         mobile = form.cleaned_data.get('mobile')
         password = form.cleaned_data['password']
+        first_name = form.cleaned_data['first_name']
+        last_name = form.cleaned_data['last_name']
+
+        # Bots submit UUID-like first/last names. Silently drop the registration
+        # without creating a user or surfacing an error so they get no feedback.
+        if looks_like_bot_name(first_name, last_name):
+            logger.warning(f"Silently dropping bot-like registration for {email} "
+                           f"(first_name={first_name!r}, last_name={last_name!r})")
+            return HttpResponseRedirect(reverse(LOGIN_REGISTER))
 
         User = get_user_model()
         # this code cannot find username=email but when you try to create it, it says can't create duplicate and you see it already there.
@@ -805,8 +830,8 @@ class RegisterView(FormView):
                 user = User.objects.create_user(
                     username=email,
                     email=email,
-                    first_name=form.cleaned_data['first_name'],
-                    last_name=form.cleaned_data['last_name'],
+                    first_name=first_name,
+                    last_name=last_name,
                     mobile=mobile or '',
                     is_active=False
                 )
@@ -831,7 +856,7 @@ class RegisterView(FormView):
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
-                return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
+                return HttpResponseRedirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(email)}")
 
         set_current_user(self.request, user.id, "REGISTER")
 
@@ -916,6 +941,8 @@ def set_current_user(request, user_id=None, user_login_mode=None):
         request.session.pop('forgot_channel', None)
         request.session.pop('forgot_email', None)
         request.session.pop('forgot_password_step', None)
+        request.session.pop('forgot_vc_pk', None)
+        request.session.pop('forgot_verified', None)
         request.session.pop('verification_code', None)
 
     else:
@@ -1118,7 +1145,7 @@ class VerifyForgotPasswordLinkView(View):
         request.session[ForgotPassword.SK_EMAIL] = vc.user.email
         request.session[ForgotPassword.SK_CHANNEL] = str(vc.channel_id)
         request.session[ForgotPassword.SK_VC_PK] = str(vc.pk)
-        request.session[ForgotPassword.SK_VERIFIED] = True
+        request.session[ForgotPassword.SK_VERIFIED] = str(vc.user.pk)
         request.session[ForgotPassword.SK_STEP] = 4  # jump to password entry
 
         messages.success(request, "Your email has been verified. Please set a new password.")
@@ -1217,7 +1244,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     SK_EMAIL = "forgot_email"
     SK_CHANNEL = "forgot_channel"         # channel id (int/uuid)
     SK_VC_PK = "forgot_vc_pk"             # verification code pk (uuid)
-    SK_VERIFIED = "forgot_verified"       # bool set by code or magic link
+    SK_VERIFIED = "forgot_verified"       # pk of the user a code or magic link verified
 
     def dispatch(self, request, *args, **kwargs):
         # Ensure user is redirected if already logged in
@@ -1236,6 +1263,12 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
     def reset_flow(self):
         for k in (self.SK_STEP, self.SK_EMAIL, self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
             self.request.session.pop(k, None)
+
+    def is_verified_for(self, user):
+        # Verification belongs to the user it was done for. It used to be a bare
+        # True, which survived starting again with another email - verify your
+        # own address, then reset anyone's password.
+        return self.request.session.get(self.SK_VERIFIED) == str(user.pk)
 
     def _models(self):
         CommsChannel = apps.get_model('users', 'CommsChannel')
@@ -1258,9 +1291,9 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         if step == 1:
             email = self.request.GET.get('email') or self.request.POST.get('email')
             if email:
-                kwargs['initial'] = {'email': normalise_email(email)}
+                kwargs['initial'] = {'email': normalise_email(email, check_deliverability=False)}
         else:
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, "")) if self.request.session.get(self.SK_EMAIL) else ""
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False) if self.request.session.get(self.SK_EMAIL) else ""
             kwargs.setdefault('initial', {})
             kwargs['initial']['email'] = email
 
@@ -1280,7 +1313,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
         ctx = super().get_context_data(**kwargs)
         ctx['step'] = self.get_step()
         ctx['verification_sent'] = bool(self.request.session.get(self.SK_VC_PK))
-        ctx['magic_link'] = bool(settings.USE_MAGIC_LINK_FOR_FORGOT)
+        ctx['magic_link'] = bool(getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False))
         ctx['user'] = self.user
         return ctx
 
@@ -1291,7 +1324,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
         if step == 1:
             # Step 1: verify email exists (no enumeration wording leaked to UI)
-            email = normalise_email(form.cleaned_data['email'])
+            email = normalise_email(form.cleaned_data['email'], check_deliverability=False)
             user = User.objects.filter(email=email).first()
 
             if not user:
@@ -1303,13 +1336,16 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 form.add_error('email', 'This email does not have an active account. Please contact the administrators.')
                 return self.form_invalid(form)
 
-            # Persist email and continue
+            # Persist email and continue - a new email starts a new flow, so
+            # nothing verified or sent for an earlier one carries over
+            for k in (self.SK_CHANNEL, self.SK_VC_PK, self.SK_VERIFIED):
+                self.request.session.pop(k, None)
             self.request.session[self.SK_EMAIL] = email
             self.set_step(2)
 
         elif step == 2:
             # Step 2: choose channel and send code or magic link
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Email not found.')
@@ -1329,7 +1365,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
 
             # Create verification
             purpose = "forgot_password"
-            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+            if getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False) and channel.channel_type == "email":
                 vc, context = VerificationCode.create_for_magic_link(user=user, channel=channel, purpose=purpose)
             else:
                 vc, context = VerificationCode.create_for_code(user=user, channel=channel, purpose=purpose)
@@ -1343,7 +1379,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Store vc pk (NOT the raw code)
             self.request.session[self.SK_VC_PK] = str(vc.pk)
 
-            if settings.USE_MAGIC_LINK_FOR_FORGOT and channel.channel_type == "email":
+            if getattr(settings, 'USE_MAGIC_LINK_FOR_FORGOT', False) and channel.channel_type == "email":
                 # For magic link, go straight to step 3 page that waits for link or offers "enter code" fallback if you want.
                 messages.info(self.request, 'We’ve sent you a verification link. Please check your email.')
                 # Optionally you could allow a fallback code entry if your email also includes the code.
@@ -1357,14 +1393,14 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             # Step 3: verify the code (code flow) OR accept magic-link completion
             CommsChannel, VerificationCode = self._models()
 
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
 
             # If magic link was used and already verified, skip code entry
-            if self.request.session.get(self.SK_VERIFIED):
+            if self.is_verified_for(user):
                 self.set_step(4)
                 return self._render_next_step(form)
 
@@ -1383,18 +1419,18 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 return self.form_invalid(form)
 
             # Mark as verified for this flow
-            self.request.session[self.SK_VERIFIED] = True
+            self.request.session[self.SK_VERIFIED] = str(user.pk)
             self.set_step(4)
 
         elif step == 4:
             # Step 4: set the new password
-            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""))
+            email = normalise_email(self.request.session.get(self.SK_EMAIL, ""), check_deliverability=False)
             user = User.objects.filter(email=email).first()
             if not user:
                 form.add_error('email', 'Session expired. Please start again.')
                 return self.form_invalid(form)
 
-            if not self.request.session.get(self.SK_VERIFIED):
+            if not self.is_verified_for(user):
                 form.add_error(None, 'Please verify your contact method before changing password.')
                 self.set_step(3)
                 return self.form_invalid(form)
@@ -1438,7 +1474,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                                  'Your password has been reset. You can now log in with your new password.')
                 # clear flow
                 self.reset_flow()
-                return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
+                return redirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(user.email)}")
 
             form.add_error('confirm_password', 'Unable to reset password. Please try a different password.')
             return self.form_invalid(form)
@@ -2455,7 +2491,7 @@ class ResetSessionView(TemplateView):
         request.session.flush()
 
         next_url = request.POST.get("next") or "/"
-        login_url = reverse(settings.LOGIN_URL)
+        login_url = resolve_url(settings.LOGIN_URL)
         response = HttpResponseRedirect(
             f"{login_url}?next={next_url}"
         )

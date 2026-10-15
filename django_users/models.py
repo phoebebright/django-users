@@ -461,7 +461,7 @@ class VerificationCodeBase(models.Model):
         )
 
         # Log the issuance of a new verification code
-        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+        if apps.is_installed('django_users') and hasattr(apps.get_app_config('django_users'), 'UserHistory'):
              UserHistory = apps.get_model('django_users', 'UserHistory')
              UserHistory.log(user, "issue_code", details={"purpose": purpose, "channel": str(channel)})
 
@@ -483,7 +483,7 @@ class VerificationCodeBase(models.Model):
         )
 
         # Log the issuance of a new magic link token
-        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+        if apps.is_installed('django_users') and hasattr(apps.get_app_config('django_users'), 'UserHistory'):
              UserHistory = apps.get_model('django_users', 'UserHistory')
              UserHistory.log(user, "issue_token", details={"purpose": purpose, "channel": str(channel)})
 
@@ -553,7 +553,7 @@ class VerificationCodeBase(models.Model):
             obj.consumed_at = now
         obj.save(update_fields=["attempts", "consumed_at"])
 
-        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+        if apps.is_installed('django_users') and hasattr(apps.get_app_config('django_users'), 'UserHistory'):
              UserHistory = apps.get_model('django_users', 'UserHistory')
              if ok:
                  UserHistory.log(user, "verify_code_success", details={"purpose": purpose})
@@ -588,7 +588,7 @@ class VerificationCodeBase(models.Model):
         # Clean up all other outstanding records for same user+channel+purpose
         cls.objects.filter(user=obj.user, channel=obj.channel, purpose=purpose).exclude(pk=obj.pk).delete()
 
-        if hasattr(apps.get_app_config('django_users'), 'UserHistory'):
+        if apps.is_installed('django_users') and hasattr(apps.get_app_config('django_users'), 'UserHistory'):
              UserHistory = apps.get_model('django_users', 'UserHistory')
              UserHistory.log(obj.user, "verify_token_success", details={"purpose": purpose})
 
@@ -888,6 +888,23 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
 
     _system_user = None
+
+    #: Roles a host adds beyond ModelRoles, as {code: description}. user_roles()
+    #: reads it; defined here so a host on this Basic base need not (3.1.2).
+    EXTRA_ROLES = {}
+
+    @property
+    def idp_id(self):
+        """ID of this user in the active external IdP, or None.
+
+        Defined here, not only on CustomUserBase, because generic flows
+        (verification, channel verify) read it for every host: a host built on
+        this Basic base has no keycloak_id/authentik_id fields and got an
+        AttributeError (3.1.2). Plain Django auth has no IdP, so None.
+        """
+        field = {"keycloak": "keycloak_id", "authentik": "authentik_id"}.get(get_auth_provider())
+        return getattr(self, field, None) if field else None
+
     #I don't think this works as it needs to be a class property
     @property
     def system_user(self):
@@ -1083,15 +1100,19 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
         clear_email_channels = False
         clear_mobile_channels = False
         if not new:
+            # .values(), not .only(): a host user model that tracks field
+            # changes (e.g. BuiltAir's ModelDiffMixin) reads every field when
+            # an instance is built, so a deferred-field instance recursed
+            # without end and no user could be saved (3.1.2).
             try:
-                previous = type(self).objects.only('email', 'mobile').get(pk=self.pk)
+                previous = type(self).objects.values('email', 'mobile').get(pk=self.pk)
             except type(self).DoesNotExist:
                 previous = None
             if previous:
-                if (previous.email or '') != (self.email or ''):
+                if (previous['email'] or '') != (self.email or ''):
                     self.email_verified_at = None
                     clear_email_channels = True
-                if (previous.mobile or '') != (self.mobile or ''):
+                if (previous['mobile'] or '') != (self.mobile or ''):
                     self.mobile_verified_at = None
                     clear_mobile_channels = True
 

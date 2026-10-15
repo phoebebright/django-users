@@ -676,7 +676,7 @@ class SendVerificationCode(APIView):
             return Response(response_payload, status=HTTP_200_OK)
 
         try:
-            email = normalise_email(email)
+            email = normalise_email(email, check_deliverability=False)
         except Exception as e:
             # Invalid email format; still respond generically
             logger.warning("email not supplied to SendVerificationCode")
@@ -774,7 +774,7 @@ class SendVerificationCode(APIView):
 def email_exists_or_404(request):
 
     try:
-        email = normalise_email(request.POST.get('email'))
+        email = normalise_email(request.POST.get('email'), check_deliverability=False)
     except Exception as e:
         logger.warning(f"Call to email exists with bad email {request.POST.get('email')} {str(e)}")  # eg. bad domain
         return Response(status=status.HTTP_404_NOT_FOUND)
@@ -811,7 +811,7 @@ class CheckEmail(viewsets.ReadOnlyModelViewSet):
 
     def post(self, request, *args, **kwargs):
         User = get_user_model()
-        email = normalise_email(request.POST.get('email'))
+        email = normalise_email(request.POST.get('email'), check_deliverability=False)
         # logger.warning(f"CheckEmail used to check {email}")
 
         # check this is an email
@@ -857,7 +857,7 @@ class CheckUserPublic(CheckEmail):
         email = request.POST.get('email', None)
 
         if email:
-            email = normalise_email(email)
+            email = normalise_email(email, check_deliverability=False)
 
             channels = []
 
@@ -922,7 +922,7 @@ class CheckEmailInKeycloak(_KeycloakOnlyAPIView):
     def post(self, request, *args, **kwargs):
         from .keycloak import search_user_by_email_in_keycloak
 
-        email = normalise_email(request.POST.get('email'))
+        email = normalise_email(request.POST.get('email'), check_deliverability=False)
         if email:
             user = search_user_by_email_in_keycloak(email, request.user)
             if user:
@@ -965,7 +965,7 @@ class CheckEmailInKeycloakPublic(_KeycloakOnlyAPIView):
         if not email:
             return Response({"status": "N"}, status=status.HTTP_400_BAD_REQUEST)
 
-        email = normalise_email(email)
+        email = normalise_email(email, check_deliverability=False)
         channels = []
 
         try:

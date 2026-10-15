@@ -199,7 +199,7 @@ class ForgotPasswordForm(forms.Form):
         if not email:
             return email
         try:
-            email = normalise_email(email)
+            email = normalise_email(email, check_deliverability=False)
         except Exception as e:
             raise forms.ValidationError(str(e))
         return email

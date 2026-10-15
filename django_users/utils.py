@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -17,10 +18,75 @@ from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
 from django.utils.module_loading import import_string
+from django.shortcuts import resolve_url
 
 from email_validator import validate_email, EmailNotValidError
 
 logger = logging.getLogger('django')
+
+# Matches UUID-like strings (e.g. "4245a264-f75d-49f4-9e68-79336fa5469") that bots
+# submit as first/last names. Two or more hyphen-separated hex groups, hex-only.
+_UUID_LIKE_RE = re.compile(r'^[0-9a-f]{4,}(?:-[0-9a-f]{2,}){2,}$', re.IGNORECASE)
+# A single long hex blob with no hyphens (e.g. "4245a264f75d49f4").
+_HEX_BLOB_RE = re.compile(r'^[0-9a-f]{16,}$', re.IGNORECASE)
+# Splits a name into words on whitespace and the separators legitimately found in
+# real names, so each word can be checked independently.
+_NAME_SEP_RE = re.compile(r"[\s\-'./]+")
+_VOWELS = set('aeiouyAEIOUY')
+
+
+def _has_random_casing(word):
+    """True for tokens with random internal capitalisation (e.g. "hREsCKna").
+
+    Real names capitalise only the first letter of a word (optionally after a
+    separator like "-" or "'", or one internal capital as in "McDonald"). Bot
+    tokens scatter capitals through a mixed-case word, so two or more uppercase
+    letters after the first position — alongside at least one lowercase letter —
+    is the signal. All-caps words (e.g. "JOHN") have no lowercase and are ignored.
+    """
+    has_lower = any(c.islower() for c in word)
+    internal_upper = sum(1 for i, c in enumerate(word) if i > 0 and c.isupper())
+    return has_lower and internal_upper >= 2
+
+
+def _has_long_consonant_run(word):
+    """True if the word has a run of 5+ consecutive consonants (y treated as a
+    vowel). Catches random lowercase tokens that lack real-name structure; runs
+    this long effectively don't occur in genuine names."""
+    run = 0
+    for c in word:
+        if c.isalpha() and c not in _VOWELS:
+            run += 1
+            if run >= 5:
+                return True
+        else:
+            run = 0
+    return False
+
+
+def looks_like_bot_name(*names):
+    """Return True if any supplied name looks machine-generated.
+
+    Bots fill first_name/last_name with UUIDs, hex blobs, or random mixed-case /
+    consonant-heavy tokens rather than real names. Used to silently drop those
+    registrations and to find existing bot accounts for removal. Tuned for high
+    precision (few false positives) since it gates a silent drop.
+    """
+    for name in names:
+        if not name:
+            continue
+        candidate = name.strip()
+        if not candidate:
+            continue
+        if _UUID_LIKE_RE.match(candidate) or _HEX_BLOB_RE.match(candidate):
+            return True
+        for word in _NAME_SEP_RE.split(candidate):
+            if not word:
+                continue
+            if _has_random_casing(word) or _has_long_consonant_run(word):
+                return True
+    return False
+
 
 def get_mail_class():
     """
@@ -35,7 +101,7 @@ def send_otp(channel, code):
     to_email = channel.user.email
     context = {
         'verification_code': code,
-        'login_url': settings.SITE_URL + reverse(settings.LOGIN_URL) + '?' + urlencode({'email': to_email}),
+        'login_url': settings.SITE_URL + resolve_url(settings.LOGIN_URL) + '?' + urlencode({'email': to_email}),
     }
     mail = get_mail_class()
     mail.send(
@@ -283,12 +349,21 @@ def get_subscription_analytics():
     }
 
 ALLOWED_FAKE_DOMAINS = {"example.com", "test.com",}
-def normalise_email(addr: str) -> str:
+def normalise_email(addr: str, check_deliverability: bool = True) -> str:
+    """Validate and normalise an email address.
+
+    ``check_deliverability`` asks DNS whether the domain accepts mail. Use it
+    only when accepting a NEW address (registration, contact form). Looking up
+    an EXISTING account (login, forgot password, email checks) must pass False:
+    a DNS failure there made login a 500 for everyone on that domain (3.1.3).
+    """
+    if not addr:
+        raise ValidationError("Enter an email address.")
     domain = addr.split("@")[-1].lower()
     try:
         v = validate_email(addr,
                            allow_smtputf8=True,
-                           check_deliverability=domain not in ALLOWED_FAKE_DOMAINS
+                           check_deliverability=check_deliverability and domain not in ALLOWED_FAKE_DOMAINS
                            )
         # v.normalized in v2; v.email in v1 – support both:
         return getattr(v, "normalized", v.email).lower()

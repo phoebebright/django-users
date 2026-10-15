@@ -1,0 +1,48 @@
+{% extends "django_users/users_narrow_base.html" %}
+{% load i18n %}
+{% comment %}
+Log in on a phone: a single-use QR code valid for `max_age` seconds. See
+django_users.phone_login. When the window closes the code is hidden rather than
+left on screen looking usable; "Show a new code" reloads, which makes a new one.
+{% endcomment %}
+
+{% block title %}{% trans "Log in on your phone" %}{% endblock %}
+
+{% block content %}
+<h2 class="h4">{% trans "Log in on your phone" %}</h2>
+<p>{% trans "Scan this code with your phone's camera. It logs the phone in as you." %}</p>
+
+<div class="text-center">
+    <div data-phone-qr>
+        <img src="data:image/png;base64,{{ qr_png }}" alt="{% trans 'QR code to log in on your phone' %}" class="img-fluid">
+        <p class="mt-2" role="timer">{% trans "Expires in" %} <strong data-phone-qr-countdown></strong></p>
+        <p class="small text-muted">{% trans "It works once. Anyone who scans it can log in as you, so don't share it." %}</p>
+    </div>
+    <div class="d-none" data-phone-qr-expired role="status">
+        <p><strong>{% trans "This code has expired." %}</strong></p>
+    </div>
+    <a href="" class="btn btn-outline-primary mt-2">{% trans "Show a new code" %}</a>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var remaining = {{ max_age }};
+    var countdown = document.querySelector('[data-phone-qr-countdown]');
+    var qr = document.querySelector('[data-phone-qr]');
+    var expired = document.querySelector('[data-phone-qr-expired]');
+    function show() {
+        var m = Math.floor(remaining / 60), s = remaining % 60;
+        countdown.textContent = m + ':' + (s < 10 ? '0' + s : s);
+    }
+    show();
+    var timer = setInterval(function () {
+        remaining -= 1;
+        if (remaining > 0) { show(); return; }
+        clearInterval(timer);
+        qr.classList.add('d-none');
+        expired.classList.remove('d-none');
+    }, 1000);
+})();
+</script>
+{% endblock %}
