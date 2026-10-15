@@ -24,9 +24,9 @@ class UserCanAdministerOrganise(HasRoleMixin):
 
 class UserCanJudgeMixin(HasRoleMixin):
 
-    role_required = ModelRoles.JUDGE_ROLES
+    role_required = ModelRoles.MENTOR_ROLES
     also_allow = [ModelRoles.ROLE_MANAGER, ModelRoles.ROLE_ADMINISTRATOR]
-    mode_role = ModelRoles.ROLE_JUDGE
+    mode_role = ModelRoles.ROLE_MENTOR
 
 class UserCanCompeteMixin(HasRoleMixin):
 

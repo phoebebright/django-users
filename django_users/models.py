@@ -1362,7 +1362,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
 
     @cached_property
     def is_judge(self):
-        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_JUDGE).exists()
+        return self.Role.objects.active().filter(user=self, role_type=self.ModelRoles.ROLE_MENTOR).exists()
 
     @cached_property
     def is_organiser(self):
@@ -1984,8 +1984,8 @@ class CustomUserBase(CustomUserBaseBasic):
             return self.ModelRoles.ROLE_ORGANISER
         elif self.ModelRoles.ROLE_AUXJUDGE in roles:
             return self.ModelRoles.ROLE_AUXJUDGE
-        elif self.ModelRoles.ROLE_JUDGE in roles:
-            return self.ModelRoles.ROLE_JUDGE
+        elif self.ModelRoles.ROLE_MENTOR in roles:
+            return self.ModelRoles.ROLE_MENTOR
         elif self.ModelRoles.ROLE_COMPETITOR in roles:
             return self.ModelRoles.ROLE_COMPETITOR
 
@@ -2005,8 +2005,8 @@ class CustomUserBase(CustomUserBaseBasic):
             return self.ModelRoles.ROLE_MANAGER
         elif self.ModelRoles.ROLE_AUXJUDGE in roles:
             return self.ModelRoles.ROLE_AUXJUDGE
-        elif self.ModelRoles.ROLE_JUDGE in roles:
-            return self.ModelRoles.ROLE_JUDGE
+        elif self.ModelRoles.ROLE_MENTOR in roles:
+            return self.ModelRoles.ROLE_MENTOR
         elif self.ModelRoles.ROLE_COMPETITOR in roles:
             return self.ModelRoles.ROLE_COMPETITOR
 
@@ -2076,7 +2076,7 @@ class CustomUserBase(CustomUserBaseBasic):
         if self.is_manager:
             modes.append((self.ModelRoles.ROLE_MANAGER, self.ModelRoles.ROLES[self.ModelRoles.ROLE_MANAGER]))
         if self.is_judge:
-            modes.append((self.ModelRoles.ROLE_JUDGE, self.ModelRoles.ROLES[self.ModelRoles.ROLE_JUDGE]))
+            modes.append((self.ModelRoles.ROLE_MENTOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_MENTOR]))
         if self.is_competitor:
             modes.append((self.ModelRoles.ROLE_COMPETITOR, self.ModelRoles.ROLES[self.ModelRoles.ROLE_COMPETITOR]))
         # if self.is_reader:
@@ -2614,7 +2614,7 @@ class PersonBase(CreatedUpdatedMixin, AliasForMixin, TrackChangesMixin):
 class RoleQuerySet(models.QuerySet):
 
     def judges(self):
-        return self.filter(role_type=ModelRoles.ROLE_JUDGE)
+        return self.filter(role_type=ModelRoles.ROLE_MENTOR)
 
     def active(self):
         return self.filter(active=True)
