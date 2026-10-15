@@ -1631,7 +1631,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
 
     def get_context_data(self, *args, **kwargs):
         context = super().get_context_data(**kwargs)
-        Competitor = apps.get_model('web.Competitor')
+        Competitor = apps.get_model('web.Student')
         Entry = apps.get_model('web.Entry')
         Payment = apps.get_model('skorie_payments.Payment')
         DirectEmail = apps.get_model('skorie_news.DirectEmail')
@@ -2139,7 +2139,7 @@ def dedupe_role(request, role_ref):
     '''
     Role = apps.get_model('users.Role')
     EventRole = apps.get_model('web.CourseRole')
-    Competitor = apps.get_model('web.Competitor')
+    Competitor = apps.get_model('web.Student')
 
     role = Role.objects.get(ref=role_ref)
     qs = Role.objects.filter(user=role.user, role_type=role.role_type).exclude(ref=role_ref)

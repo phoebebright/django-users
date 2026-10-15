@@ -951,7 +951,7 @@ class CustomUserBaseBasic(AbstractBaseUser, PermissionsMixin):
     @property
     def Competitor(self):
         if not self._Competitor:
-            self._Competitor = apps.get_model('web', 'Competitor')
+            self._Competitor = apps.get_model('web', 'Student')
         return self._Competitor
 
     _Organisation = None
@@ -2874,7 +2874,7 @@ class OrganisationBase(CreatedUpdatedMixin):
 #     user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.CASCADE)
 #     comms_template = models.ForeignKey("CommsTemplate", blank=True, null=True, on_delete=models.CASCADE)
 #     eventrole = models.ForeignKey("web.CourseRole", blank=True, null=True, on_delete=models.CASCADE)
-#     competitor = models.ForeignKey("web.Competitor", blank=True, null=True, on_delete=models.CASCADE)
+#     competitor = models.ForeignKey("web.Student", blank=True, null=True, on_delete=models.CASCADE)
 #     entries = models.ManyToManyField("Entry")
 #     comm_group = models.CharField(max_length=12, default="competitor")  # group sent to
 #     comm_type = models.CharField(max_length=30)  # type of communication
