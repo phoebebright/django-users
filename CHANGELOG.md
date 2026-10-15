@@ -9,6 +9,38 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.0 (15 Oct 2026)
+
+- **Limit on failed sign-ins** (`django_users/login_limits.py`, used by
+  `LoginView`).
+  - Counts failures only: 5 per email address in 15 minutes and 30 per client
+    IP an hour by default.
+  - Once a limit is reached, even the correct password is refused. The page
+    returns 429 with "Too many sign-in attempts. Please wait up to N minutes,
+    or reset your password."
+  - A completed Forgot Password reset clears that email's count.
+  - It fails open if the cache is down.
+  - The per-IP limit is skipped for an address that isn't public (a proxy's),
+    so one person can't lock out everyone behind it.
+  - If the host has `UserHistory`, `login_rate_limited` is logged once, when a
+    known user reaches the limit.
+- **New checks:** `django_users.W010` warns when the counts' cache isn't shared
+  between processes, and `W011` when `RATELIMIT_USE_CACHE` names a missing
+  cache.
+- **New dependency:** `django-ratelimit>=4.1,<5`.
+- **Fixed before release:** the merge of 3.1.4 into the trunk dropped
+  `looks_like_bot_name` from `views.py`'s imports, so registration was a
+  `NameError` on the untagged trunk. No tag had it.
+- **Affects:** all hosts.
+- **Host action:**
+  - Set `RATELIMIT_USE_CACHE` to a shared cache (Redis or memcached).
+  - Behind nginx, set
+    `RATELIMIT_IP_META_KEY = 'django_users.login_limits.forwarded_client_ip'`.
+  - Optionally set `LOGIN_RATELIMIT_EMAIL` / `LOGIN_RATELIMIT_IP` (`None`
+    turns a limit off).
+  - Without a shared cache, the limit still works but counts per process.
+    `manage.py check` warns.
+
 ## 3.1.4 (13 Oct 2026)
 
 Found in skorie1's bug hunt (C5). The same fix is on `skorie_users` as 1.4.8.

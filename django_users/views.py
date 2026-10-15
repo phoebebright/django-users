@@ -53,7 +53,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
 from .login_limits import clear_login_limit, login_wait_seconds, record_failed_login
-from .utils import normalise_email, get_mail_class
+from .utils import normalise_email, get_mail_class, looks_like_bot_name
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 

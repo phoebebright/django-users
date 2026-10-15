@@ -61,7 +61,7 @@ Per Keycloak host (skorie1/2/3):
    provider's config.
 5. **Static paths:** the `static/js_no_keycloak/` tree is gone; templates
    referencing it must point at `static/js/` (single tree, provider-aware).
-6. **Sign-in limit (3.1.0+, every provider):** set `RATELIMIT_USE_CACHE` to a
+6. **Sign-in limit (3.2.0+, every provider):** set `RATELIMIT_USE_CACHE` to a
    shared cache and, behind nginx, `RATELIMIT_IP_META_KEY` (see *Optional
    settings*). `python manage.py check` must show no `django_users.W010`/`W011`.
 7. Smoke test: login (confirm `_auth_user_backend` is ModelBackend),
