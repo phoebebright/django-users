@@ -61,7 +61,10 @@ Per Keycloak host (skorie1/2/3):
    provider's config.
 5. **Static paths:** the `static/js_no_keycloak/` tree is gone; templates
    referencing it must point at `static/js/` (single tree, provider-aware).
-6. Smoke test: login (confirm `_auth_user_backend` is ModelBackend),
+6. **Sign-in limit (3.1.0+, every provider):** set `RATELIMIT_USE_CACHE` to a
+   shared cache and, behind nginx, `RATELIMIT_IP_META_KEY` (see *Optional
+   settings*). `python manage.py check` must show no `django_users.W010`/`W011`.
+7. Smoke test: login (confirm `_auth_user_backend` is ModelBackend),
    register, forgot-password (all 4 steps), change-password(-now), admin
    AddUser, OTP generate/send, logout + logout_all, `unverified/` report,
    `migrate_login/` if enabled.
@@ -195,7 +198,23 @@ CONFIRM_USER_PAGE               = "users:tell_us_about"
 INVITE_LINK_EXPIRY_DAYS         = 7
 OTP_EXPIRY_HOURS                = 24
 REQUIRES_APPROVAL               = False     # gate self-registered users
+
+# Limit on failed sign-ins (django_users/login_limits.py). Failures only;
+# once a limit is reached even the correct password is refused until the
+# window ends. None turns a limit off.
+LOGIN_RATELIMIT_EMAIL           = "5/15m"   # failures per email address
+LOGIN_RATELIMIT_IP              = "30/h"    # failures per client IP
+# django-ratelimit's settings decide where the counts live and how the
+# client IP is found:
+RATELIMIT_USE_CACHE             = "default" # must be shared: Redis or memcached
+RATELIMIT_IP_META_KEY           = "django_users.login_limits.forwarded_client_ip"  # behind nginx
 ```
+
+The limit needs a cache every process shares; `manage.py check` warns
+(`django_users.W010`/`W011`) when it isn't. It fails open: if the cache is
+down, sign-in carries on without a limit. The per-IP limit is skipped when
+the address isn't public, because that is the proxy's address, and one
+counter for everyone would let one person lock everyone out.
 
 ## What lives on this branch
 

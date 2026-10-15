@@ -11,6 +11,9 @@ Checks:
     ``AUTH_PROVIDER == "authentik"``.
   * ``check_authentik_reachable`` - slow, network-touching. Tagged so it only
     runs under ``manage.py check --deploy`` (or explicitly via ``--tag idp``).
+  * ``check_login_ratelimit_cache`` - fast, always runs. Warns when the cache
+    the sign-in limit counts failures in is missing or not shared between
+    processes (see ``login_limits``).
 
 Run::
 
@@ -36,6 +39,12 @@ from django.core.checks import Error, Tags, Warning, register
 REQUIRED_KEYS = ("URL", "OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "API_TOKEN")
 
 KEYCLOAK_REQUIRED_CLIENT_KEYS = ("CLIENT_ID", "CLIENT_SECRET", "URL", "REALM")
+
+# Caches that can't hold sign-in limit counts shared between processes.
+NOT_SHARED_CACHE_BACKENDS = (
+    "django.core.cache.backends.locmem.LocMemCache",
+    "django.core.cache.backends.dummy.DummyCache",
+)
 
 
 @register("idp")
@@ -214,3 +223,37 @@ def check_authentik_reachable(app_configs, **kwargs):
         )
 
     return warnings
+
+
+@register(Tags.caches)
+def check_login_ratelimit_cache(app_configs, **kwargs):
+    """The sign-in limit needs a cache every process shares.
+
+    The limit fails open, so a bad cache never stops anyone signing in; it just
+    stops the limit working. Hence warnings, not errors.
+    """
+    from .login_limits import login_rates
+
+    if not any(login_rates().values()):
+        return []
+
+    alias = getattr(settings, "RATELIMIT_USE_CACHE", "default")
+    cache = settings.CACHES.get(alias)
+    if cache is None:
+        return [
+            Warning(
+                f"RATELIMIT_USE_CACHE is {alias!r}, which is not in CACHES, so the sign-in limit is off.",
+                hint="Add that cache to CACHES, or point RATELIMIT_USE_CACHE at an existing one.",
+                id="django_users.W011",
+            )
+        ]
+    if cache.get("BACKEND") in NOT_SHARED_CACHE_BACKENDS:
+        return [
+            Warning(
+                f"The sign-in limit counts failures in cache {alias!r} ({cache['BACKEND']}), "
+                "which is not shared between processes, so each process keeps its own count.",
+                hint="Point RATELIMIT_USE_CACHE at a Redis or memcached cache.",
+                id="django_users.W010",
+            )
+        ]
+    return []

@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import logging
+import math
 import random
 import string
 
@@ -19,6 +20,7 @@ from django.db.models.functions import Extract, Concat, Cast, LPad
 from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
 from django.utils.decorators import method_decorator
+from django.utils.html import format_html
 from django.utils.module_loading import import_string
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
@@ -35,7 +37,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse_lazy, reverse
@@ -49,6 +51,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
+from .login_limits import clear_login_limit, login_wait_seconds, record_failed_login
 from .utils import normalise_email, get_mail_class
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
@@ -608,6 +611,9 @@ class LoginView(GoNextTemplateMixin, TemplateView):
     login alongside SSO). We record ``ModelBackend`` as the session backend so
     ``auth.get_user()`` keeps resolving the user for the life of the session
     cookie — see the auth/session note in CLAUDE.md.
+
+    Failed attempts are limited per email address and per IP; see
+    ``login_limits`` for the settings.
     """
     template_name = "django_users/login.html"
 
@@ -620,6 +626,12 @@ class LoginView(GoNextTemplateMixin, TemplateView):
             UserHistory = apps.get_model('users', 'UserHistory')
         except LookupError:
             UserHistory = None  # host app has not subclassed UserHistoryBase
+
+        # Too many recent failures for this email or IP: refuse before checking
+        # the password, so a correct guess is refused too (see login_limits).
+        wait_seconds = login_wait_seconds(request, email)
+        if wait_seconds:
+            return self.rate_limited_response(request, email, wait_seconds, **kwargs)
 
         try:
             # Under keycloak the host's AUTHENTICATION_BACKENDS include a
@@ -673,6 +685,10 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                              _('Your temporary password cannot be used again. Please change your password.'))
             return redirect('users:change_password_now')
 
+        limit_reached = record_failed_login(request, email)
+        if UserHistory and limit_reached and fallback_user:
+            # Once, when the limit is reached; refused attempts after it write nothing.
+            UserHistory.log(fallback_user, "login_rate_limited", request=request)
         if UserHistory:
             if fallback_user:
                 UserHistory.log(fallback_user, "login_failed", details={"reason": "invalid_password"}, request=request)
@@ -683,6 +699,17 @@ class LoginView(GoNextTemplateMixin, TemplateView):
         context = self.get_context_data(**kwargs)
         context['email'] = email
         return render(request, self.template_name, context)
+
+    def rate_limited_response(self, request, email, wait_seconds, **kwargs):
+        minutes = max(1, math.ceil(wait_seconds / 60))
+        wait = ngettext('%(minutes)d minute', '%(minutes)d minutes', minutes) % {'minutes': minutes}
+        messages.error(request, format_html(
+            _('Too many sign-in attempts. Please wait up to {}, or <a href="{}">reset your password</a>.'),
+            wait, reverse('users:forgot_password'),
+        ))
+        context = self.get_context_data(**kwargs)
+        context['email'] = email
+        return render(request, self.template_name, context, status=429)
 
 
 class ProblemSignup(TemplateView):
@@ -1404,6 +1431,8 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 # Keep user logged-in if they're changing their own password while authenticated (rare in this flow)
                 if user == self.request.user and self.request.user.is_authenticated:
                     update_session_auth_hash(self.request, user)
+                # They've proved who they are, so lift any sign-in lockout.
+                clear_login_limit(email)
 
                 messages.success(self.request,
                                  'Your password has been reset. You can now log in with your new password.')
