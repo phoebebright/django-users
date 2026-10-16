@@ -49,7 +49,7 @@ def get_next(request, event_ref):
     # otherwise got to event page appropriate for this users role/mode
     if not url and event_ref:
         try:
-            url = reverse('event-home', args=[event_ref])
+            url = reverse('course-home', args=[event_ref])
         except:
             url = None
 
