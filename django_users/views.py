@@ -1675,7 +1675,7 @@ class ManageUser(UserCanAdministerMixin, TemplateView):
         context['roles4user_list'] = [r.role_type for r in context['roles4user']]
 
         context['competitors'] = Competitor.objects.filter(user=context['object'])
-        context['entries'] = Entry.objects.my_entries(context['object']).order_by(
+        context['entries'] = Entry.objects.my_assignments(context['object']).order_by(
             '-created')  # ones created by me - includes ones added for another
 
         if settings.USE_PAYMENTS:

@@ -2149,7 +2149,7 @@ class CustomUserBase(CustomUserBaseBasic):
             # this is a bad way of doing this!
             for entry in entries:
                 # add if not already existing
-                order.add_item(entry=entry)
+                order.add_item(assignment=entry)
 
         return order
 
