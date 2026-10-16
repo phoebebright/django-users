@@ -9,6 +9,15 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.2 (15 Oct 2026)
+
+- **Login form labels back.** The Email and Password labels in
+  `include_login_form.html` were dropped in 8cc74f6 (3 Jul 2026). The fields
+  use Bootstrap's floating labels, which hide the placeholder, so without a
+  label the boxes were blank and typed text sat at the bottom of the box.
+- **Affects:** all hosts.
+- **Host action:** none.
+
 ## 3.2.1 (15 Oct 2026)
 
 - **Open redirects closed.** A link to the login page with
