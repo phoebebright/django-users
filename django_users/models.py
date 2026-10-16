@@ -2144,7 +2144,7 @@ class CustomUserBase(CustomUserBaseBasic):
             entries = Entry.objects.mine(self).unpaid()
 
             if event:
-                entries = entries.filter(event=event)
+                entries = entries.filter(course=event)
             # don't include entries on orders which are in the process of being paid
             # this is a bad way of doing this!
             for entry in entries:

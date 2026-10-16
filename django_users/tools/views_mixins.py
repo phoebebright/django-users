@@ -101,8 +101,8 @@ class GoNextMixin():
             event_ref = self.kwargs['event_ref']
         elif hasattr(self, 'event') and self.event:
             event_ref = self.event.ref
-        elif hasattr(self.request, 'event') and self.request.event :
-            event_ref = self.request.event.ref
+        elif hasattr(self.request, 'course') and self.request.course :
+            event_ref = self.request.course.ref
 
         context['next'] = get_next(self.request, event_ref )
         return context
