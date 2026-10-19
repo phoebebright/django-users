@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from users.models import CommsChannel, VerificationCode
+from users.models import CommsChannel, UserContact, VerificationCode
 
 User = get_user_model()
 
@@ -229,3 +229,18 @@ class LoginUrlIsAPathTests(TestCase):
             send_otp(channel, "123456")
         context = mail_class.return_value.send.call_args.kwargs["context"]
         self.assertEqual(context["login_url"], f"{settings.SITE_URL}{self.LOGIN}?email=plain%40test.com")
+
+
+class UserContactAddTests(TestCase):
+    """3.2.3: UserContact.add() saved the contact twice, the first time with no
+    site. That save logged "No site set when adding to UserContact - possible
+    attack" on every contact (whinn.ie, the subscribe form, 15Oct26) and left a
+    duplicate row."""
+
+    def test_add_saves_one_contact_with_the_site_and_no_warning(self):
+        user = User.objects.create_user(email="system@test.com", password="x")
+        with self.assertNoLogs("django", level="WARNING"):
+            UserContact.add(user=user, method="Subscribe & Interest Form",
+                            data={"email": "someone@test.com"}, send_mail=False)
+        contact = UserContact.objects.get(user=user)
+        self.assertEqual(contact.site, "http://testserver")

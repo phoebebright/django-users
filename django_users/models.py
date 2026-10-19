@@ -2280,8 +2280,6 @@ class UserContactBase(models.Model):
         else:
             user_url = settings.SITE_URL + reverse('users:admin_user', args=[user.authentik_id])
 
-        contact = cls(user=user, method=method, notes=notes, data=data)
-        contact.save()
         obj = cls.objects.create(user=user, method=method, notes=notes, data=data, site=settings.SITE_URL.replace('https://', ''))
         email = data.get('email', user.email)
         if data and 'message' in data:
