@@ -49,6 +49,7 @@ from django.views.generic import FormView, TemplateView, DetailView, ListView, U
 
 from django.contrib.auth import (authenticate, get_user_model, login, logout as log_out,
                                  update_session_auth_hash)
+from django.contrib.auth.views import redirect_to_login
 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin, ProviderRequiredMixin
@@ -1178,11 +1179,12 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
     template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
 
-    def get(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):
         # only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
+        # Checked on POST too: a session can end while the form is open (3.2.4).
         if not request.user.is_authenticated:
             return redirect(reverse('users:forgot_password'))
-        return super().get(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return "/"
@@ -1506,14 +1508,21 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
     form_class = ChangePasswordForm
     success_url = reverse_lazy("users:user-profile")
 
-    def form_valid(self, form):
-        # TODO: should we check for user still being logged in?
+    def dispatch(self, request, *args, **kwargs):
+        # Any new password ends the sessions signed in with the old one, e.g.
+        # an admin issuing a fresh OTP while the user has this form open. Send
+        # them to log in again rather than post against no user (3.2.4).
+        self.user, self.user_login_mode = get_current_user(request)
+        if self.user is None:
+            messages.warning(request, "Your session has ended. Please log in again to change your password.")
+            return redirect_to_login(request.get_full_path())
+        return super().dispatch(request, *args, **kwargs)
 
+    def form_valid(self, form):
         current_password = form.cleaned_data.get("current_password")
         new_password = form.cleaned_data.get("new_password")
 
-        # Your helper returns the canonical user object to update
-        user, user_login_mode = get_current_user(self.request)
+        user = self.user
 
         # Verify current password by checking against Django's hash. The IdP
         # session-cookie already proves identity for the *current* request;

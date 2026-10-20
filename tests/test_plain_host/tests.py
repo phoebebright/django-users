@@ -244,3 +244,50 @@ class UserContactAddTests(TestCase):
                             data={"email": "someone@test.com"}, send_mail=False)
         contact = UserContact.objects.get(user=user)
         self.assertEqual(contact.site, "http://testserver")
+
+
+class ChangePasswordSignedOutTests(TestCase):
+    """3.2.4: ChangePasswordView called check_password on whatever
+    get_current_user() returned, so posting the form from a session that had
+    ended was a 500 ('NoneType' object has no attribute 'check_password').
+    Any new password ends the sessions signed in with the old one, e.g. an
+    admin issuing a fresh OTP while the user is on the form (skorie4, 20Oct26).
+    ChangePasswordNowView only checked for a signed-in user on GET."""
+    PASSWORD = "testpass123"
+    NEW_PASSWORD = "Correct-horse-42"
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="plain@test.com", password=self.PASSWORD)
+        self.client.force_login(self.user)
+
+    def end_session(self):
+        self.user.set_password("set-by-an-admin")
+        self.user.save()
+
+    def change(self, url_name):
+        return self.client.post(reverse(url_name), {
+            "current_password": self.PASSWORD,
+            "new_password": self.NEW_PASSWORD,
+            "confirm_password": self.NEW_PASSWORD,
+        })
+
+    def test_signed_in_user_changes_password(self):
+        response = self.change("users:change_password")
+        self.assertEqual(response["Location"], reverse("users:user-profile"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.NEW_PASSWORD))
+
+    def test_change_password_sends_a_signed_out_user_to_login(self):
+        self.end_session()
+        response = self.change("users:change_password")
+        self.assertEqual(response["Location"], "/users/login/?next=/users/change_password/")
+
+    def test_change_password_page_sends_a_signed_out_user_to_login(self):
+        self.end_session()
+        response = self.client.get(reverse("users:change_password"))
+        self.assertEqual(response["Location"], "/users/login/?next=/users/change_password/")
+
+    def test_change_password_now_sends_a_signed_out_user_to_forgot_password(self):
+        self.end_session()
+        response = self.change("users:change_password_now")
+        self.assertEqual(response["Location"], reverse("users:forgot_password"))
