@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from users.models import CommsChannel, VerificationCode
+from users.models import CommsChannel, UserContact, VerificationCode
 
 User = get_user_model()
 
@@ -229,3 +229,65 @@ class LoginUrlIsAPathTests(TestCase):
             send_otp(channel, "123456")
         context = mail_class.return_value.send.call_args.kwargs["context"]
         self.assertEqual(context["login_url"], f"{settings.SITE_URL}{self.LOGIN}?email=plain%40test.com")
+
+
+class UserContactAddTests(TestCase):
+    """3.2.3: UserContact.add() saved the contact twice, the first time with no
+    site. That save logged "No site set when adding to UserContact - possible
+    attack" on every contact (whinn.ie, the subscribe form, 15Oct26) and left a
+    duplicate row."""
+
+    def test_add_saves_one_contact_with_the_site_and_no_warning(self):
+        user = User.objects.create_user(email="system@test.com", password="x")
+        with self.assertNoLogs("django", level="WARNING"):
+            UserContact.add(user=user, method="Subscribe & Interest Form",
+                            data={"email": "someone@test.com"}, send_mail=False)
+        contact = UserContact.objects.get(user=user)
+        self.assertEqual(contact.site, "http://testserver")
+
+
+class ChangePasswordSignedOutTests(TestCase):
+    """3.2.4: ChangePasswordView called check_password on whatever
+    get_current_user() returned, so posting the form from a session that had
+    ended was a 500 ('NoneType' object has no attribute 'check_password').
+    Any new password ends the sessions signed in with the old one, e.g. an
+    admin issuing a fresh OTP while the user is on the form (skorie4, 20Oct26).
+    ChangePasswordNowView only checked for a signed-in user on GET."""
+    PASSWORD = "testpass123"
+    NEW_PASSWORD = "Correct-horse-42"
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="plain@test.com", password=self.PASSWORD)
+        self.client.force_login(self.user)
+
+    def end_session(self):
+        self.user.set_password("set-by-an-admin")
+        self.user.save()
+
+    def change(self, url_name):
+        return self.client.post(reverse(url_name), {
+            "current_password": self.PASSWORD,
+            "new_password": self.NEW_PASSWORD,
+            "confirm_password": self.NEW_PASSWORD,
+        })
+
+    def test_signed_in_user_changes_password(self):
+        response = self.change("users:change_password")
+        self.assertEqual(response["Location"], reverse("users:user-profile"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.NEW_PASSWORD))
+
+    def test_change_password_sends_a_signed_out_user_to_login(self):
+        self.end_session()
+        response = self.change("users:change_password")
+        self.assertEqual(response["Location"], "/users/login/?next=/users/change_password/")
+
+    def test_change_password_page_sends_a_signed_out_user_to_login(self):
+        self.end_session()
+        response = self.client.get(reverse("users:change_password"))
+        self.assertEqual(response["Location"], "/users/login/?next=/users/change_password/")
+
+    def test_change_password_now_sends_a_signed_out_user_to_forgot_password(self):
+        self.end_session()
+        response = self.change("users:change_password_now")
+        self.assertEqual(response["Location"], reverse("users:forgot_password"))

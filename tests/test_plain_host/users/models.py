@@ -11,7 +11,8 @@ from django.forms.models import model_to_dict
 
 from django_users.models import (
     CommsChannelBase, CustomUserBaseBasic, CustomUserManager, OrganisationBase,
-    PersonBase, PersonOrganisationBase, RoleBase, VerificationCodeBase,
+    PersonBase, PersonOrganisationBase, RoleBase, UserContactBase,
+    VerificationCodeBase,
 )
 
 
@@ -45,6 +46,10 @@ class CommsChannel(CommsChannelBase):
 
 
 class VerificationCode(VerificationCodeBase):
+    pass
+
+
+class UserContact(UserContactBase):
     pass
 
 

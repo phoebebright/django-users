@@ -9,6 +9,32 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.4 (20 Oct 2026)
+
+- **Change password no longer crashes when the session has ended.** Any new
+  password ends the sessions signed in with the old one, e.g. an admin
+  issuing a fresh OTP while the user has the form open (skorie4, 20 Oct 2026).
+  Submitting `ChangePasswordView` from that session was a 500
+  (`'NoneType' object has no attribute 'check_password'`). It now says the
+  session has ended and sends the user to log in, then back to the form,
+  on GET and POST. `ChangePasswordNowView` already sent a signed-out user to
+  Forgot Password on GET; it now does on POST too, which was also a 500.
+  `tests/test_plain_host` covers both.
+- **Affects:** all hosts.
+- **Host action:** none.
+
+## 3.2.3 (19 Oct 2026)
+
+- **`UserContact.add()` saved every contact twice.** It saved one row with no
+  `site`, then created a second with it. The first save logged "No site set
+  when adding to UserContact - possible attack" on every Contact Us and
+  Subscribe & Interest form (seen on whinn.ie, 15 Oct 2026), and every contact
+  was stored twice. Now one row, with `site` set, and no warning.
+  `tests/test_plain_host` gains a concrete `UserContact` and a test.
+- **Affects:** all hosts.
+- **Host action:** none. Duplicate `UserContact` rows from before this release
+  stay; they are harmless.
+
 ## 3.2.2 (15 Oct 2026)
 
 - **Login form labels back.** The Email and Password labels in
