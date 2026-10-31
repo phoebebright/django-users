@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.apps import apps
 from django.template.loader import render_to_string
 from django.conf import settings
-from django.utils.http import urlencode
+from django.utils.http import urlencode, url_has_allowed_host_and_scheme
 from twilio.rest import Client
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse_lazy, reverse
@@ -85,6 +85,25 @@ def looks_like_bot_name(*names):
             if _has_random_casing(word) or _has_long_consonant_run(word):
                 return True
     return False
+
+
+def safe_return_url(request, candidate):
+    """
+    The page to return to after registering or verifying, if it is on this site, else "".
+    Used for the next carried from the register page through the emailed verify link.
+    """
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        return candidate
+    return ""
+
+
+def with_next(url, next_url):
+    """url with next= added when there is a page to return to"""
+    if not next_url:
+        return url
+    return f"{url}{'&' if '?' in url else '?'}{urlencode({'next': next_url})}"
 
 
 def get_mail_class():

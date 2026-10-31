@@ -34,7 +34,7 @@
     <div class="col-12">
 
 
-        <a href="#"  class="text-primary resend_verify_code mt-1 text-center" data-channel_pk="{{ item.pk }}">     {% if magic_link %}{% trans "Resend Verification Code" %}{% else %}{% trans "Resend Verification Code" %}{% endif %}</a>
+        <a href="?resend=1{% if next %}&amp;next={{ next|urlencode:"" }}{% endif %}" class="text-primary mt-1 text-center">{% trans "Resend Verification Code" %}</a>
 
         <!--                        {% for item in user2verify.comms_channels.verified %}-->
 
@@ -53,8 +53,8 @@
     {% if user.is_authenticated %}
     <a href="{% url 'users:user-profile' %}" class="text-primary">Account</a>
     {% else %}
-    <a href="{% url LOGIN_URL %}" class="text-primary">{{ LOGIN_TERM }}</a>
-    <a href="{% url REGISTER_URL %}" class="text-primary float-end">{{ REGISTER_TERM }}</a>
+    <a href="{% url LOGIN_URL %}{% if next %}?next={{ next|urlencode:"" }}{% endif %}" class="text-primary">{{ LOGIN_TERM }}</a>
+    <a href="{% url REGISTER_URL %}{% if next %}?next={{ next|urlencode:"" }}{% endif %}" class="text-primary float-end">{{ REGISTER_TERM }}</a>
     {% endif %}
 </div>
 {% endblock %}
@@ -65,18 +65,6 @@
 
         $("#id_code").focus();
 
-        $('.resend_verify_code').click(function() {
-            const payload = {
-                'channel_pk': $(this).data('channel_pk'),
-                'channel_value': $(this).data('channel_value'),
-            }
-
-            $.post("{% url 'usersapi:resend_verify_code' %}", payload).done(function() {
-                clear_header_messages();
-                console.log("message sent");
-            });
-        });
-        return false;
     });
 
     {% if can_login %}

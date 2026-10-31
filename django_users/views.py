@@ -37,7 +37,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
-from django.shortcuts import redirect, get_object_or_404, render
+from django.shortcuts import redirect, get_object_or_404, render, resolve_url
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
@@ -49,7 +49,7 @@ from django.contrib.auth import (authenticate, get_user_model, login, logout as 
 
 from .tools.permission_mixins import UserCanAdministerMixin
 from .tools.views_mixins import GoNextMixin, CheckLoginRedirectMixin
-from .utils import normalise_email, get_mail_class, looks_like_bot_name
+from .utils import normalise_email, get_mail_class, looks_like_bot_name, safe_return_url, with_next
 
 ModelRoles = import_string(settings.MODEL_ROLES_PATH)
 
@@ -719,8 +719,22 @@ class RegisterView(FormView):
             raise NotImplementedError("Define `form_class` in the child class.")
         return self.form_class
 
+    def get_return_url(self):
+        '''the page that sent them here to register (next), carried through the verify page and
+        the emailed link so they come back to it - only ever an address on this site'''
+        return safe_return_url(self.request, self.request.POST.get('next') or self.request.GET.get('next'))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['next'] = self.get_return_url()
+        return context
+
     def get_success_url(self):
-        return reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
+        url = reverse('users:verify_channel', kwargs={'channel_id': self.user.preferred_channel_id})
+        return with_next(url, self.get_return_url())
+
+    def login_url(self, email):
+        return with_next(reverse(LOGIN_URL) + f"?email={quote_plus(email)}", self.get_return_url())
 
     # @transaction.atomic
     def form_valid(self, form):
@@ -774,7 +788,7 @@ class RegisterView(FormView):
                         user.save()
                     messages.warning(self.request,
                                      _('An account with this email already exists on Skorie. Please log in with the original password.'))
-                    return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
+                    return HttpResponseRedirect(self.login_url(email))
                 else:
                     # as they never finished setting up the user, let's update the password so they can continue
                     update_password_keycloak(user.keycloak_id, password)
@@ -782,7 +796,7 @@ class RegisterView(FormView):
             elif user.is_active:
                 messages.warning(self.request,
                                  _('An account with this email already exists. Please log in with the original password.'))
-                return HttpResponseRedirect(reverse(LOGIN_URL) + f"?email={quote_plus(email)}")
+                return HttpResponseRedirect(self.login_url(email))
 
         set_current_user(self.request, user.id, "REGISTER")
 
@@ -978,10 +992,15 @@ class VerifyChannelView(FormView):
 
         return channel, None
 
-    def _send_code_or_link(self, channel):
+    def _return_url(self):
+        '''the page they registered from, carried on from RegisterView - only ever on this site'''
+        return safe_return_url(self.request, self.request.POST.get('next') or self.request.GET.get('next'))
+
+    def _send_code_or_link(self, channel, next_url=None):
         """
         Sends either a magic link (email) or a 6-digit code (email/sms/whatsapp),
-        returning a dict for the template context.
+        returning a dict for the template context. The magic link carries next_url, so
+        following it from any browser comes back to the page they registered from.
         """
         _, VerificationCode = self._get_models()
         purpose = "email_verify"
@@ -989,7 +1008,7 @@ class VerifyChannelView(FormView):
 
         if USE_MAGIC_LINK and channel.channel_type == "email":
             vc, context = VerificationCode.create_for_magic_link(
-                user=channel.user, channel=channel, purpose="email_verify"
+                user=channel.user, channel=channel, purpose="email_verify", next_url=next_url
             )
         else:
             vc, context = VerificationCode.create_for_code(
@@ -1005,22 +1024,23 @@ class VerifyChannelView(FormView):
     def get(self, request, channel_id):
 
         channel, _ = self._get_channel(channel_id)
+        back = self._return_url()
 
         if channel.is_verified:
 
             if request.user.is_authenticated:
                 messages.success(request, 'Contact method has already been verified.')
-                return redirect('/')
+                return redirect(back or '/')
             else:
                 messages.success(request, f'Your account is already verified, please {settings.LOGIN_TERM}')
-                return redirect('users:login')
+                return redirect(with_next(reverse('users:login'), back))
 
         # send on first arrival or explicit resend
         if "resent" not in request.GET or request.GET.get("resend") == "1":
-            send_ctx = self._send_code_or_link(channel)
+            send_ctx = self._send_code_or_link(channel, back)
             if not send_ctx["sent"]:
                 messages.error(request, 'Failed to send verification. Check your contact method is correct.')
-                return redirect('users:login')
+                return redirect(with_next(reverse('users:login'), back))
 
             if "magic_link" in send_ctx and send_ctx["magic_link"]:
                 # don't have user logged in so fails
@@ -1030,33 +1050,33 @@ class VerifyChannelView(FormView):
                     "channel": channel,
                     "form": None,
                     "magic_link": True,
+                    "next": back,
                 })
 
         form = self.form_class(initial={'channel': channel})
-        context = {"form": form, "channel": channel, "magic_link": False}
+        context = {"form": form, "channel": channel, "magic_link": False, "next": back}
 
         return render(request, self.template_name, context)
 
     # POST: handle 6-digit code submission
     def post(self, request, channel_id):
         channel, _ = self._get_channel(channel_id)
+        back = self._return_url()
         code = request.POST.get('code') or request.POST.get('verification_code')
 
         if not code:
             messages.error(request, _('Please enter the verification code.'))
-            return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
+            return render(request, self.template_name, {"channel": channel, "form": self.form_class(), "next": back})
 
         _, VerificationCode = self._get_models()
         ok = VerificationCode.verify_code(user=channel.user, channel=channel, code=code, purpose="email_verify")
 
         if ok:
             messages.success(request, _('Contact method has been verified. Please log in.'))
-            return redirect('users:login')
-            url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
-            return redirect(url)
+            return redirect(with_next(reverse('users:login'), back))
 
         messages.error(request, _('Invalid or expired verification code.'))
-        return render(request, self.template_name, {"channel": channel, "form": self.form_class()})
+        return render(request, self.template_name, {"channel": channel, "form": self.form_class(), "next": back})
 
 class VerifyForgotPasswordLinkView(View):
     def get(self, request):
@@ -2264,19 +2284,19 @@ class VerifyMagicLinkView(View):
         channel = vc.channel
         user = vc.user
 
+        # the page they registered from (RegisterView's next, put in the link by VerifyChannelView)
+        back = safe_return_url(request, request.GET.get("next"))
+
         # Optionally log the user in (if this is part of a sign-up or login flow)
         auto_login = getattr(settings, "VERIFICATION_AUTO_LOGIN", False)
         if auto_login:
             user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
             messages.success(request, _(f"Your link has been verified and you are now logged in."))
-
-            # do we have a next url?
-            next = request.GET.get("next", settings.LOGIN_REDIRECT_URL)
-            return redirect(next)
+            return redirect(back or settings.LOGIN_REDIRECT_URL)
         else:
             messages.success(request, _("Your link has been verified."))
-            return redirect(settings.LOGIN_URL)
+            return redirect(with_next(resolve_url(settings.LOGIN_URL), back))
 
 
 

@@ -17,6 +17,7 @@
 
             <form id="register" method="post">
                 {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
                 {% bootstrap_field form.first_name %}
                 {% bootstrap_field form.last_name %}
                 {% bootstrap_field form.email %}
@@ -34,7 +35,7 @@
             </form>
 
             <div class="text-center mt-3">
-                <p>Already Registered? &nbsp;<a href="{% url "users:login" %}" class="text-primary">{{ LOGIN_TERM }}</a>
+                <p>Already Registered? &nbsp;<a href="{% url "users:login" %}{% if next %}?next={{ next|urlencode:"" }}{% endif %}" class="text-primary">{{ LOGIN_TERM }}</a>
             </div>
    <div class="text-center mt-3">
                 <p>Problem with Registering? &nbsp;<a href="{% url "users:problem_register" %}" class="text-primary">Help me {{ REGISTER_TERM }}</a>

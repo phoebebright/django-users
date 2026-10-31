@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
 from django.core.mail import mail_admins
 from django.utils.crypto import constant_time_compare
+from django.utils.http import urlencode
 from django.conf import settings
 from django.urls import reverse_lazy, reverse
 
@@ -346,8 +347,12 @@ class VerificationCodeBase(models.Model):
         return self.consumed_at is not None
 
 
-    def magic_link_url(self, token) -> str:
-        return  f"{settings.SITE_URL}{reverse('users:verify_link', args=[self.purpose])}?t={token}"
+    def magic_link_url(self, token, next_url=None) -> str:
+        '''next_url: the page to go back to once the link is followed - the register page's next'''
+        url = f"{settings.SITE_URL}{reverse('users:verify_link', args=[self.purpose])}?t={token}"
+        if next_url:
+            url += "&" + urlencode({"next": next_url})
+        return url
 
     # @classmethod
     # def create_verification_code(cls, user, channel):
@@ -421,7 +426,7 @@ class VerificationCodeBase(models.Model):
         return obj, {'code': raw_code, 'expiry_minutes': ttl_minutes, 'user': user}
 
     @classmethod
-    def _create_token_row(cls, user, channel, purpose, ttl_minutes):
+    def _create_token_row(cls, user, channel, purpose, ttl_minutes, next_url=None):
         expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -441,7 +446,7 @@ class VerificationCodeBase(models.Model):
              UserHistory.log(user, "issue_token", details={"purpose": purpose, "channel": str(channel)})
 
         return obj, {'token': raw_token, 'expiry_minutes': ttl_minutes, 'user': user,
-                     'magic_link': obj.magic_link_url(raw_token)}
+                     'magic_link': obj.magic_link_url(raw_token, next_url)}
 
     @classmethod
     def create_verification_code(cls, user, channel, purpose='forgot_password', ttl_minutes=60):
@@ -468,18 +473,18 @@ class VerificationCodeBase(models.Model):
 
 
     @classmethod
-    def create_for_magic_link(cls, user, channel, purpose="email_verify", ttl_minutes=None):
+    def create_for_magic_link(cls, user, channel, purpose="email_verify", ttl_minutes=None, next_url=None):
         ttl = ttl_minutes or getattr(settings, "VERIFICATION_CODE_EXPIRY_MINUTES", 20)
         for _ in range(2):
             try:
                 with transaction.atomic():
                     cls._consume_active(user, channel, purpose, reason="superseded")
-                    return cls._create_token_row(user, channel, purpose, ttl)
+                    return cls._create_token_row(user, channel, purpose, ttl, next_url)
             except IntegrityError:
                 continue
         with transaction.atomic():
             cls._consume_active(user, channel, purpose, reason="superseded")
-            return cls._create_token_row(user, channel, purpose, ttl)
+            return cls._create_token_row(user, channel, purpose, ttl, next_url)
 
 
     @classmethod
