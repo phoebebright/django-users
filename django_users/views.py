@@ -724,6 +724,17 @@ class RegisterView(FormView):
         the emailed link so they come back to it - only ever an address on this site'''
         return safe_return_url(self.request, self.request.POST.get('next') or self.request.GET.get('next'))
 
+    # what a link to register can fill in, e.g. an invitation that already knows the name and email
+    PREFILL_FIELDS = ('email', 'first_name', 'last_name')
+
+    def get_initial(self):
+        initial = super().get_initial()
+        for field in self.PREFILL_FIELDS:
+            value = self.request.GET.get(field, '').strip()
+            if value:
+                initial[field] = value
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['next'] = self.get_return_url()
