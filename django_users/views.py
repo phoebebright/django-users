@@ -38,6 +38,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.http import HttpResponseRedirect, HttpResponse, Http404, HttpRequest, HttpResponseBadRequest
 from django.shortcuts import redirect, get_object_or_404, render, resolve_url
+from django.contrib.auth.views import redirect_to_login
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.views import generic, View
@@ -685,6 +686,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
 
                 messages.warning(request,
                                  _('Your temporary password cannot be used again. Please change your password.'))
+                # the only way in to ChangePasswordNowView, which sets a password without the current one
+                request.session[ChangePasswordNowView.SK_ALLOWED] = str(user.pk)
                 return redirect('users:change_password_now')
             else:
                 messages.error(request, _('Invalid email or password.'))
@@ -1127,14 +1130,21 @@ class ManageCommsChannelsView(View):
 
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordNowView(GoNextTemplateMixin, FormView):
+    '''Set a new password without giving the current one. Only straight after signing in with
+    a temporary password (LoginView sets SK_ALLOWED); anyone else signed in has to give their
+    current password on ChangePasswordView, so an unattended session can't be taken over.'''
     template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
+    SK_ALLOWED = "change_password_now_user"
 
-    def get(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):
         # only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
+        # checked on POST too, not just GET
         if not request.user.is_authenticated:
             return redirect(reverse('users:forgot_password'))
-        return super().get(request, *args, **kwargs)
+        if request.session.get(self.SK_ALLOWED) != str(request.user.pk):
+            return redirect(reverse('users:change_password'))
+        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return "/"
@@ -1177,6 +1187,7 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
             form.add_error(None, f"Failed to update password: {e}")
             return self.form_invalid(form)
 
+        self.request.session.pop(self.SK_ALLOWED, None)
         messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
 
@@ -1438,17 +1449,23 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
     form_class = ChangePasswordForm
     success_url = reverse_lazy("users:user-profile")
 
-    def form_valid(self, form):
-        # TODO: should we check for user still being logged in?
+    def dispatch(self, request, *args, **kwargs):
+        # a signed-out user (or a session that ended while the form was open) has no
+        # password to change - send them to log in rather than fail on no user
+        self.user, self.user_login_mode = get_current_user(request)
+        if self.user is None:
+            messages.warning(request, "Your session has ended. Please log in again to change your password.")
+            return redirect_to_login(request.get_full_path())
+        return super().dispatch(request, *args, **kwargs)
 
+    def form_valid(self, form):
         current_password = form.cleaned_data.get("current_password")
         new_password = form.cleaned_data.get("new_password")
 
-        # Your helper returns the canonical user object to update
-        user, user_login_mode = get_current_user(self.request)
+        user = self.user
 
         # Verify current password before changing it
-        if not verify_login(self.request.user.email, current_password):
+        if not verify_login(user.email, current_password):
             form.add_error('current_password', "Current password is incorrect.")
             return self.form_invalid(form)
 
