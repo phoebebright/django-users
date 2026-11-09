@@ -701,6 +701,8 @@ class LoginView(GoNextTemplateMixin, TemplateView):
                 UserHistory.log(fallback_user, "login_success_temporary", request=request)
             messages.warning(request,
                              _('Your temporary password cannot be used again. Please change your password.'))
+            # the only way in to ChangePasswordNowView, which sets a password without the current one
+            request.session[ChangePasswordNowView.SK_ALLOWED] = str(fallback_user.pk)
             return redirect('users:change_password_now')
 
         limit_reached = record_failed_login(request, email)
@@ -1176,14 +1178,20 @@ class ManageCommsChannelsView(View):
 # and has to mirror the IdP's password validation rules.
 @method_decorator(never_cache, name='dispatch')
 class ChangePasswordNowView(GoNextTemplateMixin, FormView):
+    '''Set a new password without giving the current one. Only straight after signing in with
+    a temporary password (LoginView sets SK_ALLOWED); anyone else signed in has to give their
+    current password on ChangePasswordView, so an unattended session can't be taken over (3.2.5).'''
     template_name = "django_users/change_password.html"
     form_class = ChangePasswordNowCurrentForm
+    SK_ALLOWED = "change_password_now_user"
 
     def dispatch(self, request, *args, **kwargs):
         # only for logged in users - don't want to use standard mixin as this will ask them to login and then return here
         # Checked on POST too: a session can end while the form is open (3.2.4).
         if not request.user.is_authenticated:
             return redirect(reverse('users:forgot_password'))
+        if request.session.get(self.SK_ALLOWED) != str(request.user.pk):
+            return redirect(reverse('users:change_password'))
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
@@ -1219,6 +1227,7 @@ class ChangePasswordNowView(GoNextTemplateMixin, FormView):
             user.save(update_fields=update_fields)
             update_session_auth_hash(self.request, user)
 
+        self.request.session.pop(self.SK_ALLOWED, None)
         messages.success(self.request, "Password updated successfully.")
         return super().form_valid(form)
 
