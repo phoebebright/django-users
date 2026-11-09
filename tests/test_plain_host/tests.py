@@ -291,3 +291,42 @@ class ChangePasswordSignedOutTests(TestCase):
         self.end_session()
         response = self.change("users:change_password_now")
         self.assertEqual(response["Location"], reverse("users:forgot_password"))
+
+
+class ChangePasswordNowTests(TestCase):
+    """3.2.5: ChangePasswordNowView sets a password without the current one and
+    let any signed-in session use it, so someone at an unattended session could
+    take the account. It is now only for the session that has just signed in
+    with a temporary password (activation_code), and only once."""
+    PASSWORD = "testpass123"
+    NEW_PASSWORD = "Correct-horse-42"
+    NEW_FIELDS = {"new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD}
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="now@test.com", password=self.PASSWORD)
+
+    def password_changed(self):
+        self.user.refresh_from_db()
+        return self.user.check_password(self.NEW_PASSWORD)
+
+    def test_signed_in_session_cannot_skip_the_current_password(self):
+        self.client.force_login(self.user)
+        url = reverse("users:change_password_now")
+        for response in (self.client.get(url), self.client.post(url, self.NEW_FIELDS)):
+            self.assertEqual(response["Location"], reverse("users:change_password"))
+        self.assertFalse(self.password_changed())
+
+    def test_temporary_password_sign_in_can_set_a_new_password_once(self):
+        self.user.activation_code = "123456"
+        self.user.save(update_fields=["activation_code"])
+
+        response = self.client.post(reverse("users:login"), {"email": self.user.email, "password": "123456"})
+        url = reverse("users:change_password_now")
+        self.assertEqual(response["Location"], url)
+
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.client.post(url, self.NEW_FIELDS)
+        self.assertTrue(self.password_changed())
+
+        # used up: setting it again needs the current password
+        self.assertEqual(self.client.get(url)["Location"], reverse("users:change_password"))

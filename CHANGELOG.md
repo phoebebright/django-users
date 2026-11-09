@@ -9,6 +9,22 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.5 (9 Nov 2026)
+
+- **Change password now only follows a temporary-password sign-in.**
+  `ChangePasswordNowView` sets a new password without the current one, and
+  any signed-in session could use it, so someone at an unattended session
+  could take the account. `LoginView` now marks the session when someone signs
+  in with a temporary password (`activation_code`); the view checks that mark,
+  sends anyone else signed in to `ChangePasswordView` (which asks for the
+  current password) and clears the mark once the password is set.
+  `tests/test_plain_host` covers both. Skorie had the same fix in 1.4.11 on
+  `skorie_users`.
+- **Affects:** all hosts.
+- **Host action:** none. A host that links to `users:change_password_now` from
+  anywhere but the temporary-password login should link to
+  `users:change_password` instead.
+
 ## 3.2.4 (20 Oct 2026)
 
 - **Change password no longer crashes when the session has ended.** Any new
