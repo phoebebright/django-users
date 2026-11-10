@@ -433,8 +433,13 @@ function check_user_exists(email, callback, error_callback) {
             }
         })
         .fail(function (xhr, status, error) {
-            if (error_callback) {
-                error_callback("Invalid email");
+            if (xhr.status === 404) {
+                // email is valid but no account uses it yet
+                if (callback) {
+                    callback({'not_registered': true});
+                }
+            } else if (error_callback) {
+                error_callback(xhr.status === 400 ? "Invalid email" : "Sorry, we couldn't check that email just now. Please try again.");
             }
         });
 }
