@@ -36,7 +36,7 @@
     </div>
 
     {% if not user.is_authenticated %}
-        <p>Signup to get a profile page.</p>
+        <p>Create an account to get started.</p>
         <div class="row">
             <div class="col-12 col-md-6 offset-md-3 ">
 
@@ -49,7 +49,7 @@
             <div class="row">
 
                 <div class="col-12 col-md-6">
-               <h4 class="mt-3">Login</h4>
+               <h4 class="mt-3">Sign-in details</h4>
 
                     <ul id="profile-page-about-details" class="list-group z-depth-1">
                         <li class="list-group-item">
@@ -72,7 +72,7 @@
 
                         <li class="list-group-item">
                             <div class="row">
-                                <a class="btn btn-primary" href="{% url "users:change_password" %}?next=profile">{% trans "Change Password" %}</a>
+                                <a class="btn btn-primary" href="{% url "users:change_password" %}?next=profile">{% trans "Change password" %}</a>
                             </div>
                         </li>
 
@@ -174,14 +174,14 @@
                         <li class="list-group-item">
                             <div class="row">
                                 <div class="col col-sm-5">
-                                    <i class="bi bi-calendar"></i> {% trans "Registered" %}</div>
+                                    <i class="bi bi-calendar"></i> {% trans "Account created" %}</div>
                                 <div class="col col-sm-7 right-align">{{ user.date_joined }}</div>
                             </div>
                         </li>
                         <li class="list-group-item">
                             <div class="row">
                                 <div class="col col-sm-5">
-                                    <i class="bi bi-calendar"></i> {% blocktrans %}Last Login{% endblocktrans %}</div>
+                                    <i class="bi bi-calendar"></i> {% blocktrans %}Last signed in{% endblocktrans %}</div>
                                 <div class="col col-sm-7 right-align">{{ user.last_login }}</div>
 
                             </div>
@@ -209,7 +209,7 @@
                                 {% csrf_token %}
                                 {% bootstrap_form form %}
                                     <div class="mt-3">
-                    <button type="submit" class="btn btn-success float-end">Save Profile</button>
+                    <button type="submit" class="btn btn-success float-end">Save details</button>
                 </div>
                             </form>
                         </li>

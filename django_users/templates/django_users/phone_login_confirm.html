@@ -4,13 +4,13 @@
 The phone's side of a QR login. The code arrives after '#' in the URL, so the
 server never sees it in a request line or a log; this page reads it, drops it
 from the address bar, asks the server whose it is (spending nothing) and only
-spends it when "Log in" is pressed. See django_users.views_phone_login.
+spends it when "Sign in" is pressed. See django_users.views_phone_login.
 {% endcomment %}
 
-{% block title %}{% trans "Log in on this phone" %}{% endblock %}
+{% block title %}{% trans "Sign in on this phone" %}{% endblock %}
 
 {% block content %}
-<h2 class="h4">{% trans "Log in on this phone" %}</h2>
+<h2 class="h4">{% trans "Sign in on this phone" %}</h2>
 
 <div class="alert alert-warning{% if not error %} d-none{% endif %}" role="alert" data-phone-error>{{ error }}</div>
 
@@ -20,14 +20,14 @@ spends it when "Log in" is pressed. See django_users.views_phone_login.
     {% csrf_token %}
     <input type="hidden" name="action" value="login">
     <input type="hidden" name="token" value="" data-phone-token>
-    <p>{% trans "Log in as" %} <strong data-phone-email></strong>?</p>
+    <p>{% trans "Sign in as" %} <strong data-phone-email></strong>?</p>
     {% if user.is_authenticated %}
-        <p class="small text-muted">{% blocktrans with email=user.email %}This phone is logged in as {{ email }} now. If that is a different account, logging in here replaces it.{% endblocktrans %}</p>
+        <p class="small text-muted">{% blocktrans with email=user.email %}This phone is signed in as {{ email }} now. If that is a different account, signing in here replaces it.{% endblocktrans %}</p>
     {% endif %}
     <div class="action_buttons">
         <div class="d-grid gap-2 d-md-flex justify-content-md-between">
             <a href="/" class="btn btn-outline-secondary mt-3">{% trans "Cancel" %}</a>
-            <button type="submit" class="btn btn-primary mt-3">{% trans "Log in" %}</button>
+            <button type="submit" class="btn btn-primary mt-3">{% trans "Sign in" %}</button>
         </div>
     </div>
 </form>

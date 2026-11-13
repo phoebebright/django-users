@@ -146,4 +146,4 @@ class DuplicateSignUpTest(TestCase):
         }
         response = self.client.post(reverse('users:signup'), data=form_data)
         self.assertRedirects(response, reverse('login'))
-        self.assertContains(response, 'An account with this email already exists. Please log in.')
+        self.assertContains(response, 'An account with this email already exists. Please sign in')
