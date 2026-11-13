@@ -6,12 +6,12 @@
 {% block content %}
 
 {% if user.is_authenticated %}
-<p>You are successfully logged in as {{ user }}</p>
+<p>You are signed in as {{ user }}</p>
 {% else %}
-<h1>Help me {{ REGISTER_TERM }}</h1>
+<h1>Help me create an account</h1>
 
 <p>
-    If you have tried to Register, and haven't received a verification email,
+    If you have tried to create an account and haven't received a verification email,
     check if it's in your SPAM folder.
 </p>
 
@@ -41,7 +41,7 @@
     </div>
 </div>
 
-<p>Start by entering the email you used to {{ REGISTER_TERM }}:</p>
+<p>Start by entering the email you used to create your account:</p>
 
 
 
@@ -51,7 +51,7 @@
         <input type="hidden" id="user_id" value="">
         <input type="email" class="form-control" id="entered_email" name="email" placeholder="enter email..." required value="{{ email }}">
         <div class="invalid-feedback">
-            Please enter the email you used to {{ REGISTER_TERM }}.
+            Please enter the email you used to create your account.
         </div>
     </div>
     <div class="d-grid">
@@ -221,7 +221,7 @@
                     url: USERS_API_URL + "verify_user_with_sms/",
                     data: {'user_id': user_id, 'phone_no':phone_no },
                     success: function (d) {
-                        $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href={% url LOGIN_URL %} class="btn btn-success-outline">{{LOGIN_TERM}}</a></div>');
+                        $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now sign in <a href={% url LOGIN_URL %} class="btn btn-success-outline">{{LOGIN_TERM}}</a></div>');
                     },
                     error: function () {
                         $('#result').html('<div class="alert alert-danger" role="alert">There was an error verifying your account</div>');
@@ -272,7 +272,7 @@
 
 
                 }  else if (d.not_registered) {
-                    $('#result').html('<div class="alert alert-danger" role="alert">This email was not found .  Check you have entered the email correctly above or {{ REGISTER_URL }} again. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</div>');
+                    $('#result').html('<div class="alert alert-danger" role="alert">There is no account with this email. Check you have entered it correctly above, or create an account. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</a></div>');
                     $("#result").slideDown();
                     return;
                 } else if (d.user_id && d.django_user ) { // TODO: need to check another way I think
@@ -295,7 +295,7 @@
     Your account is verified and ready to use.
   </div>
   <div class="d-flex justify-content-between mt-3">
-    <a class="btn btn-secondary" href="${link}">Forgot Password?</a>
+    <a class="btn btn-secondary" href="${link}">Forgot your password?</a>
     <a class="btn btn-primary" href="{% url LOGIN_URL %}?email=${encoded_email}">{{LOGIN_TERM}}</a>
   </div>
 `).slideDown();

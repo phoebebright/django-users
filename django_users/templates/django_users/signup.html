@@ -3,7 +3,7 @@
 {% load static %}
 {% load bootstrap5 %}
 
-{% block title %}{% trans "Register" %}{% endblock %}
+{% block title %}{% trans "Create account" %}{% endblock %}
 
 
 
@@ -17,7 +17,7 @@
                 <img src="/shared_static/images/calculator_icon.svg" alt="Skorie logo" width="120">
             </div>
 
-            <h2 class="text-center mb-4">Register for an Account</h2>
+            <h2 class="text-center mb-4">Create an account</h2>
 
             <form method="post">
                 {% csrf_token %}
@@ -34,11 +34,11 @@
                     <div id="phone-feedback" class="invalid-feedback"></div>
 
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Signup</button>
+                <button type="submit" class="btn btn-primary w-100">Create account</button>
             </form>
 
             <div class="text-center mt-3">
-                <p>Already Registered? &nbsp;<a href="{% url LOGIN_URL %}" class="text-primary">{% trans "Sign In" %}</a>
+                <p>Already have an account? &nbsp;<a href="{% url LOGIN_URL %}" class="text-primary">{% trans "Sign in" %}</a>
             </div>
 
         </div>

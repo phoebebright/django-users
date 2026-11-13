@@ -19,8 +19,8 @@
             <strong>This user logs in via Authentik.</strong>
             Changing the email here only updates the local record &mdash; it is <strong>not</strong> pushed to Authentik.
             <ul class="mb-0 mt-2">
-                <li>They will continue to log in with the <strong>old</strong> email ({{ object.email }}) until it is also changed in Authentik.</li>
-                <li>On their next OIDC login, Authentik may overwrite the new email back to the old one.</li>
+                <li>They will continue to sign in with the <strong>old</strong> email ({{ object.email }}) until it is also changed in Authentik.</li>
+                <li>On their next OIDC sign-in, Authentik may overwrite the new email back to the old one.</li>
             </ul>
             Update the email in Authentik first (or alongside this change) to keep the two in sync.
         </div>

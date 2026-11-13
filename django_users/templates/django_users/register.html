@@ -3,7 +3,7 @@
 {% load static %}
 {% load bootstrap5 %}
 
-{% block title %}{% trans "Register" %}{% endblock %}
+{% block title %}{% trans "Create account" %}{% endblock %}
 
 
 
@@ -13,7 +13,7 @@
                 <img src="{{ LOGO_URL }}" alt="{{ SITE_NAME}}" width="120">
             </div>
 
-            <h2 class="text-center mb-4">Register for an Account</h2>
+            <h2 class="text-center mb-4">Create an account</h2>
 
             <form id="register" method="post">
                 {% csrf_token %}
@@ -34,10 +34,10 @@
             </form>
 
             <div class="text-center mt-3">
-                <p>Already Registered? &nbsp;<a href="{% url "users:login" %}" class="text-primary">{{ LOGIN_TERM }}</a>
+                <p>Already have an account? &nbsp;<a href="{% url "users:login" %}" class="text-primary">{{ LOGIN_TERM }}</a>
             </div>
    <div class="text-center mt-3">
-                <p>Problem with Registering? &nbsp;<a href="{% url "users:problem_register" %}" class="text-primary">Help me {{ REGISTER_TERM }}</a>
+                <p>Problem creating an account? &nbsp;<a href="{% url "users:problem_register" %}" class="text-primary">Help me create an account</a>
             </div>
 
 

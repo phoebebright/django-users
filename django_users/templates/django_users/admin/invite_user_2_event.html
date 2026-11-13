@@ -102,9 +102,9 @@
         function populate_message(name, email, password) {
             const url = "{{ SITE_URL }}{% url "enter-online" event.ref %}?email=" + encodeURIComponent(email);
             if (password == "") {
-                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and login with email " + email + " : \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
+                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and sign in with email " + email + " : \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
             } else {
-                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and login with email " + email + " and temporary password " + password +".  You will then be asked to enter a new password.  \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
+                $("#message").val("Dear " + name + ",\n\nYou have been invited to enter {{event.name}}.\n\nTo accept this invitation, please click on the following link and sign in with email " + email + " and temporary password " + password +".  You will then be asked to enter a new password.  \n\n" + url + "\n\nRegards,\n\n{{ request.user }}");
             }
             $("#message_div").show();
         }

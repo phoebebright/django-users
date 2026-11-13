@@ -6,12 +6,12 @@
 {% block content %}
 
     {% if user.is_authenticated %}
-        <p>You are successfully logged in as {{ user }}</p>
+        <p>You are signed in as {{ user }}</p>
     {% else %}
-        <h2>Having problems with {{ LOGIN_TERM }}?</h2>
+        <h2>Having problems signing in?</h2>
 
 
-        <p>If you are having problems logging in we can help you reset your password using the contact methods you have previously set up.</p>
+        <p>If you are having problems signing in we can help you reset your password using the contact methods you have previously set up.</p>
 
         <p>Start by checking your account:</p>
 

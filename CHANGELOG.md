@@ -9,6 +9,21 @@ Each entry records:
 - **Host action:** every migration, setting or import change a host must make,
   or `none`.
 
+## 3.2.6 (13 Nov 2026)
+
+- **Sign-in wording.** Everything users see now says "Sign in" / "Sign out"
+  and "Create account", never Login, Log in, Register or Sign up: the sign-in,
+  create account, problem signing in, phone sign-in, OTP, invite and account
+  pages, flash messages, form errors and the users.js alerts. Sentences that
+  were built from `LOGIN_TERM` / `REGISTER_TERM` are written out in full. The
+  account page says "Sign-in details" and "Save details"; "Last Login" is
+  "Last signed in". Code identifiers and URL names are unchanged. Skorie had
+  the same change in 1.4.13 and 1.4.14 on `skorie_users`.
+- **Affects:** all hosts.
+- **Host action:** set `LOGIN_TERM = "Sign in"`, `REGISTER_TERM = "Create
+  account"` and `LOGOUT_TERM = "Sign out"` in settings, since buttons and
+  menus still use them.
+
 ## 3.2.5 (9 Nov 2026)
 
 - **Change password now only follows a temporary-password sign-in.**

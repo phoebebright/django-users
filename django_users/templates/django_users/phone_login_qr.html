@@ -6,17 +6,17 @@ django_users.phone_login. When the window closes the code is hidden rather than
 left on screen looking usable; "Show a new code" reloads, which makes a new one.
 {% endcomment %}
 
-{% block title %}{% trans "Log in on your phone" %}{% endblock %}
+{% block title %}{% trans "Sign in on your phone" %}{% endblock %}
 
 {% block content %}
-<h2 class="h4">{% trans "Log in on your phone" %}</h2>
+<h2 class="h4">{% trans "Sign in on your phone" %}</h2>
 <p>{% trans "Scan this code with your phone's camera. It logs the phone in as you." %}</p>
 
 <div class="text-center">
     <div data-phone-qr>
-        <img src="data:image/png;base64,{{ qr_png }}" alt="{% trans 'QR code to log in on your phone' %}" class="img-fluid">
+        <img src="data:image/png;base64,{{ qr_png }}" alt="{% trans 'QR code to sign in on your phone' %}" class="img-fluid">
         <p class="mt-2" role="timer">{% trans "Expires in" %} <strong data-phone-qr-countdown></strong></p>
-        <p class="small text-muted">{% trans "It works once. Anyone who scans it can log in as you, so don't share it." %}</p>
+        <p class="small text-muted">{% trans "It works once. Anyone who scans it can sign in as you, so don't share it." %}</p>
     </div>
     <div class="d-none" data-phone-qr-expired role="status">
         <p><strong>{% trans "This code has expired." %}</strong></p>

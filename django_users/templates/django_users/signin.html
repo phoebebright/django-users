@@ -1,7 +1,7 @@
 {% extends "registration/registration_base.html" %}
 {% load i18n %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Sign in{% endblock %}
 {% block outer %}
 
 <div class="container d-flex flex-column justify-content-center align-items-center vh-100">
@@ -20,7 +20,7 @@
         <img src="/shared_static/images/calculator_icon.svg" alt="Skorie logo" width="120">
     </div>
 
-        <h2 class="text-center mb-4">Log in</h2>
+        <h2 class="text-center mb-4">Sign in</h2>
 
      
                         {% include "django_users/include_login_form.html" %}
@@ -29,7 +29,7 @@
 
         <!-- Signup Link -->
         <div class="text-center mt-3">
-            <p>Don’t have an account? <a href="{% url REGISTER_URL %}" class="text-primary">{{REGISTER_TERM}}</a></p>
+            <p>Don't have an account? <a href="{% url REGISTER_URL %}" class="text-primary">{{REGISTER_TERM}}</a></p>
         </div>
     </div>
 

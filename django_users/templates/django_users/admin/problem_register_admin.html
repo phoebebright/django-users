@@ -7,7 +7,7 @@
 {% block content %}
 
 
-    <h1>Help me {{ REGISTER_TERM }}</h1>
+    <h1>Help me create an account</h1>
 
 
 
@@ -15,7 +15,7 @@
         <div class="mb-3">
             <input type="hidden" id="keycloak_id" value="">
             <input type="hidden" id="user_id" value="">
-            <input type="email" class="form-control" id="email" name="email" placeholder="Enter the email you used to signup here:" required value="{{ email }}">
+            <input type="email" class="form-control" id="email" name="email" placeholder="Enter the email used to create the account" required value="{{ email }}">
             <div class="invalid-feedback">
                 Please enter a valid email address.
             </div>
@@ -214,7 +214,7 @@
                        $('#existing_channels').html(show_channels(d.channels));
 
                 }  else if (d.not_registered) {
-                    $('#result').html('<div class="alert alert-danger" role="alert">This email has not been registered.  Check you have entered the email correctly above or sign up again. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</div>');
+                    $('#result').html('<div class="alert alert-danger" role="alert">There is no account with this email. Check you have entered it correctly above, or create an account. <a href="{% url REGISTER_URL %}" class="btn btn-primary-outline">{{REGISTER_TERM}}</div>');
                     $("#result").slideDown();
                     return;
                 } else if (d.user_id && d.django_user ) { // TODO: need to check another way I think

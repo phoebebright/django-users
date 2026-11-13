@@ -88,7 +88,7 @@ class HasRoleMixin(UserPassesTestMixin):
             raise PermissionDenied()
         else:
             # I don't think this gets displayed
-            msg = _("You do not have access. You may have been logged out.  Try logging in again. ")
+            msg = _("You do not have access. You may have been signed out. Try signing in again. ")
             self.request.permission_message = msg
             raise PermissionDenied();
 

@@ -94,7 +94,7 @@ $('#pin').on('input', function () {
             url: USERS_API_URL + "verify_user_with_sms/",
             data: {'user_id': user_id, 'phone_no':phone_no },
             success: function (d) {
-                $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now login <a href='+login_url+' class="btn btn-success-outline">Signin</a></div>');
+                $('#result').html('<div class="alert alert-success" role="alert">Your account has been verified, you can now sign in <a href='+login_url+' class="btn btn-success-outline">Sign in</a></div>');
             },
             error: function () {
                 $('#result').html('<div class="alert alert-danger" role="alert">There was an error verifying your account</div>');

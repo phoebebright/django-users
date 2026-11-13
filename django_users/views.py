@@ -541,7 +541,7 @@ class UserMigrationView(ProviderRequiredMixin, View):
             # session cookie still looked valid).
             login(request, authenticated_user,
                   backend='django.contrib.auth.backends.ModelBackend')
-            messages.success(request, "You have been successfully logged in.")
+            messages.success(request, "You are now signed in.")
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
             messages.error(self.request, "Authentication failed. Please check your credentials.")
@@ -738,7 +738,7 @@ class ProblemSignup(TemplateView):
 
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            messages.info(request, _("You are already signed up and logged in"))
+            messages.info(request, _("You already have an account and are signed in"))
             return HttpResponseRedirect(reverse('users:user-profile'))
         return super().get(request, *args, **kwargs)
 
@@ -859,7 +859,7 @@ class RegisterView(FormView):
                                    user.email, exc)
             elif user.is_active:
                 messages.warning(self.request,
-                                 _('An account with this email already exists. Please log in with the original password.'))
+                                 _('An account with this email already exists. Please sign in with your original password.'))
                 return HttpResponseRedirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(email)}")
 
         set_current_user(self.request, user.id, "REGISTER")
@@ -1084,7 +1084,7 @@ class VerifyChannelView(FormView):
                 messages.success(request, 'Contact method has already been verified.')
                 return redirect('/')
             else:
-                messages.success(request, f'Your account is already verified, please {settings.LOGIN_TERM}')
+                messages.success(request, _('Your account is already verified. Please sign in.'))
                 return redirect('users:login')
 
         # send on first arrival or explicit resend
@@ -1122,7 +1122,7 @@ class VerifyChannelView(FormView):
         ok = VerificationCode.verify_code(user=channel.user, channel=channel, code=code, purpose="email_verify")
 
         if ok:
-            messages.success(request, _('Contact method has been verified. Please log in.'))
+            messages.success(request, _('Contact method has been verified. Please sign in.'))
             return redirect('users:login')
             url = f"{reverse('users:login')}?{urlencode({'email': channel.user.email})}"
             return redirect(url)
@@ -1340,7 +1340,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
             user = User.objects.filter(email=email).first()
 
             if not user:
-                form.add_error('email', f'Email not found. Please {settings.REGISTER_TERM}.')
+                form.add_error('email', _('There is no account with this email. Check it, or create an account.'))
                 return self.form_invalid(form)
 
             if not user.is_active and user.last_login:
@@ -1483,7 +1483,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                 clear_login_limit(email)
 
                 messages.success(self.request,
-                                 'Your password has been reset. You can now log in with your new password.')
+                                 'Your password has been reset. You can now sign in with your new password.')
                 # clear flow
                 self.reset_flow()
                 return redirect(resolve_url(LOGIN_URL) + f"?email={quote_plus(user.email)}")
@@ -1523,7 +1523,7 @@ class ChangePasswordView(GoNextTemplateMixin, FormView):
         # them to log in again rather than post against no user (3.2.4).
         self.user, self.user_login_mode = get_current_user(request)
         if self.user is None:
-            messages.warning(request, "Your session has ended. Please log in again to change your password.")
+            messages.warning(request, "Your session has ended. Please sign in again to change your password.")
             return redirect_to_login(request.get_full_path())
         return super().dispatch(request, *args, **kwargs)
 
@@ -2384,7 +2384,7 @@ class VerifyMagicLinkView(View):
         if auto_login:
             user.backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user)
-            messages.success(request, _(f"Your link has been verified and you are now logged in."))
+            messages.success(request, _("Your link has been verified and you are now signed in."))
 
             # do we have a next url?
             next = safe_next(request, request.GET.get("next"), None)
@@ -2667,7 +2667,7 @@ class AdminInviteView(LoginRequiredMixin, UserCanAdministerMixin, TemplateView):
             )
             invite.mark_sent()
             messages.success(
-                request, _("Sent login OTP to %(email)s.") % {'email': existing.email},
+                request, _("Sent sign-in OTP to %(email)s.") % {'email': existing.email},
             )
             return self.get_success_redirect(existing)
 
@@ -2695,7 +2695,7 @@ class AdminInviteView(LoginRequiredMixin, UserCanAdministerMixin, TemplateView):
         else:
             messages.success(
                 request,
-                _("Created %(email)s and sent login OTP (email pre-approved).") % {'email': new_user.email},
+                _("Created %(email)s and sent sign-in OTP (email pre-approved).") % {'email': new_user.email},
             )
         return self.get_success_redirect(new_user)
 

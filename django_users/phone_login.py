@@ -90,7 +90,7 @@ def read_token(token: str) -> dict:
     if user is None or not constant_time_compare(_password_fingerprint(user), payload.get("h", "")):
         raise PhoneLoginError(_("This code is no longer valid. Show a new one on your computer and scan it again."))
     if cache.get(_USED_KEY.format(nonce=payload["n"])):
-        raise PhoneLoginError(_("This code has already been used. Show a new one on your computer to log in again."))
+        raise PhoneLoginError(_("This code has already been used. Show a new one on your computer to sign in again."))
     return {
         "user": user,
         "next": payload.get("next") or "/",
@@ -106,5 +106,5 @@ def redeem_token(token: str) -> dict:
     # Atomic in a shared cache: of two phones racing with one code, one wins.
     # Kept a little past the window so the claim outlives the token itself.
     if not cache.add(_USED_KEY.format(nonce=details["nonce"]), 1, timeout=max_age() + 60):
-        raise PhoneLoginError(_("This code has already been used. Show a new one on your computer to log in again."))
+        raise PhoneLoginError(_("This code has already been used. Show a new one on your computer to sign in again."))
     return details
