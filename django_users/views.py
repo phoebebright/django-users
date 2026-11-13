@@ -1425,7 +1425,7 @@ class ForgotPassword(CheckLoginRedirectMixin, FormView):
                     update_session_auth_hash(self.request, user)
 
                 messages.success(self.request,
-                                 'Your password has been reset. You can now log in with your new password.')
+                                 'Your password has been reset. You can now sign in with your new password.')
                 # clear flow
                 self.reset_flow()
                 return redirect(reverse(LOGIN_URL) + f"?email={quote_plus(user.email)}")
